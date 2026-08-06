@@ -1,0 +1,19 @@
+{
+  "name": "bureau-du-courrier",
+  "version": "1.0.0",
+  "description": "Registre des destinataires et notifications de courrier reçu — interface web et serveur d'envoi optionnel.",
+  "license": "MIT",
+  "private": true,
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "MAIL_DRY_RUN=true node --watch server/index.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "optionalDependencies": {
+    "nodemailer": "^6.9.14"
+  }
+}

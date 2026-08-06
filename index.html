@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Registre des destinataires et notifications de courrier reçu.">
+<title>Bureau du Courrier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Source+Serif+4:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%2316233F'/><path d='M6 10h20v12H6z' fill='none' stroke='%23F4F0E6' stroke-width='2'/><path d='M6 10l10 7 10-7' fill='none' stroke='%23F4F0E6' stroke-width='2'/></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Bureau du Courrier</h1>
+      <p>Registre des destinataires &amp; notifications</p>
+    </div>
+    <div class="header-right">
+      <div class="date-stamp" id="dateStamp"></div>
+      <div class="mode-badge" id="modeBadge" title="Mode de stockage">…</div>
+    </div>
+  </header>
+
+  <nav id="mainNav">
+    <button class="active" data-panel="guichet" accesskey="1">Guichet</button>
+    <button data-panel="registre" accesskey="2">Registre <span class="tab-count" id="tabCountContacts">0</span></button>
+    <button data-panel="historique" accesskey="3">Historique <span class="tab-count" id="tabCountHistory">0</span></button>
+    <button data-panel="reglages" accesskey="4">Réglages</button>
+  </nav>
+
+  <!-- ═══════════════ GUICHET ═══════════════ -->
+  <section class="panel active" id="panel-guichet" aria-label="Guichet">
+    <div class="card">
+      <h2>Nouveau courrier reçu</h2>
+      <label for="nameInput">Nom inscrit sur la lettre</label>
+      <div class="search-field">
+        <input type="text" id="nameInput" placeholder="ex. Marie Tremblay" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="suggestions" aria-autocomplete="list">
+        <ul class="suggestions" id="suggestions" role="listbox" hidden></ul>
+      </div>
+      <div class="row-actions">
+        <button class="btn" id="validerBtn">Valider</button>
+        <button class="btn ghost" id="clearSearchBtn">Effacer</button>
+        <span class="hint">Entrée pour valider · ↑↓ pour parcourir les suggestions</span>
+      </div>
+    </div>
+
+    <div id="searchResults"></div>
+  </section>
+
+  <!-- ═══════════════ REGISTRE ═══════════════ -->
+  <section class="panel" id="panel-registre" aria-label="Registre">
+    <div class="card">
+      <h2>Ajouter un destinataire</h2>
+      <form class="add-form" id="addForm" novalidate>
+        <div>
+          <label for="newName">Nom complet</label>
+          <input type="text" id="newName" placeholder="Marie Tremblay" autocomplete="off">
+        </div>
+        <div>
+          <label for="newEmail">Courriel</label>
+          <input type="email" id="newEmail" placeholder="marie@exemple.com" autocomplete="off">
+        </div>
+        <button class="btn" type="submit" id="addContactBtn">Ajouter</button>
+      </form>
+      <div id="addMsg"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Destinataires enregistrés (<span id="countContacts">0</span>)</h2>
+        <div class="toolbar">
+          <input type="text" id="contactFilter" class="filter-input" placeholder="Filtrer…" autocomplete="off">
+          <button class="btn ghost small" id="importBtn">Importer CSV</button>
+          <button class="btn ghost small" id="exportContactsBtn">Exporter CSV</button>
+          <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+        </div>
+      </div>
+      <div id="importMsg"></div>
+      <div id="contactsTable"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ HISTORIQUE ═══════════════ -->
+  <section class="panel" id="panel-historique" aria-label="Historique">
+    <div class="card">
+      <div class="card-head">
+        <h2>Notifications envoyées (<span id="countHistory">0</span>)</h2>
+        <div class="toolbar">
+          <input type="text" id="historyFilter" class="filter-input" placeholder="Filtrer…" autocomplete="off">
+          <input type="date" id="historyDate" class="filter-input">
+          <button class="btn ghost small" id="exportHistoryBtn">Exporter CSV</button>
+          <button class="btn ghost small danger" id="clearHistoryBtn">Vider</button>
+        </div>
+      </div>
+      <div id="historyTable"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ RÉGLAGES ═══════════════ -->
+  <section class="panel" id="panel-reglages" aria-label="Réglages">
+    <div class="card">
+      <h2>Message envoyé aux destinataires</h2>
+      <label for="setOffice">Nom du bureau</label>
+      <input type="text" id="setOffice" placeholder="Bureau du Courrier">
+      <label for="setSubject">Sujet</label>
+      <input type="text" id="setSubject">
+      <label for="setBody">Corps du message</label>
+      <textarea id="setBody" rows="8"></textarea>
+      <p class="hint">
+        Variables disponibles : <code>{nom}</code>, <code>{courriel}</code>, <code>{date}</code>, <code>{bureau}</code>.
+      </p>
+      <div class="row-actions">
+        <button class="btn" id="saveSettingsBtn">Enregistrer</button>
+        <button class="btn ghost" id="resetSettingsBtn">Rétablir le modèle par défaut</button>
+      </div>
+      <div id="settingsMsg"></div>
+      <label style="margin-top:18px;">Aperçu</label>
+      <pre class="preview" id="settingsPreview"></pre>
+    </div>
+
+    <div class="card">
+      <h2>État du système</h2>
+      <dl class="status-list" id="statusList"></dl>
+      <div class="row-actions" id="smtpActions"></div>
+      <div id="smtpMsg"></div>
+    </div>
+  </section>
+
+  <footer class="note" id="footerNote"></footer>
+</div>
+
+<div class="stamp-overlay" id="stampOverlay">
+  <div class="stamp"><span id="stampLabel">ENVOYÉ</span><small id="stampWho"></small></div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<dialog id="confirmDialog">
+  <form method="dialog">
+    <h3 id="confirmTitle">Confirmer</h3>
+    <p id="confirmText"></p>
+    <div class="row-actions end">
+      <button class="btn ghost" value="cancel">Annuler</button>
+      <button class="btn rust" value="ok" id="confirmOk">Confirmer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="assets/js/util.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/notify.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
