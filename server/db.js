@@ -20,7 +20,13 @@ const DEFAULT_SETTINGS = {
 };
 
 function emptyDb() {
-  return { contacts: [], history: [], settings: Object.assign({}, DEFAULT_SETTINGS) };
+  return {
+    contacts: [],
+    history: [],
+    settings: Object.assign({}, DEFAULT_SETTINGS),
+    users: [],
+    sessions: []
+  };
 }
 
 class Db {
@@ -37,7 +43,14 @@ class Db {
       this.data = {
         contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [],
         history: Array.isArray(parsed.history) ? parsed.history : [],
-        settings: Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {})
+        settings: Object.assign({}, DEFAULT_SETTINGS, parsed.settings || {}),
+        // Champs apparus avec les comptes : un registre antérieur ne les a pas.
+        users: Array.isArray(parsed.users) ? parsed.users : [],
+        sessions: Array.isArray(parsed.sessions)
+          ? parsed.sessions.filter(function (s) {
+              return s && new Date(s.expiresAt).getTime() > Date.now();
+            })
+          : []
       };
     } catch (err) {
       if (err.code !== 'ENOENT') {

@@ -121,6 +121,31 @@ service communication, seul habilité à en autoriser l'usage.
 
 ---
 
+## Comptes et boîte d'envoi personnelle
+
+Au premier démarrage du serveur, l'application propose de créer le **compte du
+bureau**. Dès qu'un compte existe, le registre n'est plus accessible sans
+connexion. On peut aussi continuer sans compte : l'application fonctionne alors
+comme avant, ouverte à qui connaît l'adresse.
+
+Chaque personne connectée peut relier **sa propre boîte** pour que les
+notifications partent de son adresse — les destinataires lui répondent
+directement, et l'envoi ne dépend plus d'un compte partagé. Deux voies :
+
+- **Connexion Gmail** : autorisation donnée sur l'écran de Google, sans jamais
+  communiquer son mot de passe, révocable à tout moment. Demande une
+  configuration préalable par l'administrateur ;
+- **Mot de passe d'application** : fonctionne immédiatement, sans configuration
+  serveur.
+
+Les jetons et mots de passe d'application sont chiffrés (AES-256-GCM) avant
+d'être enregistrés, et ne sont jamais renvoyés au navigateur. Les mots de passe
+des comptes sont hachés en scrypt.
+
+Marche à suivre complète : [`docs/connexion-boite-mail.md`](docs/connexion-boite-mail.md).
+
+---
+
 ## Utilisation
 
 **Guichet** — on tape le nom inscrit sur la lettre. La recherche ignore les
@@ -191,6 +216,10 @@ autre interface ou un import automatisé.
 | Méthode | Route | Effet |
 |---|---|---|
 | `GET` | `/api/health` | état de l'application et du courriel |
+| `GET` | `/api/auth/me` | compte connecté, s'il y en a un |
+| `POST` | `/api/auth/signup` `/login` `/logout` | comptes et sessions |
+| `PUT` `DELETE` | `/api/auth/mailbox/smtp` · `/api/auth/mailbox` | relier ou retirer sa boîte |
+| `GET` | `/api/auth/google/start` · `/callback` | autorisation Gmail |
 | `GET` | `/api/state` | registre + historique + réglages |
 | `GET` `POST` | `/api/contacts` | lister / ajouter un destinataire |
 | `PUT` `DELETE` | `/api/contacts/:id` | modifier / supprimer |
@@ -228,12 +257,15 @@ assets/js/app.js      interface (onglets, registre, historique, réglages)
 server/app.js         serveur HTTP et API JSON
 server/db.js          fichier JSON, écritures atomiques et sérialisées
 server/mailer.js      envoi SMTP (nodemailer, optionnel) et mode essai
+server/auth.js        mots de passe scrypt, sessions, limitation des tentatives
+server/secrets.js     chiffrement des identifiants au repos (AES-256-GCM)
+server/google.js      autorisation Gmail (OAuth 2.0)
 test/                 tests (node:test), sans dépendance
 .github/workflows/    intégration continue : npm test sur Node 20.12 et 22
 ```
 
 ```bash
-npm test     # 30 tests : utilitaires + API de bout en bout
+npm test     # 49 tests : utilitaires, API, comptes et boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

@@ -19,6 +19,49 @@
 </head>
 <body>
 
+<!-- ═══════════════ CONNEXION ═══════════════ -->
+<div class="gate" id="authGate" hidden>
+  <div class="gate-card">
+    <div class="gate-head">
+      <img src="assets/icons/logo.svg" alt="" class="brand-logo">
+      <div>
+        <h1>Bureau du Courrier</h1>
+        <p id="gateSubtitle">Connectez-vous pour accéder au registre</p>
+      </div>
+    </div>
+
+    <div class="gate-tabs" id="gateTabs">
+      <button class="active" data-form="login">Connexion</button>
+      <button data-form="signup">Créer un compte</button>
+    </div>
+
+    <form id="loginForm" class="gate-form">
+      <label for="loginEmail">Courriel</label>
+      <input type="email" id="loginEmail" autocomplete="username" required>
+      <label for="loginPassword">Mot de passe</label>
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
+      <button class="btn" type="submit">Se connecter</button>
+    </form>
+
+    <form id="signupForm" class="gate-form" hidden>
+      <label for="signupName">Votre nom</label>
+      <input type="text" id="signupName" autocomplete="name" required>
+      <label for="signupEmail">Courriel</label>
+      <input type="email" id="signupEmail" autocomplete="username" required>
+      <label for="signupPassword">Mot de passe</label>
+      <input type="password" id="signupPassword" autocomplete="new-password" required>
+      <p class="hint">Au moins 10 caractères. Ce mot de passe est propre à cette application — n'y remettez pas celui de votre boîte mail.</p>
+      <button class="btn" type="submit">Créer le compte</button>
+    </form>
+
+    <div id="gateMsg"></div>
+    <p class="gate-skip" id="gateSkip" hidden>
+      <button type="button" class="link-btn" id="skipAccountBtn">Continuer sans compte</button>
+      — le registre reste alors accessible à toute personne qui ouvre cette adresse.
+    </p>
+  </div>
+</div>
+
 <div class="wrap">
   <header>
     <div class="brand">
@@ -33,6 +76,10 @@
       <div class="header-badges">
         <button class="btn ghost small install-btn" id="installBtn" hidden>Installer l'application</button>
         <div class="mode-badge" id="modeBadge" title="Mode de stockage">…</div>
+      </div>
+      <div class="header-badges" id="accountBar" hidden>
+        <span class="who-badge" id="whoBadge"></span>
+        <button class="link-btn" id="logoutBtn">Se déconnecter</button>
       </div>
     </div>
   </header>
@@ -170,6 +217,57 @@
       <div id="settingsMsg"></div>
       <label style="margin-top:18px;">Aperçu</label>
       <pre class="preview" id="settingsPreview"></pre>
+    </div>
+
+    <div class="card" id="mailboxCard" hidden>
+      <h2>Ma boîte d'envoi</h2>
+      <div id="mailboxState"></div>
+
+      <div id="mailboxChoices">
+        <div class="mailbox-option">
+          <h3>Connecter ma boîte Gmail</h3>
+          <p>
+            Vous autorisez l'application depuis l'écran de Google. Votre mot de passe n'est jamais
+            transmis à l'application, et l'autorisation se retire à tout moment sur
+            <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">la page des accès Google</a>.
+          </p>
+          <button class="btn" id="connectGoogleBtn">Connecter ma boîte Gmail</button>
+          <p class="hint" id="googleUnavailable" hidden>
+            Indisponible : ce serveur n'a pas de <code>GOOGLE_CLIENT_ID</code> configuré.
+            Utilisez un mot de passe d'application ci-dessous, ou voir <code>docs/connexion-boite-mail.md</code>.
+          </p>
+        </div>
+
+        <details class="mailbox-option">
+          <summary>Utiliser un mot de passe d'application (SMTP)</summary>
+          <p class="hint">
+            Pour les boîtes sans connexion Google : vous fournissez un mot de passe d'application,
+            jamais le mot de passe de votre compte. Il est chiffré avant d'être enregistré.
+          </p>
+          <div class="copies-grid">
+            <div>
+              <label for="mbAddress">Votre adresse</label>
+              <input type="email" id="mbAddress" placeholder="vous@exemple.com">
+            </div>
+            <div>
+              <label for="mbHost">Serveur SMTP</label>
+              <input type="text" id="mbHost" placeholder="smtp.gmail.com">
+            </div>
+          </div>
+          <div class="copies-grid">
+            <div>
+              <label for="mbPort">Port</label>
+              <input type="text" id="mbPort" placeholder="587" value="587">
+            </div>
+            <div>
+              <label for="mbPassword">Mot de passe d'application</label>
+              <input type="password" id="mbPassword" autocomplete="off">
+            </div>
+          </div>
+          <button class="btn ghost" id="connectSmtpBtn">Enregistrer cette boîte</button>
+        </details>
+      </div>
+      <div id="mailboxMsg"></div>
     </div>
 
     <div class="card">

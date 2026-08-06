@@ -240,6 +240,90 @@ input.invalid{border-color:var(--rust);background:#FCF3F1;}
 .result-row .who{font-size:15px;}
 .result-row .who span{display:block;font-family:var(--mono);font-size:12px;color:var(--slate);margin-top:2px;}
 
+/* ---------- écran de connexion ---------- */
+/* display:flex l'emporterait sur le display:none implicite de [hidden] :
+   sans cette règle, l'écran de connexion resterait au-dessus de l'application. */
+.gate[hidden]{display:none;}
+.gate{
+  position:fixed;
+  inset:0;
+  background:var(--paper);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  z-index:80;
+  overflow-y:auto;
+}
+.gate-card{
+  background:#fff;
+  border:1px solid var(--line);
+  padding:28px;
+  width:100%;
+  max-width:420px;
+}
+.gate-head{display:flex;align-items:center;gap:14px;margin-bottom:22px;}
+.gate-head h1{font-family:var(--typewriter);font-size:20px;margin:0 0 4px;}
+.gate-head p{margin:0;color:var(--slate);font-size:13px;font-style:italic;}
+.gate-head .brand-logo{width:46px;height:46px;}
+.gate-tabs{display:flex;gap:2px;margin-bottom:20px;}
+.gate-tabs button{
+  flex:1;
+  font-family:var(--typewriter);
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  padding:10px;
+  background:var(--paper-dark);
+  border:1px solid var(--line);
+  color:var(--slate);
+  cursor:pointer;
+}
+.gate-tabs button.active{background:var(--navy);color:var(--paper);border-color:var(--navy);}
+.gate-form .btn{width:100%;margin-top:4px;}
+.gate-form .hint{margin:-8px 0 14px;}
+input[type=password]{
+  width:100%;
+  font-family:var(--serif);
+  font-size:16px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  background:var(--paper);
+  color:var(--navy);
+  margin-bottom:16px;
+}
+.who-badge{
+  font-family:var(--mono);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--slate);
+}
+
+/* ---------- boîte d'envoi personnelle ---------- */
+.mailbox-option{
+  border:1px solid var(--line);
+  padding:16px;
+  margin-bottom:14px;
+  background:var(--paper);
+}
+.mailbox-option h3{
+  font-family:var(--typewriter);
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  margin:0 0 8px;
+}
+.mailbox-option p{margin:0 0 12px;font-size:13.5px;line-height:1.5;}
+.mailbox-option summary{
+  font-family:var(--typewriter);
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  cursor:pointer;
+  margin-bottom:10px;
+}
+
 /* ---------- copies (Cc / Cci) ---------- */
 .copies{
   margin-top:18px;

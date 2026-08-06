@@ -10,6 +10,8 @@ const crypto = require('node:crypto');
 
 const util = require('../assets/js/util.js');
 const { DEFAULT_SETTINGS } = require('./db.js');
+const auth = require('./auth.js');
+const { createUserMailer } = require('./mailer.js');
 
 const VERSION = '1.0.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -127,6 +129,233 @@ async function serveStatic(req, res, rootDir) {
   fs.createReadStream(target).pipe(res);
 }
 
+/* ---------- comptes ---------- */
+
+function sendJsonWithCookie(res, status, payload, cookie) {
+  const body = JSON.stringify(payload);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    'Cache-Control': 'no-store',
+    'Set-Cookie': cookie
+  });
+  res.end(body);
+}
+
+function redirect(res, location) {
+  res.writeHead(302, { Location: location, 'Cache-Control': 'no-store' });
+  res.end();
+}
+
+/** Renvoie true si la route a été traitée ici. */
+async function handleAuth(req, res, ctx, pathname) {
+  const { db, vault, google, throttle } = ctx;
+  const method = req.method;
+  const secureCookie = (req.headers['x-forwarded-proto'] || '') === 'https';
+
+  if (pathname === '/api/auth/me' && method === 'GET') {
+    const user = auth.userFromRequest(db, req);
+    sendJson(res, 200, {
+      user: auth.publicUser(user),
+      accountsExist: (db.data.users || []).length > 0,
+      signupOpen: ctx.signupOpen,
+      googleOAuth: google.enabled
+    });
+    return true;
+  }
+
+  if (pathname === '/api/auth/signup' && method === 'POST') {
+    const body = await readBody(req);
+    const name = String(body.name || '').trim();
+    const email = String(body.email || '').trim();
+    const password = String(body.password || '');
+
+    if (!name) throw Object.assign(new Error('Nom manquant'), { status: 400 });
+    if (!util.isValidEmail(email)) throw Object.assign(new Error('Courriel invalide'), { status: 400 });
+    const weak = auth.checkPasswordStrength(password);
+    if (weak) throw Object.assign(new Error(weak), { status: 400 });
+
+    // Le tout premier compte est toujours autorisé : sans lui, personne ne
+    // pourrait ouvrir l'application après avoir fermé les inscriptions.
+    const first = (db.data.users || []).length === 0;
+    if (!first && !ctx.signupOpen) {
+      throw Object.assign(new Error('Les inscriptions sont fermées sur ce serveur'), { status: 403 });
+    }
+    if (auth.findUserByEmail(db, email)) {
+      throw Object.assign(new Error('Un compte existe déjà avec ce courriel'), { status: 409 });
+    }
+
+    const user = {
+      id: crypto.randomUUID(),
+      name: name,
+      email: email,
+      password: auth.hashPassword(password),
+      createdAt: new Date().toISOString(),
+      mailbox: null,
+      mailboxSecret: ''
+    };
+    const session = auth.newSession(user.id);
+    await db.write(function (data) {
+      data.users.push(user);
+      data.sessions.push(session);
+    });
+
+    sendJsonWithCookie(res, 201, { user: auth.publicUser(user) }, auth.sessionCookie(session.token, { secure: secureCookie }));
+    return true;
+  }
+
+  if (pathname === '/api/auth/login' && method === 'POST') {
+    const body = await readBody(req);
+    const email = String(body.email || '').trim();
+    const key = util.normalize(email) || 'inconnu';
+
+    const state = throttle.check(key);
+    if (state.blocked) {
+      throw Object.assign(
+        new Error('Trop de tentatives. Réessayez dans ' + Math.ceil(state.retryInSeconds / 60) + ' minute(s).'),
+        { status: 429 }
+      );
+    }
+
+    const user = auth.findUserByEmail(db, email);
+    // Même message et même coût dans les deux cas : ne pas révéler quels
+    // courriels ont un compte.
+    const ok = user && auth.verifyPassword(String(body.password || ''), user.password);
+    if (!ok) {
+      throttle.fail(key);
+      throw Object.assign(new Error('Courriel ou mot de passe incorrect'), { status: 401 });
+    }
+    throttle.succeed(key);
+
+    const session = auth.newSession(user.id);
+    await db.write(function (data) {
+      data.sessions.push(session);
+    });
+    sendJsonWithCookie(res, 200, { user: auth.publicUser(user) }, auth.sessionCookie(session.token, { secure: secureCookie }));
+    return true;
+  }
+
+  if (pathname === '/api/auth/logout' && method === 'POST') {
+    const token = auth.parseCookies(req.headers.cookie)[auth.SESSION_COOKIE];
+    if (token) {
+      await db.write(function (data) {
+        data.sessions = data.sessions.filter(function (s) {
+          return s.token !== token;
+        });
+      });
+    }
+    sendJsonWithCookie(res, 200, { ok: true }, auth.sessionCookie('', { secure: secureCookie }));
+    return true;
+  }
+
+  /* --- boîte d'envoi personnelle --- */
+
+  if (pathname === '/api/auth/mailbox' && method === 'DELETE') {
+    const user = auth.userFromRequest(db, req);
+    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    await db.write(function (data) {
+      const target = data.users.find(function (u) {
+        return u.id === user.id;
+      });
+      target.mailbox = null;
+      target.mailboxSecret = '';
+    });
+    sendJson(res, 200, { user: auth.publicUser(auth.userFromRequest(db, req)) });
+    return true;
+  }
+
+  if (pathname === '/api/auth/mailbox/smtp' && method === 'PUT') {
+    const user = auth.userFromRequest(db, req);
+    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    const body = await readBody(req);
+    const address = String(body.address || '').trim();
+    const host = String(body.host || '').trim();
+    const password = String(body.password || '');
+    const port = Number(body.port || 587);
+
+    if (!util.isValidEmail(address)) throw Object.assign(new Error('Adresse invalide'), { status: 400 });
+    if (!host) throw Object.assign(new Error('Serveur SMTP manquant'), { status: 400 });
+    if (!password) throw Object.assign(new Error('Mot de passe manquant'), { status: 400 });
+
+    const mailbox = {
+      method: 'smtp',
+      address: address,
+      host: host,
+      port: port,
+      username: String(body.username || '').trim() || address,
+      connectedAt: new Date().toISOString()
+    };
+    await db.write(function (data) {
+      const target = data.users.find(function (u) {
+        return u.id === user.id;
+      });
+      target.mailbox = mailbox;
+      target.mailboxSecret = vault.seal(password);
+    });
+    sendJson(res, 200, { user: auth.publicUser(auth.userFromRequest(db, req)) });
+    return true;
+  }
+
+  if (pathname === '/api/auth/google/start' && method === 'GET') {
+    const user = auth.userFromRequest(db, req);
+    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    if (!google.enabled) {
+      throw Object.assign(new Error('Connexion Google non configurée sur ce serveur'), { status: 503 });
+    }
+    // L'état lie la redirection à cette session : sans lui, un tiers pourrait
+    // faire aboutir son propre consentement sur le compte de l'employé·e.
+    const state = crypto.randomBytes(24).toString('base64url');
+    const token = auth.parseCookies(req.headers.cookie)[auth.SESSION_COOKIE];
+    await db.write(function (data) {
+      const session = data.sessions.find(function (s) {
+        return s.token === token;
+      });
+      if (session) session.oauthState = state;
+    });
+    redirect(res, google.authUrl(state, google.redirectUri(req)));
+    return true;
+  }
+
+  if (pathname === '/api/auth/google/callback' && method === 'GET') {
+    const url = new URL(req.url, 'http://localhost');
+    const user = auth.userFromRequest(db, req);
+    const token = auth.parseCookies(req.headers.cookie)[auth.SESSION_COOKIE];
+    const session = auth.findSession(db, token);
+
+    const fail = function (reason) {
+      redirect(res, '/#reglages?boite=' + encodeURIComponent(reason));
+    };
+
+    if (!user || !session) return fail('session'), true;
+    if (url.searchParams.get('error')) return fail(url.searchParams.get('error')), true;
+    const state = url.searchParams.get('state');
+    if (!state || state !== session.oauthState) return fail('etat'), true;
+
+    try {
+      const tokens = await google.exchangeCode(url.searchParams.get('code'), google.redirectUri(req));
+      const address = await google.fetchEmail(tokens.access_token);
+      await db.write(function (data) {
+        const target = data.users.find(function (u) {
+          return u.id === user.id;
+        });
+        target.mailbox = { method: 'oauth2', address: address, connectedAt: new Date().toISOString() };
+        target.mailboxSecret = vault.seal(tokens.refresh_token);
+        const s = data.sessions.find(function (x) {
+          return x.token === token;
+        });
+        if (s) delete s.oauthState;
+      });
+      redirect(res, '/#reglages?boite=ok');
+    } catch (err) {
+      console.error('[google]', err.message);
+      fail(err.message.slice(0, 120));
+    }
+    return true;
+  }
+
+  return false;
+}
+
 /* ---------- API ---------- */
 
 async function handleApi(req, res, ctx, pathname) {
@@ -140,12 +369,33 @@ async function handleApi(req, res, ctx, pathname) {
       smtp: mailer.enabled,
       mailMode: mailer.mode,
       mailReason: mailer.reason || null,
-      storage: 'fichier'
+      storage: 'fichier',
+      accountsExist: (db.data.users || []).length > 0,
+      googleOAuth: ctx.google.enabled
     });
   }
 
+  if (pathname.startsWith('/api/auth/')) {
+    if (await handleAuth(req, res, ctx, pathname)) return;
+    throw Object.assign(new Error('Route inconnue'), { status: 404 });
+  }
+
+  /* Tant qu'aucun compte n'existe, le serveur reste ouvert : c'est le premier
+     démarrage, et exiger une connexion inexistante bloquerait l'installation.
+     Dès qu'un compte est créé, tout le reste de l'API demande une session. */
+  const currentUser = auth.userFromRequest(db, req);
+  if ((db.data.users || []).length > 0 && !currentUser) {
+    throw Object.assign(new Error('Connexion requise'), { status: 401 });
+  }
+
   if (pathname === '/api/state' && method === 'GET') {
-    return sendJson(res, 200, db.data);
+    // Ni comptes ni sessions : le registre partagé n'a pas à transporter les
+    // secrets des autres employé·es.
+    return sendJson(res, 200, {
+      contacts: db.data.contacts,
+      history: db.data.history,
+      settings: db.data.settings
+    });
   }
 
   /* --- destinataires --- */
@@ -279,7 +529,27 @@ async function handleApi(req, res, ctx, pathname) {
     const to = String(body.email || '').trim();
     const name = String(body.name || '').trim();
     if (!util.isValidEmail(to)) throw Object.assign(new Error('Courriel invalide'), { status: 400 });
-    if (!mailer.enabled) {
+
+    /* La boîte de la personne connectée passe avant le compte du serveur : si
+       elle a autorisé l'application, le courriel part de son adresse, et les
+       réponses lui reviennent. */
+    let sender = mailer;
+    let senderLabel = 'serveur';
+    if (currentUser && currentUser.mailbox) {
+      const secret = ctx.vault.open(currentUser.mailboxSecret);
+      if (secret === null) {
+        throw Object.assign(
+          new Error('Les identifiants de votre boîte sont illisibles — reconnectez-la dans les Réglages'),
+          { status: 503 }
+        );
+      }
+      sender = createUserMailer(currentUser.mailbox, secret, {
+        dryRun: mailer.mode === 'essai',
+        clientId: ctx.google.clientId,
+        clientSecret: ctx.google.clientSecret
+      });
+      senderLabel = currentUser.mailbox.address;
+    } else if (!mailer.enabled) {
       throw Object.assign(new Error(mailer.reason || 'Envoi automatique indisponible'), { status: 503 });
     }
 
@@ -319,11 +589,13 @@ async function handleApi(req, res, ctx, pathname) {
       bcc: bccList,
       date: new Date().toISOString(),
       method: 'auto',
-      status: 'envoyé'
+      status: 'envoyé',
+      sentBy: senderLabel,
+      operator: currentUser ? currentUser.name : null
     };
 
     try {
-      await mailer.send({ to: to, from: from, cc: ccList, bcc: bccList, subject: subject, text: text });
+      await sender.send({ to: to, from: from, cc: ccList, bcc: bccList, subject: subject, text: text });
     } catch (err) {
       record.status = 'échec';
       await db.write(function (data) {
@@ -346,8 +618,17 @@ async function handleApi(req, res, ctx, pathname) {
 
 /* ---------- assemblage ---------- */
 
-function createServer(ctx) {
-  const rootDir = path.resolve(ctx.rootDir || path.join(__dirname, '..'));
+function createServer(options) {
+  const rootDir = path.resolve(options.rootDir || path.join(__dirname, '..'));
+
+  // Valeurs de repli : le serveur doit pouvoir démarrer avec le seul couple
+  // { db, mailer }, comme avant l'ajout des comptes.
+  const ctx = Object.assign({}, options, {
+    vault: options.vault || require('./secrets.js').createVault({ secret: crypto.randomBytes(32).toString('base64') }),
+    google: options.google || require('./google.js').createGoogleOAuth({}),
+    throttle: options.throttle || auth.createThrottle(),
+    signupOpen: options.signupOpen !== false
+  });
 
   return http.createServer(async function (req, res) {
     const pathname = new URL(req.url, 'http://localhost').pathname;

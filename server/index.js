@@ -7,6 +7,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { Db } = require('./db.js');
 const { createMailer } = require('./mailer.js');
+const { createVault } = require('./secrets.js');
+const { createGoogleOAuth } = require('./google.js');
 const { createServer, VERSION } = require('./app.js');
 
 const ROOT = path.join(__dirname, '..');
@@ -49,7 +51,21 @@ async function main() {
   await db.load();
 
   const mailer = createMailer(process.env);
-  const server = createServer({ db: db, mailer: mailer, rootDir: ROOT });
+  const vault = createVault({
+    secret: process.env.APP_SECRET || '',
+    keyFile: process.env.APP_SECRET_FILE || path.join(path.dirname(dbFile), 'secret.key')
+  });
+  const google = createGoogleOAuth(process.env);
+  const signupOpen = String(process.env.SIGNUP_CLOSED || '').toLowerCase() !== 'true';
+
+  const server = createServer({
+    db: db,
+    mailer: mailer,
+    vault: vault,
+    google: google,
+    signupOpen: signupOpen,
+    rootDir: ROOT
+  });
 
   server.listen(port, host, function () {
     console.log('Bureau du Courrier v' + VERSION);
@@ -63,6 +79,13 @@ async function main() {
             : 'SMTP ' + mailer.config.host + ':' + mailer.config.port + ' (de : ' + mailer.config.from + ')'
           : 'inactif — ' + mailer.reason)
     );
+    console.log(
+      '  comptes     ' +
+        (db.data.users.length === 0
+          ? 'aucun — le premier compte créé protégera l’application'
+          : db.data.users.length + ' compte(s)' + (signupOpen ? '' : ', inscriptions fermées'))
+    );
+    console.log('  boîte perso ' + (google.enabled ? 'connexion Google disponible' : 'Google non configuré — SMTP personnel seulement'));
     if (String(process.env.OPEN_BROWSER || '') === '1') {
       openBrowser('http://localhost:' + port);
     }

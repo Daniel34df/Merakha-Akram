@@ -22,7 +22,10 @@
     suggestions: [],
     // Vrai dès que l'employé·e a modifié les copies au guichet : on cesse alors
     // de les réaligner sur les réglages tant qu'elles n'ont pas été remises à zéro.
-    copiesTouched: false
+    copiesTouched: false,
+    // Premier démarrage : l'écran d'installation a été écarté volontairement.
+    skipAccount: false,
+    gateFormChosen: false
   };
 
   /* ═════════════ retours visuels ═════════════ */
@@ -134,7 +137,7 @@
     badge.title = info.title;
 
     const notes = [];
-    if (S.mode === 'serveur' && S.smtp) {
+    if (store.canSendAutomatically()) {
       notes.push('Envoi automatique actif : le courriel part directement du serveur, sans ouvrir votre logiciel de courriel.');
     } else {
       notes.push(
@@ -154,7 +157,14 @@
   function renderStatus() {
     const rows = [
       ['Stockage', (MODE_LABEL[S.mode] || {}).text + ' (' + S.mode + ')'],
-      ['Envoi automatique', S.mode === 'serveur' && S.smtp ? 'Actif (SMTP)' : 'Inactif — repli sur le logiciel de courriel'],
+      [
+        'Envoi automatique',
+        store.canSendAutomatically()
+          ? S.auth.user && S.auth.user.mailbox
+            ? 'Actif — depuis votre boîte (' + S.auth.user.mailbox.address + ')'
+            : 'Actif — compte du serveur'
+          : 'Inactif — repli sur le logiciel de courriel'
+      ],
       ['Destinataires', String(S.contacts.length)],
       ['Notifications', String(S.history.length)],
       ['Application', installStatusText()]
@@ -166,7 +176,7 @@
       })
       .join('');
 
-    const smtpOn = S.mode === 'serveur' && S.smtp;
+    const smtpOn = store.canSendAutomatically();
     $('smtpActions').innerHTML = smtpOn
       ? '<button class="btn ghost" id="testMailBtn">Envoyer un courriel de test</button>'
       : '';
@@ -189,7 +199,9 @@
             '<code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code> et <code>MAIL_FROM</code></li>' +
             '<li>redémarrer avec <code>npm start</code></li>' +
             '</ul>' +
-            'Les valeurs SMTP sont celles de votre fournisseur de courriel (voir le README).'
+            (S.auth.user
+              ? 'Plus simple : reliez votre propre boîte dans « Ma boîte d’envoi », juste au-dessus.'
+              : 'Les valeurs SMTP sont celles de votre fournisseur de courriel (voir le README).')
     );
   }
 
@@ -479,7 +491,7 @@
 
     let auto = false;
     let failure = null;
-    if (S.mode === 'serveur' && S.smtp) {
+    if (store.canSendAutomatically()) {
       try {
         await store.sendViaServer(contact, message);
         auto = true;
@@ -997,6 +1009,207 @@
     setMsg('settingsMsg', 'ok', 'Modèle par défaut rétabli.');
   });
 
+  /* ═════════════ comptes ═════════════ */
+
+  function renderGate() {
+    const gate = $('authGate');
+    /* Trois situations mènent à l'écran de connexion :
+       - une session est exigée et manque ;
+       - le serveur n'a encore aucun compte : c'est l'installation, on propose
+         de créer celui du bureau (avec la possibilité de s'en passer).
+       Hors mode serveur, il n'y a pas de comptes du tout. */
+    const firstRun = S.mode === 'serveur' && !S.auth.accountsExist && !view.skipAccount;
+    const needed = S.mode === 'serveur' && (S.auth.required || firstRun);
+    gate.hidden = !needed;
+    document.body.style.overflow = needed ? 'hidden' : '';
+    $('gateSkip').hidden = !firstRun;
+
+    const bar = $('accountBar');
+    bar.hidden = !S.auth.user;
+    if (S.auth.user) $('whoBadge').textContent = S.auth.user.name;
+
+    // Les comptes n'existent qu'en mode serveur : hors de ce mode, l'écran de
+    // connexion n'a pas lieu d'être et ne doit rien réclamer.
+    if (S.mode !== 'serveur') return;
+
+    // Aucun compte encore : la première visite crée le compte du bureau.
+    const signupTab = document.querySelector('.gate-tabs button[data-form="signup"]');
+    if (signupTab) signupTab.hidden = !S.auth.signupOpen && S.auth.accountsExist;
+    if (!S.auth.accountsExist && !view.gateFormChosen) {
+      $('gateSubtitle').textContent = 'Créez le compte du bureau pour protéger le registre';
+      showGateForm('signup');
+    }
+  }
+
+  function showGateForm(which) {
+    document.querySelectorAll('.gate-tabs button').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.form === which);
+    });
+    $('loginForm').hidden = which !== 'login';
+    $('signupForm').hidden = which !== 'signup';
+    setMsg('gateMsg', '', '');
+  }
+
+  document.querySelectorAll('.gate-tabs button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      view.gateFormChosen = true;
+      showGateForm(btn.dataset.form);
+    });
+  });
+
+  $('skipAccountBtn').addEventListener('click', function () {
+    view.skipAccount = true;
+    renderGate();
+    toast('Registre ouvert sans compte. Créez-en un depuis les Réglages quand vous voudrez.');
+    nameInput.focus();
+  });
+
+  $('loginForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    setMsg('gateMsg', '', 'Connexion…');
+    try {
+      await store.login({ email: $('loginEmail').value.trim(), password: $('loginPassword').value });
+      $('loginPassword').value = '';
+      setMsg('gateMsg', '', '');
+      afterLogin();
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
+
+  $('signupForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    setMsg('gateMsg', '', 'Création du compte…');
+    try {
+      await store.signup({
+        name: $('signupName').value.trim(),
+        email: $('signupEmail').value.trim(),
+        password: $('signupPassword').value
+      });
+      $('signupPassword').value = '';
+      setMsg('gateMsg', '', '');
+      afterLogin();
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
+
+  $('logoutBtn').addEventListener('click', async function () {
+    try {
+      await store.logout();
+      toast('Déconnecté.');
+    } catch (err) {
+      toast('Déconnexion impossible : ' + err.message, 'error');
+    }
+  });
+
+  function afterLogin() {
+    fillSettingsForm();
+    syncCopiesFromSettings(true);
+    renderAll();
+    toast('Bonjour ' + S.auth.user.name + '.', 'ok');
+    nameInput.focus();
+  }
+
+  /* ═════════════ boîte d'envoi personnelle ═════════════ */
+
+  function renderMailbox() {
+    const card = $('mailboxCard');
+    card.hidden = !S.auth.user;
+    if (!S.auth.user) return;
+
+    const mailbox = S.auth.user.mailbox;
+    $('mailboxChoices').hidden = !!mailbox;
+
+    if (mailbox) {
+      setMsg(
+        'mailboxState',
+        'ok',
+        'Les courriels partent de <strong>' +
+          esc(mailbox.address) +
+          '</strong> — votre boîte' +
+          (mailbox.method === 'oauth2' ? ' (autorisation Google)' : ' (mot de passe d’application)') +
+          '.<br><button type="button" class="link-btn danger" id="disconnectMailboxBtn">Déconnecter cette boîte</button>'
+      );
+      const btn = $('disconnectMailboxBtn');
+      if (btn) {
+        btn.addEventListener('click', async function () {
+          const ok = await confirmDialog(
+            'Déconnecter la boîte',
+            'Les notifications repartiront du compte du serveur, ou seront préparées dans votre logiciel de courriel.',
+            'Déconnecter'
+          );
+          if (!ok) return;
+          try {
+            await store.disconnectMailbox();
+            toast('Boîte déconnectée.');
+          } catch (err) {
+            setMsg('mailboxMsg', 'error', esc(err.message));
+          }
+        });
+      }
+    } else {
+      setMsg(
+        'mailboxState',
+        '',
+        'Reliez votre boîte pour que les notifications partent de <strong>votre</strong> adresse : ' +
+          'les destinataires vous répondent directement, et l’envoi ne dépend plus d’un compte partagé.'
+      );
+    }
+
+    $('googleUnavailable').hidden = S.auth.googleOAuth;
+    $('connectGoogleBtn').disabled = !S.auth.googleOAuth;
+  }
+
+  $('connectGoogleBtn').addEventListener('click', function () {
+    // Navigation complète : l'écran de consentement Google refuse d'être
+    // affiché dans une requête en arrière-plan.
+    root.location.href = '/api/auth/google/start';
+  });
+
+  $('connectSmtpBtn').addEventListener('click', async function () {
+    const address = $('mbAddress').value.trim();
+    const host = $('mbHost').value.trim();
+    const password = $('mbPassword').value;
+    if (!util.isValidEmail(address) || !host || !password) {
+      setMsg('mailboxMsg', 'error', 'Adresse, serveur SMTP et mot de passe d’application sont requis.');
+      return;
+    }
+    try {
+      await store.connectSmtpMailbox({
+        address: address,
+        host: host,
+        port: Number($('mbPort').value) || 587,
+        password: password
+      });
+      $('mbPassword').value = '';
+      setMsg('mailboxMsg', 'ok', 'Boîte enregistrée. Essayez « Envoyer un courriel de test ».');
+    } catch (err) {
+      setMsg('mailboxMsg', 'error', esc(err.message));
+    }
+  });
+
+  /** Retour de l'écran de consentement Google : /#reglages?boite=ok ou une raison. */
+  function readMailboxReturn() {
+    const hash = root.location.hash || '';
+    const index = hash.indexOf('?');
+    if (index === -1) return;
+    const params = new URLSearchParams(hash.slice(index + 1));
+    const result = params.get('boite');
+    if (!result) return;
+    showPanel('reglages');
+    if (result === 'ok') {
+      setMsg('mailboxMsg', 'ok', 'Boîte Gmail connectée.');
+    } else if (result === 'session') {
+      setMsg('mailboxMsg', 'error', 'Session expirée pendant l’autorisation — reconnectez-vous et réessayez.');
+    } else if (result === 'etat') {
+      setMsg('mailboxMsg', 'error', 'Autorisation refusée : la demande ne correspondait pas à cette session.');
+    } else {
+      setMsg('mailboxMsg', 'error', 'Connexion impossible : ' + esc(result));
+    }
+    history.replaceState(null, '', '#reglages');
+  }
+
   /* ═════════════ application installable ═════════════ */
 
   const install = { prompt: null, installed: false };
@@ -1073,18 +1286,15 @@
   /* ═════════════ démarrage ═════════════ */
 
   function renderAll() {
+    renderGate();
     renderMode();
     renderContacts();
     renderHistory();
     renderStatus();
+    renderMailbox();
   }
 
-  store.onChange(function () {
-    renderMode();
-    renderContacts();
-    renderHistory();
-    renderStatus();
-  });
+  store.onChange(renderAll);
 
   document.addEventListener('keydown', function (e) {
     // Échap ferme les suggestions ; « / » ramène au guichet et met le curseur dans la recherche.
@@ -1115,9 +1325,10 @@
     fillSettingsForm();
     syncCopiesFromSettings(true);
     renderAll();
+    readMailboxReturn();
     renderInstallButton();
     registerServiceWorker();
-    nameInput.focus();
+    if (!S.auth.required) nameInput.focus();
   }
 
   start();

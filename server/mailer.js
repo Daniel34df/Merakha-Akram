@@ -105,4 +105,75 @@ function createMailer(env) {
   };
 }
 
-module.exports = { createMailer: createMailer, readConfig: readConfig };
+/* Envoi depuis la boîte personnelle d'un compte.
+
+   Deux voies, choisies à la connexion de la boîte :
+     - 'oauth2' : jeton Google, l'application n'a jamais vu le mot de passe ;
+     - 'smtp'   : identifiants SMTP fournis par l'employé·e (mot de passe
+                  d'application, jamais le mot de passe du compte).
+
+   Le secret arrive déjà déchiffré : c'est l'appelant qui ouvre le coffre, pour
+   que la clé ne circule pas jusqu'ici. */
+function createUserMailer(mailbox, secret, options) {
+  const opts = options || {};
+
+  if (opts.dryRun) {
+    const sent = [];
+    return {
+      mode: 'essai',
+      sent: sent,
+      async send(message) {
+        const prepared = normalizeMessage(message, mailbox.address);
+        sent.push(prepared);
+        console.log('[mail:essai:' + mailbox.method + '] ' + prepared.to + ' — ' + prepared.subject);
+        return { messageId: 'dry-run-user-' + sent.length };
+      }
+    };
+  }
+
+  let nodemailer;
+  try {
+    nodemailer = require('nodemailer');
+  } catch (e) {
+    throw Object.assign(new Error('Module nodemailer absent — exécutez « npm install »'), { status: 503 });
+  }
+
+  let transport;
+  if (mailbox.method === 'oauth2') {
+    if (!opts.clientId || !opts.clientSecret) {
+      throw Object.assign(new Error('Connexion Google non configurée sur ce serveur'), { status: 503 });
+    }
+    // nodemailer renouvelle lui-même le jeton d'accès à partir du jeton durable.
+    transport = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: mailbox.address,
+        clientId: opts.clientId,
+        clientSecret: opts.clientSecret,
+        refreshToken: secret
+      }
+    });
+  } else {
+    transport = nodemailer.createTransport({
+      host: mailbox.host,
+      port: mailbox.port || 587,
+      secure: mailbox.port === 465,
+      auth: { user: mailbox.username || mailbox.address, pass: secret }
+    });
+  }
+
+  return {
+    mode: mailbox.method,
+    async send(message) {
+      return transport.sendMail(normalizeMessage(message, mailbox.address));
+    }
+  };
+}
+
+module.exports = {
+  createMailer: createMailer,
+  createUserMailer: createUserMailer,
+  readConfig: readConfig,
+  normalizeMessage: normalizeMessage
+};

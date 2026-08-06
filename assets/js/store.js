@@ -35,8 +35,17 @@
     contacts: [],
     history: [],
     settings: Object.assign({}, DEFAULT_SETTINGS),
-    lastError: null
+    lastError: null,
+    // Comptes : n'existent qu'en mode serveur. accountsExist bascule dès la
+    // création du premier compte, et c'est lui qui rend la connexion obligatoire.
+    auth: { user: null, accountsExist: false, signupOpen: true, googleOAuth: false, required: false }
   };
+
+  /** L'envoi automatique est possible si le serveur a un compte SMTP, ou si la
+      personne connectée a relié sa propre boîte. */
+  function canSendAutomatically() {
+    return state.mode === 'serveur' && (state.smtp || !!(state.auth.user && state.auth.user.mailbox));
+  }
 
   const listeners = [];
 
@@ -53,7 +62,10 @@
   /* ---------- transport HTTP ---------- */
 
   async function api(path, options) {
-    const res = await fetch('/api' + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options));
+    const res = await fetch(
+      '/api' + path,
+      Object.assign({ headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' }, options)
+    );
     let payload = null;
     try {
       payload = await res.json();
@@ -64,9 +76,58 @@
       const err = new Error((payload && payload.error) || 'Erreur serveur (' + res.status + ')');
       err.status = res.status;
       err.payload = payload;
+      // Session expirée en cours d'usage : on repasse l'interface derrière
+      // l'écran de connexion plutôt que d'enchaîner les erreurs.
+      if (res.status === 401 && state.auth.accountsExist) {
+        state.auth.user = null;
+        state.auth.required = true;
+        emit();
+      }
       throw err;
     }
     return payload;
+  }
+
+  /* ---------- comptes ---------- */
+
+  function applyAuth(payload) {
+    state.auth.user = (payload && payload.user) || null;
+    if (payload && payload.accountsExist !== undefined) state.auth.accountsExist = payload.accountsExist;
+    if (payload && payload.signupOpen !== undefined) state.auth.signupOpen = payload.signupOpen;
+    if (payload && payload.googleOAuth !== undefined) state.auth.googleOAuth = payload.googleOAuth;
+    state.auth.required = state.auth.accountsExist && !state.auth.user;
+    emit();
+    return state.auth;
+  }
+
+  async function signup(input) {
+    const result = await api('/auth/signup', { method: 'POST', body: JSON.stringify(input) });
+    state.auth.accountsExist = true;
+    applyAuth(result);
+    await loadServerState();
+    return result.user;
+  }
+
+  async function login(input) {
+    const result = await api('/auth/login', { method: 'POST', body: JSON.stringify(input) });
+    applyAuth(result);
+    await loadServerState();
+    return result.user;
+  }
+
+  async function logout() {
+    await api('/auth/logout', { method: 'POST' });
+    state.contacts = [];
+    state.history = [];
+    applyAuth({ user: null });
+  }
+
+  async function connectSmtpMailbox(input) {
+    return applyAuth(await api('/auth/mailbox/smtp', { method: 'PUT', body: JSON.stringify(input) }));
+  }
+
+  async function disconnectMailbox() {
+    return applyAuth(await api('/auth/mailbox', { method: 'DELETE' }));
   }
 
   /* ---------- localStorage ---------- */
@@ -131,17 +192,26 @@
     }
   }
 
+  async function loadServerState() {
+    const data = await api('/state');
+    state.contacts = data.contacts || [];
+    state.history = data.history || [];
+    state.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || {});
+    emit();
+    return state;
+  }
+
   async function init() {
     const health = await detectServer();
 
     if (health) {
       state.mode = 'serveur';
       state.smtp = !!health.smtp;
+      state.auth.accountsExist = !!health.accountsExist;
+      state.auth.googleOAuth = !!health.googleOAuth;
       try {
-        const data = await api('/state');
-        state.contacts = data.contacts || [];
-        state.history = data.history || [];
-        state.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || {});
+        applyAuth(await api('/auth/me'));
+        if (!state.auth.required) await loadServerState();
         emit();
         return state;
       } catch (e) {
@@ -290,7 +360,7 @@
    * l'appelant retombe alors sur le lien mailto.
    */
   async function sendViaServer(contact, message) {
-    if (state.mode !== 'serveur' || !state.smtp) {
+    if (!canSendAutomatically()) {
       throw new Error('Envoi automatique indisponible');
     }
     const result = await api('/notify', {
@@ -322,6 +392,12 @@
       listeners.push(fn);
     },
     init: init,
+    canSendAutomatically: canSendAutomatically,
+    signup: signup,
+    login: login,
+    logout: logout,
+    connectSmtpMailbox: connectSmtpMailbox,
+    disconnectMailbox: disconnectMailbox,
     addContact: addContact,
     addContacts: addContacts,
     updateContact: updateContact,
