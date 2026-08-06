@@ -166,12 +166,31 @@
       })
       .join('');
 
-    $('smtpActions').innerHTML =
-      S.mode === 'serveur' && S.smtp
-        ? '<button class="btn ghost" id="testMailBtn">Envoyer un courriel de test</button>'
-        : '';
+    const smtpOn = S.mode === 'serveur' && S.smtp;
+    $('smtpActions').innerHTML = smtpOn
+      ? '<button class="btn ghost" id="testMailBtn">Envoyer un courriel de test</button>'
+      : '';
     const testBtn = $('testMailBtn');
     if (testBtn) testBtn.addEventListener('click', testMail);
+
+    // Tant que l'envoi automatique n'est pas actif, l'application ne fait que
+    // préparer le message : autant dire ici, noir sur blanc, ce qui manque.
+    setMsg(
+      'smtpMsg',
+      smtpOn ? 'ok' : '',
+      smtpOn
+        ? 'L’application envoie les courriels elle-même. Le bouton ci-dessus permet de le vérifier.'
+        : '<strong>L’application ne peut pas envoyer les courriels elle-même pour l’instant.</strong> ' +
+            'Chaque notification est préparée dans votre logiciel de courriel, où il faut cliquer sur <em>Envoyer</em>.' +
+            '<br>Pour un envoi direct, sur le poste qui héberge l’application :' +
+            '<ul>' +
+            '<li><code>npm install</code></li>' +
+            '<li>copier <code>.env.example</code> en <code>.env</code>, puis y renseigner ' +
+            '<code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code> et <code>MAIL_FROM</code></li>' +
+            '<li>redémarrer avec <code>npm start</code></li>' +
+            '</ul>' +
+            'Les valeurs SMTP sont celles de votre fournisseur de courriel (voir le README).'
+    );
   }
 
   async function testMail() {
@@ -501,12 +520,15 @@
           (message.cc ? ', copie à ' + esc(message.cc) : '') +
           (message.bcc ? ', copie invisible à ' + esc(message.bcc) : '') +
           '.'
-        : 'Notification préparée pour ' +
+        : '<strong>Message préparé, pas encore envoyé.</strong><br>' +
+          'Votre logiciel de courriel doit s’ouvrir avec le message adressé à ' +
           esc(contact.name) +
-          '.<br>Si votre logiciel de courriel ne s’est pas ouvert : ' +
-          '<a href="' +
+          ' : il reste à y cliquer sur <em>Envoyer</em>.<br>' +
+          'Rien ne s’est ouvert ? <a href="' +
           esc(mailto) +
-          '">cliquez ici pour l’ouvrir</a>.') +
+          '">réessayez ici</a>, ou copiez le message ci-dessous. ' +
+          'Pour que l’application envoie elle-même, sans cette étape, ' +
+          '<button type="button" class="link-btn" id="whyManualBtn">configurez l’envoi automatique</button>.') +
       (failure ? '<br><em>Envoi automatique impossible (' + esc(failure) + ') — repli sur le logiciel de courriel.</em>' : '') +
       '</div>' +
       '<div class="card" style="padding:14px;">' +
@@ -520,6 +542,14 @@
       '<button class="btn ghost" id="copyMsgBtn">Copier le message</button>' +
       (auto ? '' : '<a class="btn ghost" href="' + esc(mailto) + '">Ouvrir le logiciel de courriel</a>') +
       '</div></div>';
+
+    const whyBtn = $('whyManualBtn');
+    if (whyBtn) {
+      whyBtn.addEventListener('click', function () {
+        showPanel('reglages');
+        $('statusList').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
 
     $('copyMsgBtn').addEventListener('click', async function (e) {
       const ok = await notify.copyText(full);
@@ -797,9 +827,9 @@
   }
 
   const STATUS_PILL = {
-    'envoyé': ['', 'Envoyé'],
-    'préparé': ['manual', 'Préparé'],
-    'échec': ['failed', 'Échec']
+    'envoyé': ['', 'Envoyé', 'Parti du serveur par SMTP.'],
+    'préparé': ['manual', 'À envoyer', 'Remis à votre logiciel de courriel : il reste à y cliquer sur Envoyer.'],
+    'échec': ['failed', 'Échec', 'Le serveur de courriel a refusé l’envoi.']
   };
 
   function renderHistory() {
@@ -840,6 +870,8 @@
             esc(h.method === 'auto' ? 'Automatique' : 'Logiciel de courriel') +
             '</td><td class="actions"><span class="status-pill ' +
             pill[0] +
+            '" title="' +
+            esc(pill[2]) +
             '">' +
             pill[1] +
             '</span></td></tr>'
