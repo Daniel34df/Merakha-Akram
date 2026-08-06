@@ -1,19 +1,28 @@
 /* Bureau du Courrier — service worker.
 
-   Deux régimes, volontairement séparés :
+   Trois régimes, volontairement séparés :
 
-   - la coquille de l'application (HTML, CSS, JS, polices, icônes) est servie
-     depuis le cache, et rafraîchie en arrière-plan : l'application s'ouvre
-     instantanément et fonctionne sans réseau ;
+   - le code (HTML, CSS, JS) part du RÉSEAU, avec le cache en secours. Servir
+     le code depuis le cache d'abord fige l'application sur une version
+     ancienne, et pire, laisse dériver le HTML et le JavaScript l'un par
+     rapport à l'autre : une page d'hier avec un script d'aujourd'hui cherche
+     des éléments qui n'existent pas encore et meurt en silence ;
+   - les ressources immuables (polices, icônes) viennent du cache d'abord :
+     elles ne changent qu'avec leur nom de fichier, et pèsent l'essentiel ;
    - /api/ n'est JAMAIS mis en cache. Un registre partagé périmé serait pire
      qu'une erreur franche : hors ligne, la requête échoue et l'interface
      bascule d'elle-même sur le stockage local.
 
-   Changer CACHE_VERSION suffit à invalider l'ancien cache au prochain
-   chargement. */
+   Hors ligne, tout retombe sur le cache : l'application reste utilisable.
+   Changer CACHE_VERSION invalide l'ancien cache au prochain chargement. */
 'use strict';
 
-const CACHE_VERSION = 'bdc-v1';
+const CACHE_VERSION = 'bdc-v2';
+
+/** Le code doit toujours être cohérent avec lui-même : réseau d'abord. */
+function isCode(url) {
+  return /\.(?:html|js|css|webmanifest)$/.test(url.pathname) || url.pathname === '/' || url.pathname === '';
+}
 
 const SHELL = [
   './',
@@ -87,24 +96,34 @@ self.addEventListener('fetch', function (event) {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return; // toujours le réseau, jamais le cache
 
+  const remember = function (response) {
+    if (response && response.ok && response.type === 'basic') {
+      const copy = response.clone();
+      caches.open(CACHE_VERSION).then(function (cache) {
+        cache.put(request, copy);
+      });
+    }
+    return response;
+  };
+
+  if (isCode(url) || request.mode === 'navigate') {
+    // Réseau d'abord : la version en ligne fait foi tant qu'elle est joignable.
+    event.respondWith(
+      fetch(request)
+        .then(remember)
+        .catch(function () {
+          return caches.match(request, { ignoreSearch: true }).then(function (cached) {
+            return cached || caches.match('./index.html');
+          });
+        })
+    );
+    return;
+  }
+
+  // Ressources immuables : cache d'abord, réseau en secours.
   event.respondWith(
     caches.match(request, { ignoreSearch: true }).then(function (cached) {
-      const fromNetwork = fetch(request)
-        .then(function (response) {
-          if (response && response.ok && response.type === 'basic') {
-            const copy = response.clone();
-            caches.open(CACHE_VERSION).then(function (cache) {
-              cache.put(request, copy);
-            });
-          }
-          return response;
-        })
-        .catch(function () {
-          return cached || caches.match('./index.html');
-        });
-
-      // Cache d'abord pour l'affichage, réseau en arrière-plan pour la fraîcheur.
-      return cached || fromNetwork;
+      return cached || fetch(request).then(remember);
     })
   );
 });

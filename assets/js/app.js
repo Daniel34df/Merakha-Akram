@@ -1264,6 +1264,16 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in root.navigator) || root.location.protocol === 'file:') return;
+
+    /* Quand une nouvelle version prend le contrôle, la page affichée vient
+       encore de l'ancienne : sans ce rechargement, il faudrait recharger deux
+       fois pour voir la mise à jour. Le drapeau interdit toute boucle. */
+    let reloading = false;
+    root.navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloading) return;
+      reloading = true;
+      root.location.reload();
+    });
     root.navigator.serviceWorker
       .register('sw.js')
       .then(function (registration) {
