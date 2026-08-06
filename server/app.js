@@ -29,13 +29,63 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8'
 };
 
+/* En-têtes de sécurité appliqués à toutes les réponses.
+
+   La politique de contenu n'autorise que les ressources du serveur lui-même :
+   aucun script, aucune police, aucune image ne peut être chargé depuis
+   l'extérieur, et rien ne part vers un tiers. 'unsafe-inline' n'est concédé
+   qu'aux styles, l'interface plaçant quelques attributs style=""; les scripts,
+   eux, sont tous des fichiers séparés. */
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "object-src 'none'"
+  ].join('; '),
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'same-origin',
+  'X-Frame-Options': 'DENY',
+  'Permissions-Policy': 'geolocation=(), camera=(), microphone=(), payment=(), interest-cohort=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin'
+};
+
+function withSecurityHeaders(headers) {
+  return Object.assign({}, SECURITY_HEADERS, headers);
+}
+
+/** Vrai si la requête arrive bien de l'application elle-même. */
+function isSameOriginRequest(req) {
+  // Sec-Fetch-Site est posé par le navigateur et ne peut pas être falsifié par
+  // une page tierce ; l'en-tête Origin sert de repli aux navigateurs anciens.
+  const site = req.headers['sec-fetch-site'];
+  if (site) return site === 'same-origin' || site === 'none';
+  const origin = req.headers.origin;
+  if (!origin) return true; // clients non navigateurs (curl, scripts) : pas de risque CSRF
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch (e) {
+    return false;
+  }
+}
+
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body),
-    'Cache-Control': 'no-store'
-  });
+  res.writeHead(
+    status,
+    withSecurityHeaders({
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Length': Buffer.byteLength(body),
+      'Cache-Control': 'no-store'
+    })
+  );
   res.end(body);
 }
 
@@ -113,12 +163,12 @@ async function serveStatic(req, res, rootDir) {
     return;
   }
 
-  const headers = {
+  const headers = withSecurityHeaders({
     'Content-Type': MIME[path.extname(target).toLowerCase()] || 'application/octet-stream',
     'Content-Length': stat.size,
     ETag: etag,
     'Cache-Control': 'no-cache'
-  };
+  });
   // Un service worker figé dans le cache HTTP bloquerait toute mise à jour de
   // l'application installée : celui-ci doit toujours être revalidé.
   if (rel === '/sw.js') {
@@ -133,17 +183,20 @@ async function serveStatic(req, res, rootDir) {
 
 function sendJsonWithCookie(res, status, payload, cookie) {
   const body = JSON.stringify(payload);
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body),
-    'Cache-Control': 'no-store',
-    'Set-Cookie': cookie
-  });
+  res.writeHead(
+    status,
+    withSecurityHeaders({
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Length': Buffer.byteLength(body),
+      'Cache-Control': 'no-store',
+      'Set-Cookie': cookie
+    })
+  );
   res.end(body);
 }
 
 function redirect(res, location) {
-  res.writeHead(302, { Location: location, 'Cache-Control': 'no-store' });
+  res.writeHead(302, withSecurityHeaders({ Location: location, 'Cache-Control': 'no-store' }));
   res.end();
 }
 
@@ -189,7 +242,8 @@ async function sendVerificationCode(ctx, pending, code) {
 async function handleAuth(req, res, ctx, pathname) {
   const { db, vault, google, throttle } = ctx;
   const method = req.method;
-  const secureCookie = (req.headers['x-forwarded-proto'] || '') === 'https';
+  const secureCookie =
+    (req.headers['x-forwarded-proto'] || '') === 'https' || !!(req.socket && req.socket.encrypted);
 
   if (pathname === '/api/auth/me' && method === 'GET') {
     const user = auth.userFromRequest(db, req);
@@ -238,6 +292,17 @@ async function handleAuth(req, res, ctx, pathname) {
     }
 
     if (ctx.verifyEmail) {
+      /* Sans frein, cette route est un envoyeur de courriels à la demande :
+         il suffirait de la rappeler avec l'adresse d'un tiers pour l'inonder. */
+      const limite = ctx.signupThrottle.check(util.normalize(email));
+      if (limite.blocked) {
+        throw Object.assign(
+          new Error('Trop de demandes pour cette adresse. Réessayez dans ' + Math.ceil(limite.retryInSeconds / 60) + ' minute(s).'),
+          { status: 429 }
+        );
+      }
+      ctx.signupThrottle.fail(util.normalize(email));
+
       const code = auth.generateCode();
       const pending = auth.newPendingSignup({ name: name, email: email, password: auth.hashPassword(password) }, code);
       try {
@@ -369,7 +434,12 @@ async function handleAuth(req, res, ctx, pathname) {
     const user = auth.findUserByEmail(db, email);
     // Même message et même coût dans les deux cas : ne pas révéler quels
     // courriels ont un compte.
-    const ok = user && auth.verifyPassword(String(body.password || ''), user.password);
+    let ok = false;
+    if (user) {
+      ok = auth.verifyPassword(String(body.password || ''), user.password);
+    } else {
+      auth.equalizeTiming(body.password);
+    }
     if (!ok) {
       throttle.fail(key);
       throw Object.assign(new Error('Courriel ou mot de passe incorrect'), { status: 401 });
@@ -777,6 +847,9 @@ function createServer(options) {
     vault: options.vault || require('./secrets.js').createVault({ secret: crypto.randomBytes(32).toString('base64') }),
     google: options.google || require('./google.js').createGoogleOAuth({}),
     throttle: options.throttle || auth.createThrottle(),
+    // Trois demandes d'inscription par adresse et par heure : de quoi corriger
+    // une faute de frappe, pas de quoi noyer une boîte.
+    signupThrottle: options.signupThrottle || auth.createThrottle({ max: 3, windowMs: 60 * 60 * 1000 }),
     signupOpen: options.signupOpen !== false,
     // Par défaut, on vérifie l'adresse dès que le serveur sait envoyer un courriel.
     verifyEmail: options.verifyEmail !== undefined ? options.verifyEmail : !!(options.mailer && options.mailer.enabled)
@@ -799,6 +872,11 @@ function createServer(options) {
     }
 
     try {
+      if (req.method !== 'GET' && req.method !== 'HEAD' && !isSameOriginRequest(req)) {
+        // Le cookie est déjà SameSite=Lax ; ce contrôle ferme le cas des
+        // requêtes forgées qui contourneraient cette protection.
+        throw Object.assign(new Error('Requête refusée : origine étrangère'), { status: 403 });
+      }
       await handleApi(req, res, ctx, pathname);
     } catch (err) {
       const status = err.status || 500;

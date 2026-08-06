@@ -44,6 +44,16 @@ function verifyPassword(password, stored) {
   }
 }
 
+/* Empreinte d'un mot de passe factice, calculée une fois au démarrage.
+   Vérifier un mot de passe contre elle coûte le même temps qu'une vérification
+   réelle : sans cela, la rapidité de la réponse trahirait qu'aucun compte
+   n'existe pour l'adresse essayée. */
+const DUMMY_HASH = hashPassword(crypto.randomBytes(24).toString('hex'));
+
+function equalizeTiming(password) {
+  verifyPassword(String(password || ''), DUMMY_HASH);
+}
+
 /** Refus explicites plutôt qu'un score opaque : l'employé·e doit savoir quoi corriger. */
 function checkPasswordStrength(password) {
   const pwd = String(password || '');
@@ -241,6 +251,7 @@ module.exports = {
   hashPassword: hashPassword,
   verifyPassword: verifyPassword,
   checkPasswordStrength: checkPasswordStrength,
+  equalizeTiming: equalizeTiming,
   parseCookies: parseCookies,
   sessionCookie: sessionCookie,
   newSession: newSession,

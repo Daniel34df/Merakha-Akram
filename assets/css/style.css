@@ -3,6 +3,7 @@
 
 :root{
   --navy:#16233F;
+  --navy-hover:#223255;
   --paper:#F4F0E6;
   --paper-dark:#E9E2D0;
   --brass:#B8892B;
@@ -10,9 +11,40 @@
   --forest:#3F6650;
   --rust:#A8432E;
   --line:#CFC6AE;
+  /* Rôles, distincts des teintes : c'est ce qui permet d'inverser la palette
+     sans toucher au reste de la feuille. */
+  --card:#FFFFFF;
+  --field:var(--paper);
+  --danger-wash:#FBEFEC;
+  --stamp-bg:rgba(255,255,255,0.92);
+  --shadow:rgba(22,35,63,0.10);
+  --grain-opacity:0.025;
   --serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
   --typewriter:'Special Elite', 'Courier New', monospace;
   --mono:'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+/* Thème sombre : mêmes rôles, valeurs inversées. L'encre devient crème et le
+   papier devient nuit ; le laiton et la rouille sont éclaircis pour rester
+   lisibles sur fond sombre. */
+@media (prefers-color-scheme: dark){
+  :root{
+    --navy:#E7E1D1;
+    --navy-hover:#FFFAEC;
+    --paper:#141A26;
+    --paper-dark:#1E2635;
+    --brass:#D2A855;
+    --slate:#94A3B8;
+    --forest:#7FB392;
+    --rust:#DE7A61;
+    --line:#334158;
+    --card:#1B2333;
+    --field:#121926;
+    --danger-wash:#2C1D1A;
+    --stamp-bg:rgba(27,35,51,0.94);
+    --shadow:rgba(0,0,0,0.45);
+    --grain-opacity:0.035;
+  }
 }
 *{box-sizing:border-box;}
 body{
@@ -22,6 +54,28 @@ body{
   color:var(--navy);
   min-height:100vh;
 }
+
+/* Grain de papier : bruit fractal en SVG, posé en couche séparée pour que son
+   intensité reste réglable d'un seul cran, sans teinter le fond. */
+body::before{
+  content:'';
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  opacity:var(--grain-opacity);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+.wrap, .gate, .toasts, .stamp-overlay{position:relative;z-index:1;}
+::selection{background:var(--brass);color:var(--paper);}
+
+/* Un anneau de focus unique, visible seulement au clavier. */
+:focus-visible{
+  outline:2px solid var(--brass);
+  outline-offset:2px;
+  border-radius:1px;
+}
+input:focus-visible, textarea:focus-visible{outline-offset:1px;}
 .wrap{max-width:960px;margin:0 auto;padding:32px 24px 80px;}
 
 /* ---------- en-tête ---------- */
@@ -89,7 +143,8 @@ nav button{
   cursor:pointer;
   text-transform:uppercase;
 }
-nav button:hover{color:var(--navy);}
+nav button{transition:background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;}
+nav button:hover{color:var(--navy);background:var(--line);}
 nav button.active{
   background:var(--navy);
   color:var(--paper);
@@ -108,7 +163,8 @@ nav button.active{
 
 /* ---------- cartes ---------- */
 .card{
-  background:#fff;
+  background:var(--card);
+  box-shadow:0 1px 2px var(--shadow);
   border:1px solid var(--line);
   padding:24px;
   margin-bottom:20px;
@@ -148,19 +204,19 @@ input[type=text], input[type=email], input[type=date], textarea{
   font-size:16px;
   padding:10px 12px;
   border:1px solid var(--line);
-  background:var(--paper);
+  background:var(--field);
   color:var(--navy);
   margin-bottom:16px;
 }
 textarea{font-family:var(--mono);font-size:13.5px;line-height:1.6;resize:vertical;}
 input:focus, textarea:focus{outline:2px solid var(--brass);outline-offset:1px;}
-input.invalid{border-color:var(--rust);background:#FCF3F1;}
+input.invalid{border-color:var(--rust);background:var(--danger-wash);}
 .filter-input{
   width:auto;
   font-size:13px;
   padding:7px 10px;
   margin-bottom:0;
-  background:#fff;
+  background:var(--card);
 }
 .hint{font-size:12px;color:var(--slate);font-style:italic;margin:0;}
 .hint code{
@@ -184,15 +240,17 @@ input.invalid{border-color:var(--rust);background:#FCF3F1;}
   color:var(--paper);
   cursor:pointer;
   white-space:nowrap;
+  transition:background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.btn:hover{background:#223255;}
+.btn:active:not(:disabled){transform:translateY(1px);}
+.btn:hover{background:var(--navy-hover);}
 .btn.ghost{background:transparent;color:var(--navy);}
 .btn.ghost:hover{background:var(--paper-dark);}
 .btn.rust{background:var(--rust);border-color:var(--rust);color:#fff;}
 .btn.rust:hover{background:#8F3826;}
 .btn.small{font-size:11px;padding:7px 12px;}
 .btn.ghost.danger{color:var(--rust);border-color:var(--rust);}
-.btn.ghost.danger:hover{background:#FBEFEC;}
+.btn.ghost.danger:hover{background:var(--danger-wash);}
 .btn:disabled{opacity:0.45;cursor:not-allowed;}
 .row-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
 .row-actions.end{justify-content:flex-end;}
@@ -205,7 +263,7 @@ input.invalid{border-color:var(--rust);background:#FCF3F1;}
   left:0;right:0;
   margin:0;padding:0;
   list-style:none;
-  background:#fff;
+  background:var(--card);
   border:1px solid var(--navy);
   z-index:20;
   max-height:230px;
@@ -256,7 +314,8 @@ input.invalid{border-color:var(--rust);background:#FCF3F1;}
   overflow-y:auto;
 }
 .gate-card{
-  background:#fff;
+  background:var(--card);
+  box-shadow:0 6px 30px var(--shadow);
   border:1px solid var(--line);
   padding:28px;
   width:100%;
@@ -384,6 +443,7 @@ input[type=password]{
 }
 .msg{
   padding:12px 14px;
+  border-radius:0 2px 2px 0;
   border-left:4px solid var(--brass);
   background:var(--paper-dark);
   margin-bottom:16px;
@@ -397,7 +457,7 @@ input[type=password]{
 .msg a{color:var(--navy);font-weight:600;}
 
 /* ---------- tableaux ---------- */
-.table-scroll{overflow-x:auto;}
+.table-scroll{overflow-x:auto;max-height:60vh;overflow-y:auto;}
 table{width:100%;border-collapse:collapse;font-size:14px;}
 th{
   font-family:var(--mono);
@@ -410,6 +470,9 @@ th{
   border-bottom:2px solid var(--navy);
   white-space:nowrap;
 }
+th{position:sticky;top:0;background:var(--card);z-index:1;}
+tbody tr{transition:background-color 0.12s ease;}
+tbody tr:hover{background:var(--paper-dark);}
 td{padding:10px 6px;border-bottom:1px solid var(--line);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 td.actions{text-align:right;white-space:nowrap;}
@@ -492,7 +555,7 @@ td input{margin-bottom:0;font-size:14px;padding:6px 8px;}
   text-transform:uppercase;
   text-align:center;
   padding:12px;
-  background:rgba(255,255,255,0.9);
+  background:var(--stamp-bg);
   transform:scale(2.2) rotate(-18deg);
   opacity:0;
   box-shadow:0 0 0 3px rgba(168,67,46,0.15) inset;

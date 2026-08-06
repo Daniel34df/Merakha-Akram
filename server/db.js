@@ -81,9 +81,26 @@ class Db {
     const self = this;
     this.queue = this.queue.then(async function () {
       const result = mutator(self.data);
+
+      // Les sessions et codes périmés ne servent plus : les garder allonge le
+      // fichier et prolonge inutilement la durée de vie de données sensibles.
+      const now = Date.now();
+      if (Array.isArray(self.data.sessions)) {
+        self.data.sessions = self.data.sessions.filter(function (s) {
+          return s && new Date(s.expiresAt).getTime() > now;
+        });
+      }
+      if (Array.isArray(self.data.pending)) {
+        self.data.pending = self.data.pending.filter(function (p) {
+          return p && new Date(p.expiresAt).getTime() > now;
+        });
+      }
+
       await fs.mkdir(path.dirname(self.file), { recursive: true });
       const tmp = self.file + '.' + process.pid + '.tmp';
-      await fs.writeFile(tmp, JSON.stringify(self.data, null, 2), 'utf8');
+      // 0600 : le registre contient des empreintes de mots de passe et des
+      // secrets chiffrés, il n'a pas à être lisible par les autres comptes.
+      await fs.writeFile(tmp, JSON.stringify(self.data, null, 2), { encoding: 'utf8', mode: 0o600 });
       await fs.rename(tmp, self.file);
       return result;
     });

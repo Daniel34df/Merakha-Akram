@@ -178,6 +178,9 @@ signalées une par une, les doublons ignorés, et le reste est importé.
 exportables en CSV. Chaque entrée indique la voie utilisée : *Automatique*
 (parti du serveur) ou *Logiciel de courriel* (préparé pour l'employé·e).
 
+L'interface suit le **thème du système** : claire par défaut, sombre si votre
+poste l'est. Aucune manipulation, aucun réglage à choisir.
+
 **Réglages** — l'expéditeur (**De**), les copies **Cc** et **Cci** par défaut, le
 sujet et le corps du message, avec aperçu en direct. Variables disponibles :
 `{nom}`, `{courriel}`, `{date}`, `{bureau}`.
@@ -198,6 +201,32 @@ Deux limites à connaître sur le **De** :
 
 Le **Cci** est invisible pour les destinataires, mais reste affiché au guichet
 et dans l'historique : c'est la trace interne de l'envoi.
+
+---
+
+## Sécurité
+
+Ce que le serveur applique de lui-même, sans configuration :
+
+- **Politique de contenu stricte** : aucun script, aucune police, aucune image
+  ne peut venir d'ailleurs que du serveur, et rien ne part vers un tiers. La
+  page ne peut pas non plus être encadrée par un autre site.
+- **Mots de passe** hachés en scrypt avec sel aléatoire ; la connexion coûte le
+  même temps qu'un compte existe ou non, pour ne pas révéler quelles adresses
+  sont inscrites.
+- **Sessions** par jeton aléatoire dans un cookie `HttpOnly`, `SameSite=Lax`,
+  `Secure` dès que la connexion est en https. Les sessions et codes périmés sont
+  effacés à chaque écriture.
+- **Requêtes forgées** : toute requête modifiante venue d'un autre site est
+  refusée, en plus de la protection du cookie.
+- **Frein sur les tentatives** : connexion (8 essais / 10 min), code de
+  confirmation (5 essais), demandes d'inscription (3 / heure et par adresse,
+  pour que la route d'envoi de code ne serve pas à inonder une boîte).
+- **Secrets** (jetons Google, mots de passe d'application) chiffrés en
+  AES-256-GCM ; le registre est écrit en accès restreint au propriétaire.
+
+Deux choses restent à votre charge : servir l'application en **https** dès
+qu'elle sort du poste local, et sauvegarder `data/secret.key` avec le registre.
 
 ---
 
@@ -277,7 +306,7 @@ test/                 tests (node:test), sans dépendance
 ```
 
 ```bash
-npm test     # 64 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
+npm test     # 75 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 
