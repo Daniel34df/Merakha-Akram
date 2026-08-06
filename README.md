@@ -129,6 +129,11 @@ qu'on s'inscrive avec le courriel d'un collègue. La vérification est active d�
 que le serveur sait envoyer un courriel ; sinon l'écran d'inscription le
 signale.
 
+L'adresse une fois confirmée, l'application propose de l'**associer comme boîte
+d'envoi** dans la foulée : le serveur SMTP est deviné d'après le domaine, et
+pour une adresse Google l'autorisation OAuth est proposée en premier. L'étape se
+saute d'un clic.
+
 Au premier démarrage du serveur, l'application propose de créer le **compte du
 bureau**. Dès qu'un compte existe, le registre n'est plus accessible sans
 connexion. On peut aussi continuer sans compte : l'application fonctionne alors
@@ -272,7 +277,7 @@ test/                 tests (node:test), sans dépendance
 ```
 
 ```bash
-npm test     # 62 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
+npm test     # 64 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

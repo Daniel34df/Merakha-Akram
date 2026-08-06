@@ -50,6 +50,21 @@ test('parseAddressList accepte une liste vide', function () {
   assert.deepEqual(util.parseAddressList(null).errors, []);
 });
 
+test('suggestSmtpHost devine le serveur d’envoi des messageries courantes', function () {
+  assert.equal(util.suggestSmtpHost('marie@gmail.com'), 'smtp.gmail.com');
+  assert.equal(util.suggestSmtpHost('Marie <MARIE@Hotmail.FR>'), 'smtp-mail.outlook.com');
+  assert.equal(util.suggestSmtpHost('accueil@orange.fr'), 'smtp.orange.fr');
+  assert.equal(util.suggestSmtpHost('accueil@mon-organisation.org'), '', 'domaine inconnu : à saisir à la main');
+  assert.equal(util.suggestSmtpHost('pas-une-adresse'), '');
+});
+
+test('isGoogleAddress ne reconnaît que les adresses Google', function () {
+  assert.ok(util.isGoogleAddress('marie@gmail.com'));
+  assert.ok(util.isGoogleAddress('Marie <marie@googlemail.com>'));
+  assert.ok(!util.isGoogleAddress('marie@outlook.com'));
+  assert.ok(!util.isGoogleAddress('marie@mon-organisation.org'));
+});
+
 test('matchesQuery cherche sur le nom et le courriel, accents ignorés', function () {
   const c = { name: 'Élodie Tremblay', email: 'elo@exemple.com' };
   assert.ok(util.matchesQuery(c, 'elodie'));

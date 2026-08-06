@@ -27,7 +27,9 @@
     skipAccount: false,
     gateFormChosen: false,
     // Inscription en attente du code de confirmation.
-    pendingEmail: null
+    pendingEmail: null,
+    // Adresse confirmée, en cours d'association comme boîte d'envoi.
+    associateEmail: null
   };
 
   /* ═════════════ retours visuels ═════════════ */
@@ -1020,8 +1022,11 @@
        - le serveur n'a encore aucun compte : c'est l'installation, on propose
          de créer celui du bureau (avec la possibilité de s'en passer).
        Hors mode serveur, il n'y a pas de comptes du tout. */
+    // On se fie à l'état, pas au DOM : le rendu peut être déclenché avant que
+    // l'étape d'association ait été affichée, et refermerait l'écran.
+    const associating = !!view.associateEmail;
     const firstRun = S.mode === 'serveur' && !S.auth.accountsExist && !view.skipAccount;
-    const needed = S.mode === 'serveur' && (S.auth.required || firstRun);
+    const needed = S.mode === 'serveur' && (S.auth.required || firstRun || associating);
     gate.hidden = !needed;
     document.body.style.overflow = needed ? 'hidden' : '';
     $('gateSkip').hidden = !firstRun;
@@ -1043,7 +1048,7 @@
     // Aucun compte encore : la première visite crée le compte du bureau.
     const signupTab = document.querySelector('.gate-tabs button[data-form="signup"]');
     if (signupTab) signupTab.hidden = !S.auth.signupOpen && S.auth.accountsExist;
-    if (!S.auth.accountsExist && !view.gateFormChosen && !view.pendingEmail) {
+    if (!S.auth.accountsExist && !view.gateFormChosen && !view.pendingEmail && !associating) {
       $('gateSubtitle').textContent = 'Créez le compte du bureau pour protéger le registre';
       showGateForm('signup');
     }
@@ -1056,8 +1061,9 @@
     $('loginForm').hidden = which !== 'login';
     $('signupForm').hidden = which !== 'signup';
     $('verifyForm').hidden = which !== 'verify';
-    // L'étape du code n'est pas un onglet : on masque les onglets pendant.
-    $('gateTabs').hidden = which === 'verify';
+    $('associateForm').hidden = which !== 'associate';
+    // Ni le code ni l'association ne sont des onglets : on les masque pendant.
+    $('gateTabs').hidden = which === 'verify' || which === 'associate';
     setMsg('gateMsg', '', '');
   }
 
@@ -1101,6 +1107,7 @@
       setMsg('gateMsg', '', '');
       if (result.pending) {
         view.pendingEmail = result.email;
+        $('gateSubtitle').textContent = 'Confirmez votre adresse';
         $('verifyEmail').textContent = result.email;
         $('verifyCode').value = '';
         showGateForm('verify');
@@ -1109,7 +1116,7 @@
         $('verifyCode').focus();
         return;
       }
-      afterLogin();
+      showAssociateStep(result.user.email);
     } catch (err) {
       setMsg('gateMsg', 'error', esc(err.message));
     }
@@ -1124,10 +1131,10 @@
     }
     setMsg('gateMsg', '', 'Vérification…');
     try {
-      await store.verifySignup(view.pendingEmail, code);
+      const user = await store.verifySignup(view.pendingEmail, code);
       setMsg('gateMsg', '', '');
       view.pendingEmail = null;
-      afterLogin();
+      showAssociateStep(user.email);
     } catch (err) {
       setMsg('gateMsg', 'error', esc(err.message));
       $('verifyCode').select();
@@ -1151,6 +1158,57 @@
     }
   });
 
+  /* ═════════════ association de la boîte à l'inscription ═════════════ */
+
+  /** L'adresse vient d'être prouvée : on propose de l'utiliser pour les envois. */
+  function showAssociateStep(email) {
+    view.associateEmail = email;
+    $('associateEmail').textContent = email;
+    $('associateHost').value = util.suggestSmtpHost(email);
+    $('associatePassword').value = '';
+
+    // Le bouton Google n'a de sens que pour une adresse Google, sur un serveur
+    // où l'autorisation est configurée.
+    const google = S.auth.googleOAuth && util.isGoogleAddress(email);
+    $('associateGoogleBtn').hidden = !google;
+    $('associateGoogleHint').hidden = !google;
+    $('associateSmtp').open = !google;
+
+    $('gateSubtitle').textContent = 'Dernière étape : votre adresse d’envoi';
+    showGateForm('associate');
+    renderGate();
+    $('associatePassword').focus();
+  }
+
+  $('associateGoogleBtn').addEventListener('click', function () {
+    root.location.href = '/api/auth/google/start';
+  });
+
+  $('associateForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const host = $('associateHost').value.trim();
+    const password = $('associatePassword').value;
+    if (!host || !password) {
+      setMsg('gateMsg', 'error', 'Indiquez le serveur d’envoi et le mot de passe d’application.');
+      return;
+    }
+    setMsg('gateMsg', '', 'Association…');
+    try {
+      await store.connectSmtpMailbox({ address: view.associateEmail, host: host, port: 587, password: password });
+      $('associatePassword').value = '';
+      setMsg('gateMsg', '', '');
+      toast('Boîte associée : les notifications partiront de ' + view.associateEmail + '.', 'ok');
+      afterLogin();
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
+
+  $('skipAssociateBtn').addEventListener('click', function () {
+    setMsg('gateMsg', '', '');
+    afterLogin();
+  });
+
   $('cancelVerifyBtn').addEventListener('click', function () {
     view.pendingEmail = null;
     showGateForm('signup');
@@ -1172,6 +1230,9 @@
   });
 
   function afterLogin() {
+    view.associateEmail = null;
+    $('associateForm').hidden = true;
+    $('gateTabs').hidden = false;
     fillSettingsForm();
     syncCopiesFromSettings(true);
     renderAll();

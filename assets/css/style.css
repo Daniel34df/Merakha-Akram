@@ -266,6 +266,8 @@ input.invalid{border-color:var(--rust);background:#FCF3F1;}
 .gate-head h1{font-family:var(--typewriter);font-size:20px;margin:0 0 4px;}
 .gate-head p{margin:0;color:var(--slate);font-size:13px;font-style:italic;}
 .gate-head .brand-logo{width:46px;height:46px;}
+/* Même piège que .gate : display:flex l'emporterait sur [hidden]. */
+.gate-tabs[hidden]{display:none;}
 .gate-tabs{display:flex;gap:2px;margin-bottom:20px;}
 .gate-tabs button{
   flex:1;
@@ -282,6 +284,17 @@ input.invalid{border-color:var(--rust);background:#FCF3F1;}
 .gate-tabs button.active{background:var(--navy);color:var(--paper);border-color:var(--navy);}
 .gate-form .btn{width:100%;margin-top:4px;}
 .gate-form .hint{margin:-8px 0 14px;}
+/* La marge négative ci-dessus sert à rapprocher l'aide d'un champ ; sous un
+   résumé dépliant, elle ferait chevaucher les deux lignes. */
+.gate-form details .hint{margin:10px 0 14px;}
+.gate-form details summary{
+  font-family:var(--typewriter);
+  font-size:12.5px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  cursor:pointer;
+  margin-bottom:4px;
+}
 input[type=password]{
   width:100%;
   font-family:var(--serif);

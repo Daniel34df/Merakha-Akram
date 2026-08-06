@@ -71,6 +71,39 @@
       <p class="hint" id="verifyHint"></p>
     </form>
 
+    <form id="associateForm" class="gate-form" hidden>
+      <p class="verify-lead">
+        Adresse confirmée : <strong id="associateEmail"></strong>.<br>
+        Voulez-vous que les notifications de courrier partent de cette adresse ?
+        Les destinataires vous répondront directement.
+      </p>
+
+      <button class="btn" type="button" id="associateGoogleBtn" hidden>
+        Associer avec Google
+      </button>
+      <p class="hint" id="associateGoogleHint" hidden>
+        Vous autorisez l'application sur l'écran de Google, sans lui communiquer votre mot de passe.
+      </p>
+
+      <details id="associateSmtp">
+        <summary>Associer avec un mot de passe d'application</summary>
+        <p class="hint">
+          Un mot de passe d'application est créé dans les réglages de votre messagerie ;
+          ce n'est jamais le mot de passe de votre compte. Il est chiffré avant d'être enregistré.
+        </p>
+        <label for="associateHost">Serveur d'envoi (SMTP)</label>
+        <input type="text" id="associateHost" placeholder="smtp.exemple.com">
+        <label for="associatePassword">Mot de passe d'application</label>
+        <input type="password" id="associatePassword" autocomplete="off">
+        <button class="btn" type="submit">Associer cette boîte</button>
+      </details>
+
+      <div class="row-actions" style="margin-top:14px;">
+        <button type="button" class="link-btn" id="skipAssociateBtn">Plus tard</button>
+        <span class="hint">Vous pourrez le faire à tout moment depuis les Réglages.</span>
+      </div>
+    </form>
+
     <div id="gateMsg"></div>
     <p class="gate-skip" id="gateSkip" hidden>
       <button type="button" class="link-btn" id="skipAccountBtn">Continuer sans compte</button>

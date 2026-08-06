@@ -37,6 +37,21 @@ pourrait s'inscrire avec le courriel d'un collègue.
   inscription abandonnée ne laisse qu'une demande en attente, effacée à
   expiration.
 
+### Association de la boîte dans la foulée
+
+Une fois le code confirmé, l'adresse est prouvée : l'application propose
+aussitôt de l'**associer comme boîte d'envoi**, pour que les notifications en
+partent. Le serveur d'envoi est pré-rempli d'après le domaine de l'adresse
+(Gmail, Outlook, Orange, Free, Yahoo, iCloud…) ; un domaine professionnel se
+renseigne à la main.
+
+Pour une adresse Google, sur un serveur où l'autorisation OAuth est configurée,
+le bouton **Associer avec Google** est proposé en premier : aucun mot de passe
+n'est communiqué à l'application.
+
+L'étape se saute d'un clic sur *Plus tard* — l'association reste possible à tout
+moment depuis Réglages → *Ma boîte d'envoi*.
+
 La vérification suppose que le serveur sache envoyer un courriel. Elle est donc
 active dès que SMTP est configuré, et inactive sinon — l'écran d'inscription
 l'indique. `VERIFY_EMAIL=true` l'impose (l'inscription est alors refusée tant

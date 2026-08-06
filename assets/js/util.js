@@ -89,6 +89,43 @@
     return (entries || []).join(', ');
   }
 
+  /* Serveurs d'envoi des messageries courantes, pour pré-remplir le formulaire
+     d'association. Une adresse professionnelle sort de cette liste : le champ
+     reste alors vide et se renseigne à la main. */
+  const SMTP_HOSTS = {
+    'gmail.com': 'smtp.gmail.com',
+    'googlemail.com': 'smtp.gmail.com',
+    'outlook.com': 'smtp-mail.outlook.com',
+    'outlook.fr': 'smtp-mail.outlook.com',
+    'hotmail.com': 'smtp-mail.outlook.com',
+    'hotmail.fr': 'smtp-mail.outlook.com',
+    'live.fr': 'smtp-mail.outlook.com',
+    'msn.com': 'smtp-mail.outlook.com',
+    'yahoo.com': 'smtp.mail.yahoo.com',
+    'yahoo.fr': 'smtp.mail.yahoo.com',
+    'orange.fr': 'smtp.orange.fr',
+    'wanadoo.fr': 'smtp.orange.fr',
+    'free.fr': 'smtp.free.fr',
+    'sfr.fr': 'smtp.sfr.fr',
+    'laposte.net': 'smtp.laposte.net',
+    'icloud.com': 'smtp.mail.me.com',
+    'me.com': 'smtp.mail.me.com'
+  };
+
+  /** Serveur d'envoi probable pour une adresse, ou '' si le domaine est inconnu. */
+  function suggestSmtpHost(email) {
+    const address = extractEmail(email);
+    const at = address.lastIndexOf('@');
+    if (at === -1) return '';
+    return SMTP_HOSTS[normalize(address.slice(at + 1))] || '';
+  }
+
+  /** Vrai pour une adresse Google, seul cas où l'autorisation Gmail s'applique. */
+  function isGoogleAddress(email) {
+    const domain = normalize(extractEmail(email).split('@')[1] || '');
+    return domain === 'gmail.com' || domain === 'googlemail.com';
+  }
+
   /** Identifiant stable, avec repli quand crypto.randomUUID n'existe pas. */
   function uuid() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -266,6 +303,8 @@
     isValidAddress: isValidAddress,
     parseAddressList: parseAddressList,
     formatAddressList: formatAddressList,
+    suggestSmtpHost: suggestSmtpHost,
+    isGoogleAddress: isGoogleAddress,
     uuid: uuid,
     renderTemplate: renderTemplate,
     sameContact: sameContact,
