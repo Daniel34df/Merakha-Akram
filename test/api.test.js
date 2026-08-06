@@ -186,6 +186,10 @@ test('l’interface statique est servie et le parcours de répertoire bloqué', 
     const css = await fetch(t.base + '/assets/css/style.css');
     assert.equal(css.status, 200);
 
+    const font = await fetch(t.base + '/assets/fonts/source-serif-4-latin.woff2');
+    assert.equal(font.status, 200, 'les polices embarquées sont servies');
+    assert.equal(font.headers.get('content-type'), 'font/woff2');
+
     const escape = await fetch(t.base + '/../../etc/passwd');
     assert.ok([403, 404].includes(escape.status), 'sortie d’arborescence refusée');
 

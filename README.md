@@ -129,6 +129,8 @@ Les erreurs sont renvoyées en JSON (`{"error": "…"}`) avec un code parlant :
 ```
 index.html            interface
 assets/css/style.css  feuille de style
+assets/css/fonts.css  déclarations des polices embarquées
+assets/fonts/         polices (woff2, sous-ensembles latin) — 216 Ko
 assets/js/util.js     fonctions partagées navigateur + serveur (recherche, CSV, gabarits)
 assets/js/store.js    persistance : serveur → localStorage → mémoire
 assets/js/notify.js   composition du message, mailto, presse-papiers
@@ -143,6 +145,10 @@ test/                 tests (node:test), sans dépendance
 npm test     # 23 tests : utilitaires + API de bout en bout
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
+
+Les polices sont versionnées dans le dépôt : l'application s'affiche telle
+quelle sur un poste sans accès à Internet, et aucune requête ne part vers un
+service externe.
 
 Aucune étape de compilation : le navigateur charge les fichiers tels quels, et
 `assets/js/util.js` est le même fichier des deux côtés — les règles de recherche
