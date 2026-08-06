@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Installer Node.js — Bureau du Courrier</title>
+<style>
+  /* Guide animé : installer Node.js sur un PC Windows.
+     Cette page est autonome et se rejoue à volonté dans un navigateur ;
+     c'est aussi elle que tools/enregistrer-guide.js filme pour produire la vidéo.
+     Les écrans sont des schémas volontairement stylisés, pas des copies des
+     véritables fenêtres : ils montrent où cliquer, sans imiter un produit. */
+  @font-face{font-family:'Special Elite';src:url('../assets/fonts/special-elite-latin.woff2') format('woff2');font-display:block;}
+  @font-face{font-family:'Source Serif 4';src:url('../assets/fonts/source-serif-4-latin.woff2') format('woff2');font-weight:400 600;font-display:block;}
+  @font-face{font-family:'JetBrains Mono';src:url('../assets/fonts/jetbrains-mono-latin.woff2') format('woff2');font-display:block;}
+
+  :root{
+    --navy:#16233F; --paper:#F4F0E6; --paper-dark:#E9E2D0;
+    --brass:#B8892B; --slate:#5B6B82; --forest:#3F6650; --rust:#A8432E; --line:#CFC6AE;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{width:1280px;height:720px;overflow:hidden;}
+  body{
+    background:var(--paper);
+    font-family:'Source Serif 4',Georgia,serif;
+    color:var(--navy);
+    display:flex;flex-direction:column;
+  }
+
+  header{
+    display:flex;align-items:center;gap:16px;
+    padding:20px 48px;border-bottom:3px double var(--navy);
+  }
+  header img{width:44px;height:44px;}
+  header h1{font-family:'Special Elite',monospace;font-size:22px;letter-spacing:0.5px;}
+  header .sub{font-size:14px;color:var(--slate);font-style:italic;margin-left:auto;}
+
+  .stage{flex:1;position:relative;}
+  .scene{
+    position:absolute;inset:0;
+    padding:34px 48px;
+    display:flex;flex-direction:column;
+    opacity:0;transform:translateY(14px);
+    transition:opacity 0.5s ease, transform 0.5s ease;
+    pointer-events:none;
+  }
+  .scene.on{opacity:1;transform:none;}
+
+  .step-no{
+    font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:2px;
+    text-transform:uppercase;color:var(--brass);margin-bottom:10px;
+  }
+  .scene h2{font-family:'Special Elite',monospace;font-size:30px;margin-bottom:12px;}
+  .scene p{font-size:18px;line-height:1.55;max-width:640px;color:var(--navy);}
+  .scene p + p{margin-top:10px;}
+  .aside{font-size:15px;color:var(--slate);font-style:italic;margin-top:14px;max-width:620px;}
+
+  .cols{display:flex;gap:36px;align-items:flex-start;flex:1;margin-top:18px;}
+  .col-text{flex:1;min-width:0;}
+  .col-visual{flex:1;display:flex;align-items:center;justify-content:center;}
+
+  /* --- fenêtre schématique --- */
+  .window{
+    width:100%;max-width:470px;
+    border:1px solid var(--line);background:#fff;
+    box-shadow:0 10px 34px rgba(22,35,63,0.14);
+  }
+  .window .bar{
+    display:flex;align-items:center;gap:6px;
+    background:var(--paper-dark);border-bottom:1px solid var(--line);
+    padding:8px 10px;
+  }
+  .window .bar span{width:9px;height:9px;border-radius:50%;background:var(--line);}
+  .window .bar .title{
+    margin-left:8px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--slate);
+  }
+  .window .body{padding:20px;min-height:190px;}
+
+  .fake-line{height:9px;background:var(--paper-dark);border-radius:2px;margin-bottom:10px;}
+  .fake-line.short{width:45%;}
+  .fake-line.mid{width:70%;}
+
+  .cta{
+    display:inline-block;margin:16px 0 6px;
+    background:var(--forest);color:#fff;
+    font-family:'Special Elite',monospace;font-size:15px;
+    padding:12px 24px;letter-spacing:0.5px;position:relative;
+  }
+  .cta small{display:block;font-family:'JetBrains Mono',monospace;font-size:10px;opacity:0.85;margin-top:3px;}
+
+  .pointer{
+    position:absolute;width:26px;height:26px;
+    margin:-4px 0 0 -4px;pointer-events:none;
+    opacity:0;
+  }
+  .pointer svg{width:100%;height:100%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));}
+  .scene.on .pointer{animation:point 2.4s ease 0.6s forwards;}
+  @keyframes point{
+    0%{opacity:0;transform:translate(26px,26px) scale(1.1);}
+    35%{opacity:1;transform:translate(0,0) scale(1);}
+    55%{transform:translate(0,0) scale(0.82);}
+    70%{transform:translate(0,0) scale(1);}
+    100%{opacity:1;transform:translate(0,0) scale(1);}
+  }
+
+  /* --- terminal --- */
+  .terminal{
+    width:100%;max-width:520px;background:#0E1420;border:1px solid #2A3550;
+    box-shadow:0 10px 34px rgba(22,35,63,0.2);
+  }
+  .terminal .bar{background:#1B2436;border-bottom:1px solid #2A3550;}
+  .terminal .bar .title{color:#8FA0BC;}
+  .terminal .body{
+    padding:18px;min-height:190px;
+    font-family:'JetBrains Mono',monospace;font-size:14px;line-height:1.7;color:#D8E0EE;
+  }
+  .prompt{color:#7FB392;}
+  .typed::after{
+    content:'';display:inline-block;width:8px;height:15px;
+    background:#D8E0EE;vertical-align:-2px;margin-left:2px;
+    animation:blink 1s steps(1) infinite;
+  }
+  .typed.done::after{display:none;}
+  @keyframes blink{50%{opacity:0;}}
+  .out{color:#8FA0BC;}
+  .ok{color:#7FB392;}
+
+  /* --- pied de page / progression --- */
+  footer{
+    display:flex;align-items:center;gap:14px;
+    padding:12px 48px 18px;border-top:1px solid var(--line);
+  }
+  .dots{display:flex;gap:7px;}
+  .dots i{width:9px;height:9px;border:1px solid var(--slate);display:block;}
+  .dots i.on{background:var(--navy);border-color:var(--navy);}
+  footer .caption{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--slate);text-transform:uppercase;letter-spacing:1px;
+  }
+  footer .clock{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--slate);}
+
+  .final{align-items:center;justify-content:center;text-align:center;}
+  .final h2{font-size:34px;margin-bottom:16px;}
+  .final .recap{
+    display:flex;gap:14px;margin-top:26px;font-family:'JetBrains Mono',monospace;font-size:13px;
+  }
+  .final .recap div{
+    border:1px solid var(--line);background:#fff;padding:12px 16px;
+  }
+  .final .recap b{display:block;font-size:11px;color:var(--brass);letter-spacing:1px;margin-bottom:4px;}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="../assets/icons/logo.svg" alt="">
+  <h1>Activer Node.js sur un PC Windows</h1>
+  <div class="sub">Bureau du Courrier — guide en 5 étapes</div>
+</header>
+
+<div class="stage" id="stage">
+
+  <!-- 0 -->
+  <section class="scene final" data-caption="Introduction">
+    <h2>Node.js, c'est quoi ?</h2>
+    <p style="max-width:760px;">
+      C'est le moteur qui fait tourner le Bureau du Courrier sur votre poste.
+      Une seule installation, une fois pour toutes — puis l'application démarre
+      d'un double-clic.
+    </p>
+    <p class="aside" style="max-width:760px;">Comptez une dizaine de minutes.</p>
+  </section>
+
+  <!-- 1 -->
+  <section class="scene" data-caption="Étape 1 — Télécharger">
+    <div class="cols">
+      <div class="col-text">
+        <div class="step-no">Étape 1 sur 5</div>
+        <h2>Télécharger</h2>
+        <p>Ouvrez <b>nodejs.org/fr</b> dans votre navigateur.</p>
+        <p>Prenez la version marquée <b>LTS</b> — c'est la version stable,
+           recommandée pour un poste de travail.</p>
+        <p class="aside">Le fichier arrive dans votre dossier Téléchargements.</p>
+      </div>
+      <div class="col-visual">
+        <div class="window">
+          <div class="bar"><span></span><span></span><span></span><div class="title">nodejs.org/fr</div></div>
+          <div class="body" style="position:relative;">
+            <div class="fake-line mid"></div>
+            <div class="fake-line short"></div>
+            <div class="cta">Télécharger Node.js (LTS)<small>Windows Installer (.msi)</small></div>
+            <div class="fake-line" style="margin-top:14px;"></div>
+            <div class="fake-line short"></div>
+            <div class="pointer" style="left:170px;top:126px;">
+              <svg viewBox="0 0 24 24"><path d="M4 2l14 9-6 1 3.5 7-2.6 1.2L9.4 13 4 17z" fill="#16233F" stroke="#fff" stroke-width="1.4"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="scene" data-caption="Étape 2 — Installer">
+    <div class="cols">
+      <div class="col-text">
+        <div class="step-no">Étape 2 sur 5</div>
+        <h2>Installer</h2>
+        <p>Double-cliquez le fichier téléchargé.</p>
+        <p>Acceptez les options proposées : <b>Suivant</b>, puis <b>Installer</b>.
+           Il n'y a rien à décocher.</p>
+        <p class="aside">Windows peut demander une confirmation d'administrateur : acceptez.</p>
+      </div>
+      <div class="col-visual">
+        <div class="window">
+          <div class="bar"><span></span><span></span><span></span><div class="title">Installation de Node.js</div></div>
+          <div class="body" style="position:relative;">
+            <div class="fake-line mid"></div>
+            <div class="fake-line"></div>
+            <div class="fake-line short"></div>
+            <div style="height:8px;background:var(--paper-dark);margin:22px 0 6px;">
+              <div id="progress" style="height:100%;width:0;background:var(--forest);transition:width 3.4s linear;"></div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--slate);">Installation en cours…</div>
+            <div class="cta" style="background:var(--navy);margin-top:22px;">Installer</div>
+            <div class="pointer" style="left:112px;top:186px;">
+              <svg viewBox="0 0 24 24"><path d="M4 2l14 9-6 1 3.5 7-2.6 1.2L9.4 13 4 17z" fill="#16233F" stroke="#fff" stroke-width="1.4"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="scene" data-caption="Étape 3 — Vérifier">
+    <div class="cols">
+      <div class="col-text">
+        <div class="step-no">Étape 3 sur 5</div>
+        <h2>Vérifier</h2>
+        <p>Menu Démarrer → tapez <b>powershell</b> → ouvrez
+           <b>Windows PowerShell</b>.</p>
+        <p>Tapez la commande, puis Entrée. Un numéro de version doit s'afficher :
+           c'est la preuve que Node.js est actif.</p>
+        <p class="aside">Si rien ne s'affiche, redémarrez le PC : l'installation
+           n'est prise en compte qu'au démarrage suivant.</p>
+      </div>
+      <div class="col-visual">
+        <div class="terminal">
+          <div class="bar"><span></span><span></span><span></span><div class="title">Windows PowerShell</div></div>
+          <div class="body">
+            <div><span class="prompt">PS C:\Users\Accueil&gt;</span> <span class="typed" data-type="node --version" data-delay="600"></span></div>
+            <div class="out" data-reveal="3200">v22.11.0</div>
+            <div style="margin-top:10px;"><span class="prompt">PS C:\Users\Accueil&gt;</span> <span class="typed" data-type="npm --version" data-delay="4000"></span></div>
+            <div class="out" data-reveal="6400">10.9.0</div>
+            <div class="ok" data-reveal="7000" style="margin-top:12px;">✓ Node.js est actif</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="scene" data-caption="Étape 4 — Préparer l'application">
+    <div class="cols">
+      <div class="col-text">
+        <div class="step-no">Étape 4 sur 5</div>
+        <h2>Préparer l'application</h2>
+        <p>Ouvrez le dossier <b>bureau-du-courrier</b> dans l'Explorateur.</p>
+        <p>Cliquez dans la barre d'adresse, tapez <b>powershell</b>, Entrée.
+           Puis lancez l'installation des modules.</p>
+        <p class="aside">À faire une seule fois. C'est ce qui permet l'envoi
+           automatique des courriels.</p>
+      </div>
+      <div class="col-visual">
+        <div class="terminal">
+          <div class="bar"><span></span><span></span><span></span><div class="title">PowerShell — bureau-du-courrier</div></div>
+          <div class="body">
+            <div><span class="prompt">PS ...\bureau-du-courrier&gt;</span> <span class="typed" data-type="npm install" data-delay="600"></span></div>
+            <div class="out" data-reveal="2600">added 1 package in 3s</div>
+            <div class="ok" data-reveal="3200" style="margin-top:10px;">✓ Modules installés</div>
+            <div class="out" data-reveal="4200" style="margin-top:14px;">Facultatif — copier le fichier de configuration :</div>
+            <div data-reveal="4600"><span class="prompt">PS ...&gt;</span> <span class="typed" data-type="copy .env.example .env" data-delay="4800"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="scene" data-caption="Étape 5 — Démarrer">
+    <div class="cols">
+      <div class="col-text">
+        <div class="step-no">Étape 5 sur 5</div>
+        <h2>Démarrer</h2>
+        <p>Double-cliquez <b>demarrer.cmd</b> dans le dossier.</p>
+        <p>Une fenêtre noire s'ouvre — c'est normal, c'est le serveur.
+           Le navigateur s'ouvre tout seul sur l'application.</p>
+        <p class="aside">Laissez la fenêtre ouverte tant que vous utilisez
+           l'application ; fermez-la pour arrêter.</p>
+      </div>
+      <div class="col-visual">
+        <div class="terminal">
+          <div class="bar"><span></span><span></span><span></span><div class="title">demarrer.cmd</div></div>
+          <div class="body">
+            <div class="out" data-reveal="500">Bureau du Courrier v1.0.0</div>
+            <div class="out" data-reveal="900">&nbsp; interface&nbsp;&nbsp; http://localhost:3000</div>
+            <div class="out" data-reveal="1300">&nbsp; registre&nbsp;&nbsp;&nbsp; data\db.json</div>
+            <div class="out" data-reveal="1700">&nbsp; courriel&nbsp;&nbsp;&nbsp; SMTP smtp.gmail.com:587</div>
+            <div class="ok" data-reveal="2400" style="margin-top:14px;">✓ Le navigateur s'ouvre…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="scene final" data-caption="C'est prêt">
+    <h2>C'est prêt.</h2>
+    <p style="max-width:720px;">
+      Les fois suivantes, un seul geste : double-cliquer <b>demarrer.cmd</b>.
+    </p>
+    <div class="recap">
+      <div><b>Vérifier</b>node --version</div>
+      <div><b>Préparer</b>npm install</div>
+      <div><b>Démarrer</b>demarrer.cmd</div>
+      <div><b>Ouvrir</b>localhost:3000</div>
+    </div>
+    <p class="aside" style="margin-top:24px;">
+      Détails et pannes courantes : docs/installation-windows-gmail.md
+    </p>
+  </section>
+</div>
+
+<footer>
+  <div class="dots" id="dots"></div>
+  <div class="caption" id="caption"></div>
+  <div class="clock" id="clock">0:00</div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var scenes = Array.prototype.slice.call(document.querySelectorAll('.scene'));
+  var DUREES = [6000, 15000, 14000, 17000, 15000, 13000, 9000]; // ms par scène
+  var dots = document.getElementById('dots');
+  var caption = document.getElementById('caption');
+  var clock = document.getElementById('clock');
+
+  scenes.forEach(function () {
+    dots.appendChild(document.createElement('i'));
+  });
+
+  var debut = Date.now();
+  setInterval(function () {
+    var s = Math.floor((Date.now() - debut) / 1000);
+    clock.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }, 250);
+
+  /** Frappe caractère par caractère, comme au clavier. */
+  function taper(el) {
+    var texte = el.dataset.type || '';
+    var delai = Number(el.dataset.delay || 0);
+    el.textContent = '';
+    setTimeout(function () {
+      var i = 0;
+      var pas = setInterval(function () {
+        el.textContent = texte.slice(0, ++i);
+        if (i >= texte.length) {
+          clearInterval(pas);
+          el.classList.add('done');
+        }
+      }, 70);
+    }, delai);
+  }
+
+  function jouer(scene) {
+    scene.querySelectorAll('[data-reveal]').forEach(function (el) {
+      el.style.visibility = 'hidden';
+      setTimeout(function () {
+        el.style.visibility = 'visible';
+      }, Number(el.dataset.reveal));
+    });
+    scene.querySelectorAll('.typed').forEach(taper);
+    var barre = scene.querySelector('#progress');
+    if (barre) {
+      barre.style.width = '0';
+      setTimeout(function () {
+        barre.style.width = '100%';
+      }, 900);
+    }
+  }
+
+  var index = 0;
+  function afficher(i) {
+    scenes.forEach(function (s, n) {
+      s.classList.toggle('on', n === i);
+      dots.children[n].classList.toggle('on', n <= i);
+    });
+    caption.textContent = scenes[i].dataset.caption || '';
+    jouer(scenes[i]);
+    if (i + 1 < scenes.length) {
+      setTimeout(function () {
+        afficher(i + 1);
+      }, DUREES[i]);
+    } else {
+      setTimeout(function () {
+        document.body.dataset.fini = '1';
+      }, DUREES[i]);
+    }
+  }
+  afficher(index);
+})();
+</script>
+</body>
+</html>

@@ -52,6 +52,15 @@ vérifier la configuration.
 d'application Google, fichier `.env`, vérification et pannes courantes :
 [`docs/installation-windows-gmail.md`](docs/installation-windows-gmail.md).
 
+Les mêmes étapes en images : ouvrez `tools/guide-nodejs.html` dans un
+navigateur — un guide animé de cinq étapes, qui se rejoue à volonté. Pour en
+tirer une vidéo :
+
+```bash
+npm i --no-save playwright && npx playwright install chromium
+node tools/enregistrer-guide.js
+```
+
 Sur Windows, une fois la configuration faite, double-cliquez **`demarrer.cmd`** :
 il démarre le serveur et ouvre l'application. Aucune commande à retenir.
 
@@ -286,6 +295,8 @@ manifest.webmanifest  déclaration de l'application installable
 sw.js                 service worker : coquille en cache, /api toujours en direct
 assets/icons/         logo.svg (à remplacer) et icônes générées
 tools/make-icons.js   régénère les icônes depuis logo.svg
+tools/guide-nodejs.html      guide animé : installer Node.js sur Windows
+tools/enregistrer-guide.js   filme ce guide et produit une vidéo
 demarrer.cmd          lanceur Windows : démarre le serveur et ouvre l'application
 docs/                 pas à pas d'installation (Windows + Gmail)
 assets/css/style.css  feuille de style
