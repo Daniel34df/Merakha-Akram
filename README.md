@@ -48,6 +48,13 @@ Le courriel part alors du serveur, sans ouvrir de logiciel de courriel. Un
 bouton **Envoyer un courriel de test** apparaît dans l'onglet *Réglages* pour
 vérifier la configuration.
 
+**Pas à pas pour Windows + Gmail** — installation de Node.js, mot de passe
+d'application Google, fichier `.env`, vérification et pannes courantes :
+[`docs/installation-windows-gmail.md`](docs/installation-windows-gmail.md).
+
+Sur Windows, une fois la configuration faite, double-cliquez **`demarrer.cmd`** :
+il démarre le serveur et ouvre l'application. Aucune commande à retenir.
+
 Pour une démonstration sans rien envoyer pour de vrai :
 
 ```bash
@@ -56,6 +63,13 @@ MAIL_DRY_RUN=true npm start   # les messages sont affichés dans la console
 
 Si SMTP tombe en panne, l'application ne bloque pas : elle retombe sur le
 logiciel de courriel et note l'incident dans l'historique.
+
+**À savoir** : sans envoi automatique, une notification est *préparée*, pas
+expédiée — le message s'ouvre dans le logiciel de courriel de l'employé·e, qui
+doit encore cliquer sur *Envoyer*. L'historique la marque alors « À envoyer ».
+Si aucun logiciel de courriel n'est configuré sur le poste (cas courant quand on
+utilise Gmail ou Outlook dans le navigateur), rien ne s'ouvre : copiez le
+message depuis l'application, ou configurez l'envoi automatique.
 
 ---
 
@@ -202,6 +216,8 @@ manifest.webmanifest  déclaration de l'application installable
 sw.js                 service worker : coquille en cache, /api toujours en direct
 assets/icons/         logo.svg (à remplacer) et icônes générées
 tools/make-icons.js   régénère les icônes depuis logo.svg
+demarrer.cmd          lanceur Windows : démarre le serveur et ouvre l'application
+docs/                 pas à pas d'installation (Windows + Gmail)
 assets/css/style.css  feuille de style
 assets/css/fonts.css  déclarations des polices embarquées
 assets/fonts/         polices (woff2, sous-ensembles latin) — 216 Ko

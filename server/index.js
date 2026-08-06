@@ -4,6 +4,7 @@
 'use strict';
 
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 const { Db } = require('./db.js');
 const { createMailer } = require('./mailer.js');
 const { createServer, VERSION } = require('./app.js');
@@ -16,6 +17,26 @@ if (typeof process.loadEnvFile === 'function') {
     process.loadEnvFile(path.join(ROOT, '.env'));
   } catch (e) {
     /* pas de .env : on s'en tient aux variables d'environnement */
+  }
+}
+
+/* Ouvre le navigateur une fois le serveur en écoute (OPEN_BROWSER=1).
+   Utilisé par demarrer.cmd : lancer le navigateur avant l'écoute donnerait une
+   page d'erreur. Un échec ici n'empêche jamais le serveur de tourner. */
+function openBrowser(url) {
+  const commands = {
+    win32: ['cmd', ['/c', 'start', '', url]],
+    darwin: ['open', [url]]
+  };
+  const [command, args] = commands[process.platform] || ['xdg-open', [url]];
+  try {
+    const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+    child.on('error', function () {
+      console.log('  (ouvrez ' + url + ' dans votre navigateur)');
+    });
+    child.unref();
+  } catch (e) {
+    console.log('  (ouvrez ' + url + ' dans votre navigateur)');
   }
 }
 
@@ -42,6 +63,9 @@ async function main() {
             : 'SMTP ' + mailer.config.host + ':' + mailer.config.port + ' (de : ' + mailer.config.from + ')'
           : 'inactif — ' + mailer.reason)
     );
+    if (String(process.env.OPEN_BROWSER || '') === '1') {
+      openBrowser('http://localhost:' + port);
+    }
   });
 
   const shutdown = function () {
