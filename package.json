@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "MAIL_DRY_RUN=true node --watch server/index.js",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20.12"

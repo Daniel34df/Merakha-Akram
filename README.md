@@ -139,6 +139,7 @@ server/app.js         serveur HTTP et API JSON
 server/db.js          fichier JSON, écritures atomiques et sérialisées
 server/mailer.js      envoi SMTP (nodemailer, optionnel) et mode essai
 test/                 tests (node:test), sans dépendance
+.github/workflows/    intégration continue : npm test sur Node 20.12 et 22
 ```
 
 ```bash
