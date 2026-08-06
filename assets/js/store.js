@@ -38,7 +38,14 @@
     lastError: null,
     // Comptes : n'existent qu'en mode serveur. accountsExist bascule dès la
     // création du premier compte, et c'est lui qui rend la connexion obligatoire.
-    auth: { user: null, accountsExist: false, signupOpen: true, googleOAuth: false, required: false }
+    auth: {
+      user: null,
+      accountsExist: false,
+      signupOpen: true,
+      googleOAuth: false,
+      required: false,
+      verifyEmail: false
+    }
   };
 
   /** L'envoi automatique est possible si le serveur a un compte SMTP, ou si la
@@ -95,17 +102,33 @@
     if (payload && payload.accountsExist !== undefined) state.auth.accountsExist = payload.accountsExist;
     if (payload && payload.signupOpen !== undefined) state.auth.signupOpen = payload.signupOpen;
     if (payload && payload.googleOAuth !== undefined) state.auth.googleOAuth = payload.googleOAuth;
+    if (payload && payload.verifyEmail !== undefined) state.auth.verifyEmail = payload.verifyEmail;
     state.auth.required = state.auth.accountsExist && !state.auth.user;
     emit();
     return state.auth;
   }
 
+  /* Deux issues possibles : le compte est créé (pas de vérification), ou un code
+     part par courriel et il faut le confirmer. On renvoie l'issue à l'appelant. */
   async function signup(input) {
     const result = await api('/auth/signup', { method: 'POST', body: JSON.stringify(input) });
+    if (result && result.pending) return { pending: true, email: result.email };
+    state.auth.accountsExist = true;
+    applyAuth(result);
+    await loadServerState();
+    return { pending: false, user: result.user };
+  }
+
+  async function verifySignup(email, code) {
+    const result = await api('/auth/verify', { method: 'POST', body: JSON.stringify({ email: email, code: code }) });
     state.auth.accountsExist = true;
     applyAuth(result);
     await loadServerState();
     return result.user;
+  }
+
+  async function resendCode(email) {
+    return api('/auth/resend', { method: 'POST', body: JSON.stringify({ email: email }) });
   }
 
   async function login(input) {
@@ -209,6 +232,7 @@
       state.smtp = !!health.smtp;
       state.auth.accountsExist = !!health.accountsExist;
       state.auth.googleOAuth = !!health.googleOAuth;
+      state.auth.verifyEmail = !!health.verifyEmail;
       try {
         applyAuth(await api('/auth/me'));
         if (!state.auth.required) await loadServerState();
@@ -394,6 +418,8 @@
     init: init,
     canSendAutomatically: canSendAutomatically,
     signup: signup,
+    verifySignup: verifySignup,
+    resendCode: resendCode,
     login: login,
     logout: logout,
     connectSmtpMailbox: connectSmtpMailbox,

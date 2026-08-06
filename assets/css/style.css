@@ -292,6 +292,14 @@ input[type=password]{
   color:var(--navy);
   margin-bottom:16px;
 }
+.verify-lead{font-size:13.5px;line-height:1.5;margin:0 0 16px;}
+.code-input{
+  font-family:var(--mono);
+  font-size:26px;
+  letter-spacing:10px;
+  text-align:center;
+  padding:12px;
+}
 .who-badge{
   font-family:var(--mono);
   font-size:10px;

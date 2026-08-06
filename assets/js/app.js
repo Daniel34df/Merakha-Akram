@@ -25,7 +25,9 @@
     copiesTouched: false,
     // Premier démarrage : l'écran d'installation a été écarté volontairement.
     skipAccount: false,
-    gateFormChosen: false
+    gateFormChosen: false,
+    // Inscription en attente du code de confirmation.
+    pendingEmail: null
   };
 
   /* ═════════════ retours visuels ═════════════ */
@@ -1023,6 +1025,12 @@
     gate.hidden = !needed;
     document.body.style.overflow = needed ? 'hidden' : '';
     $('gateSkip').hidden = !firstRun;
+    const notice = $('signupNotice');
+    if (notice) {
+      notice.textContent = S.auth.verifyEmail
+        ? 'Un code de confirmation sera envoyé à cette adresse pour en vérifier l’accès.'
+        : 'Ce serveur ne peut pas envoyer de courriel : l’adresse ne sera pas vérifiée.';
+    }
 
     const bar = $('accountBar');
     bar.hidden = !S.auth.user;
@@ -1035,7 +1043,7 @@
     // Aucun compte encore : la première visite crée le compte du bureau.
     const signupTab = document.querySelector('.gate-tabs button[data-form="signup"]');
     if (signupTab) signupTab.hidden = !S.auth.signupOpen && S.auth.accountsExist;
-    if (!S.auth.accountsExist && !view.gateFormChosen) {
+    if (!S.auth.accountsExist && !view.gateFormChosen && !view.pendingEmail) {
       $('gateSubtitle').textContent = 'Créez le compte du bureau pour protéger le registre';
       showGateForm('signup');
     }
@@ -1047,6 +1055,9 @@
     });
     $('loginForm').hidden = which !== 'login';
     $('signupForm').hidden = which !== 'signup';
+    $('verifyForm').hidden = which !== 'verify';
+    // L'étape du code n'est pas un onglet : on masque les onglets pendant.
+    $('gateTabs').hidden = which === 'verify';
     setMsg('gateMsg', '', '');
   }
 
@@ -1081,17 +1092,74 @@
     e.preventDefault();
     setMsg('gateMsg', '', 'Création du compte…');
     try {
-      await store.signup({
+      const result = await store.signup({
         name: $('signupName').value.trim(),
         email: $('signupEmail').value.trim(),
         password: $('signupPassword').value
       });
       $('signupPassword').value = '';
       setMsg('gateMsg', '', '');
+      if (result.pending) {
+        view.pendingEmail = result.email;
+        $('verifyEmail').textContent = result.email;
+        $('verifyCode').value = '';
+        showGateForm('verify');
+        $('verifyHint').textContent =
+          'Le code est valable 15 minutes. Pensez à regarder dans les indésirables.';
+        $('verifyCode').focus();
+        return;
+      }
       afterLogin();
     } catch (err) {
       setMsg('gateMsg', 'error', esc(err.message));
     }
+  });
+
+  $('verifyForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const code = $('verifyCode').value.replace(/\D/g, '');
+    if (code.length !== 6) {
+      setMsg('gateMsg', 'error', 'Le code compte six chiffres.');
+      return;
+    }
+    setMsg('gateMsg', '', 'Vérification…');
+    try {
+      await store.verifySignup(view.pendingEmail, code);
+      setMsg('gateMsg', '', '');
+      view.pendingEmail = null;
+      afterLogin();
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+      $('verifyCode').select();
+      // Code expiré ou trop d'essais : il faut repartir de l'inscription.
+      if (err.status === 410 || err.status === 429) {
+        view.pendingEmail = null;
+        showGateForm('signup');
+        setMsg('gateMsg', 'error', esc(err.message));
+      }
+    }
+  });
+
+  $('resendCodeBtn').addEventListener('click', async function () {
+    if (!view.pendingEmail) return;
+    setMsg('gateMsg', '', 'Envoi d’un nouveau code…');
+    try {
+      await store.resendCode(view.pendingEmail);
+      setMsg('gateMsg', 'ok', 'Nouveau code envoyé à ' + esc(view.pendingEmail) + '.');
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
+
+  $('cancelVerifyBtn').addEventListener('click', function () {
+    view.pendingEmail = null;
+    showGateForm('signup');
+  });
+
+  // Confort : coller un code envoie directement le formulaire.
+  $('verifyCode').addEventListener('input', function (e) {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+    if (e.target.value.length === 6) $('verifyForm').requestSubmit();
   });
 
   $('logoutBtn').addEventListener('click', async function () {

@@ -25,7 +25,8 @@ function emptyDb() {
     history: [],
     settings: Object.assign({}, DEFAULT_SETTINGS),
     users: [],
-    sessions: []
+    sessions: [],
+    pending: []
   };
 }
 
@@ -49,6 +50,13 @@ class Db {
         sessions: Array.isArray(parsed.sessions)
           ? parsed.sessions.filter(function (s) {
               return s && new Date(s.expiresAt).getTime() > Date.now();
+            })
+          : [],
+        // Inscriptions en attente de confirmation : les codes périmés ne
+        // servent plus à rien et n'ont pas à traîner dans le fichier.
+        pending: Array.isArray(parsed.pending)
+          ? parsed.pending.filter(function (p) {
+              return p && new Date(p.expiresAt).getTime() > Date.now();
             })
           : []
       };

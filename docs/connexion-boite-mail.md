@@ -22,6 +22,26 @@ reste possible de continuer sans compte : l'application fonctionne comme avant.
 **Dès qu'un compte existe, le registre est protégé** : l'API refuse toute
 requête sans session valide.
 
+### Vérification de l'adresse
+
+À l'inscription, un **code à six chiffres** est envoyé à l'adresse indiquée, et
+le compte n'est créé qu'une fois ce code saisi. Sans cela, n'importe qui
+pourrait s'inscrire avec le courriel d'un collègue.
+
+- Le code est valable **15 minutes** et n'est jamais conservé en clair : le
+  registre n'en garde qu'une empreinte, comme pour un mot de passe.
+- **5 essais** au maximum, puis il faut recommencer l'inscription.
+- Un nouveau code peut être demandé après 60 secondes ; il annule le précédent
+  et remet le compteur d'essais à zéro.
+- Tant que le code n'est pas confirmé, **aucun compte n'existe** : une
+  inscription abandonnée ne laisse qu'une demande en attente, effacée à
+  expiration.
+
+La vérification suppose que le serveur sache envoyer un courriel. Elle est donc
+active dès que SMTP est configuré, et inactive sinon — l'écran d'inscription
+l'indique. `VERIFY_EMAIL=true` l'impose (l'inscription est alors refusée tant
+que SMTP manque) ; `VERIFY_EMAIL=false` la désactive.
+
 - Mot de passe : 10 caractères minimum, haché en **scrypt** avec un sel
   aléatoire. Il n'est jamais stocké ni renvoyé en clair.
 - Session : jeton aléatoire dans un cookie `HttpOnly`, valable 30 jours,

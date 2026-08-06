@@ -57,6 +57,9 @@ async function main() {
   });
   const google = createGoogleOAuth(process.env);
   const signupOpen = String(process.env.SIGNUP_CLOSED || '').toLowerCase() !== 'true';
+  // VERIFY_EMAIL absent : on vérifie si le serveur sait envoyer un courriel.
+  const verifyRaw = String(process.env.VERIFY_EMAIL || '').toLowerCase();
+  const verifyEmail = verifyRaw === '' ? mailer.enabled : verifyRaw === 'true';
 
   const server = createServer({
     db: db,
@@ -64,6 +67,7 @@ async function main() {
     vault: vault,
     google: google,
     signupOpen: signupOpen,
+    verifyEmail: verifyEmail,
     rootDir: ROOT
   });
 
@@ -84,6 +88,12 @@ async function main() {
         (db.data.users.length === 0
           ? 'aucun — le premier compte créé protégera l’application'
           : db.data.users.length + ' compte(s)' + (signupOpen ? '' : ', inscriptions fermées'))
+    );
+    console.log(
+      '  inscription ' +
+        (verifyEmail
+          ? 'code de confirmation envoyé par courriel'
+          : 'sans vérification d’adresse' + (mailer.enabled ? ' (VERIFY_EMAIL=false)' : ' — aucun envoi possible'))
     );
     console.log('  boîte perso ' + (google.enabled ? 'connexion Google disponible' : 'Google non configuré — SMTP personnel seulement'));
     if (String(process.env.OPEN_BROWSER || '') === '1') {

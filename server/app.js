@@ -147,6 +147,44 @@ function redirect(res, location) {
   res.end();
 }
 
+function createUserRecord(name, email, passwordHash) {
+  return {
+    id: crypto.randomUUID(),
+    name: name,
+    email: email,
+    password: passwordHash,
+    createdAt: new Date().toISOString(),
+    emailVerifiedAt: new Date().toISOString(),
+    mailbox: null,
+    mailboxSecret: ''
+  };
+}
+
+/* Le code part du compte du serveur : au moment de l'inscription, personne n'a
+   encore de boîte reliée. */
+async function sendVerificationCode(ctx, pending, code) {
+  const bureau = (ctx.db.data.settings && ctx.db.data.settings.officeName) || 'Bureau du Courrier';
+  await ctx.mailer.send({
+    to: pending.email,
+    subject: 'Votre code de confirmation : ' + code,
+    text:
+      'Bonjour ' +
+      pending.name +
+      ',\n\n' +
+      'Voici le code de confirmation pour créer votre compte sur ' +
+      bureau +
+      ' :\n\n' +
+      '    ' +
+      code +
+      '\n\n' +
+      'Ce code est valable ' +
+      auth.CODE_MINUTES +
+      ' minutes.\n\n' +
+      'Si vous n’êtes pas à l’origine de cette demande, ignorez ce message : ' +
+      'aucun compte ne sera créé sans ce code.'
+  });
+}
+
 /** Renvoie true si la route a été traitée ici. */
 async function handleAuth(req, res, ctx, pathname) {
   const { db, vault, google, throttle } = ctx;
@@ -159,7 +197,8 @@ async function handleAuth(req, res, ctx, pathname) {
       user: auth.publicUser(user),
       accountsExist: (db.data.users || []).length > 0,
       signupOpen: ctx.signupOpen,
-      googleOAuth: google.enabled
+      googleOAuth: google.enabled,
+      verifyEmail: ctx.verifyEmail
     });
     return true;
   }
@@ -185,15 +224,44 @@ async function handleAuth(req, res, ctx, pathname) {
       throw Object.assign(new Error('Un compte existe déjà avec ce courriel'), { status: 409 });
     }
 
-    const user = {
-      id: crypto.randomUUID(),
-      name: name,
-      email: email,
-      password: auth.hashPassword(password),
-      createdAt: new Date().toISOString(),
-      mailbox: null,
-      mailboxSecret: ''
-    };
+    /* Vérification de l'adresse : sans elle, n'importe qui peut s'inscrire avec
+       le courriel d'un collègue. Elle suppose que le serveur sache envoyer un
+       courriel — sinon il n'y a aucun moyen d'acheminer le code. */
+    if (ctx.verifyEmail && !ctx.mailer.enabled) {
+      throw Object.assign(
+        new Error(
+          'Ce serveur ne peut pas envoyer de courriel : la vérification par code est impossible. ' +
+            'Configurez SMTP, ou mettez VERIFY_EMAIL=false.'
+        ),
+        { status: 503 }
+      );
+    }
+
+    if (ctx.verifyEmail) {
+      const code = auth.generateCode();
+      const pending = auth.newPendingSignup({ name: name, email: email, password: auth.hashPassword(password) }, code);
+      try {
+        await sendVerificationCode(ctx, pending, code);
+      } catch (err) {
+        throw Object.assign(new Error('Envoi du code impossible : ' + err.message), { status: 502 });
+      }
+      await db.write(function (data) {
+        // Une nouvelle demande remplace la précédente pour la même adresse.
+        data.pending = data.pending.filter(function (p) {
+          return util.normalize(p.email) !== util.normalize(email);
+        });
+        data.pending.push(pending);
+      });
+      sendJson(res, 202, {
+        pending: true,
+        email: email,
+        codeLength: auth.CODE_LENGTH,
+        expiresInMinutes: auth.CODE_MINUTES
+      });
+      return true;
+    }
+
+    const user = createUserRecord(name, email, auth.hashPassword(password));
     const session = auth.newSession(user.id);
     await db.write(function (data) {
       data.users.push(user);
@@ -201,6 +269,87 @@ async function handleAuth(req, res, ctx, pathname) {
     });
 
     sendJsonWithCookie(res, 201, { user: auth.publicUser(user) }, auth.sessionCookie(session.token, { secure: secureCookie }));
+    return true;
+  }
+
+  if (pathname === '/api/auth/verify' && method === 'POST') {
+    const body = await readBody(req);
+    const email = String(body.email || '').trim();
+    const code = String(body.code || '').trim();
+
+    const pending = (db.data.pending || []).find(function (p) {
+      return util.normalize(p.email) === util.normalize(email);
+    });
+    if (!pending || auth.pendingExpired(pending)) {
+      throw Object.assign(new Error('Code expiré ou inscription introuvable — recommencez l’inscription'), {
+        status: 410
+      });
+    }
+    if (pending.attempts >= auth.CODE_MAX_ATTEMPTS) {
+      throw Object.assign(new Error('Trop de codes erronés — recommencez l’inscription'), { status: 429 });
+    }
+
+    if (!auth.verifyPassword(code, pending.codeHash)) {
+      await db.write(function (data) {
+        const target = data.pending.find(function (p) {
+          return p.id === pending.id;
+        });
+        if (target) target.attempts++;
+      });
+      // `pending` désigne l'objet que db.write vient d'incrémenter : le compteur
+      // est déjà à jour ici, l'ajouter une seconde fois fausserait le décompte.
+      const left = auth.CODE_MAX_ATTEMPTS - pending.attempts;
+      throw Object.assign(
+        new Error('Code incorrect.' + (left > 0 ? ' Il reste ' + left + ' essai(s).' : ' Recommencez l’inscription.')),
+        { status: 401 }
+      );
+    }
+
+    // Une inscription a pu aboutir pendant l'attente du code.
+    if (auth.findUserByEmail(db, pending.email)) {
+      throw Object.assign(new Error('Un compte existe déjà avec ce courriel'), { status: 409 });
+    }
+
+    const user = createUserRecord(pending.name, pending.email, pending.password);
+    const session = auth.newSession(user.id);
+    await db.write(function (data) {
+      data.users.push(user);
+      data.sessions.push(session);
+      data.pending = data.pending.filter(function (p) {
+        return p.id !== pending.id;
+      });
+    });
+    sendJsonWithCookie(res, 201, { user: auth.publicUser(user) }, auth.sessionCookie(session.token, { secure: secureCookie }));
+    return true;
+  }
+
+  if (pathname === '/api/auth/resend' && method === 'POST') {
+    const body = await readBody(req);
+    const email = String(body.email || '').trim();
+    const pending = (db.data.pending || []).find(function (p) {
+      return util.normalize(p.email) === util.normalize(email);
+    });
+    if (!pending || auth.pendingExpired(pending)) {
+      throw Object.assign(new Error('Aucune inscription en attente pour cette adresse'), { status: 410 });
+    }
+    const wait = auth.secondsBeforeResend(pending);
+    if (wait > 0) {
+      throw Object.assign(new Error('Patientez ' + wait + ' seconde(s) avant de redemander un code'), { status: 429 });
+    }
+
+    const code = auth.generateCode();
+    await sendVerificationCode(ctx, pending, code);
+    await db.write(function (data) {
+      const target = data.pending.find(function (p) {
+        return p.id === pending.id;
+      });
+      if (target) {
+        target.codeHash = auth.hashPassword(code);
+        target.attempts = 0;
+        target.lastSentAt = new Date().toISOString();
+      }
+    });
+    sendJson(res, 200, { sent: true, email: pending.email });
     return true;
   }
 
@@ -371,7 +520,8 @@ async function handleApi(req, res, ctx, pathname) {
       mailReason: mailer.reason || null,
       storage: 'fichier',
       accountsExist: (db.data.users || []).length > 0,
-      googleOAuth: ctx.google.enabled
+      googleOAuth: ctx.google.enabled,
+      verifyEmail: ctx.verifyEmail
     });
   }
 
@@ -627,7 +777,9 @@ function createServer(options) {
     vault: options.vault || require('./secrets.js').createVault({ secret: crypto.randomBytes(32).toString('base64') }),
     google: options.google || require('./google.js').createGoogleOAuth({}),
     throttle: options.throttle || auth.createThrottle(),
-    signupOpen: options.signupOpen !== false
+    signupOpen: options.signupOpen !== false,
+    // Par défaut, on vérifie l'adresse dès que le serveur sait envoyer un courriel.
+    verifyEmail: options.verifyEmail !== undefined ? options.verifyEmail : !!(options.mailer && options.mailer.enabled)
   });
 
   return http.createServer(async function (req, res) {

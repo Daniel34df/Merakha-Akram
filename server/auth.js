@@ -57,6 +57,46 @@ function checkPasswordStrength(password) {
   return null;
 }
 
+/* ---------- codes de confirmation ---------- */
+
+const CODE_LENGTH = 6;
+const CODE_MINUTES = 15;
+const CODE_MAX_ATTEMPTS = 5;
+const RESEND_SECONDS = 60;
+
+/** Six chiffres tirés au sort de façon non prévisible (jamais Math.random). */
+function generateCode() {
+  let code = '';
+  for (let i = 0; i < CODE_LENGTH; i++) code += String(crypto.randomInt(0, 10));
+  return code;
+}
+
+function newPendingSignup(input, code) {
+  const now = Date.now();
+  return {
+    id: crypto.randomUUID(),
+    name: input.name,
+    email: input.email,
+    password: input.password, // déjà haché par l'appelant
+    // Le code n'est pas conservé en clair : une lecture du registre ne doit pas
+    // permettre de valider une adresse à la place de son propriétaire.
+    codeHash: hashPassword(code),
+    attempts: 0,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + CODE_MINUTES * 60 * 1000).toISOString(),
+    lastSentAt: new Date(now).toISOString()
+  };
+}
+
+function pendingExpired(pending) {
+  return !pending || new Date(pending.expiresAt).getTime() < Date.now();
+}
+
+function secondsBeforeResend(pending) {
+  const elapsed = (Date.now() - new Date(pending.lastSentAt).getTime()) / 1000;
+  return Math.max(0, Math.ceil(RESEND_SECONDS - elapsed));
+}
+
 /* ---------- cookies ---------- */
 
 function parseCookies(header) {
@@ -190,6 +230,14 @@ function createThrottle(options) {
 module.exports = {
   SESSION_COOKIE: SESSION_COOKIE,
   MIN_PASSWORD: MIN_PASSWORD,
+  CODE_LENGTH: CODE_LENGTH,
+  CODE_MINUTES: CODE_MINUTES,
+  CODE_MAX_ATTEMPTS: CODE_MAX_ATTEMPTS,
+  RESEND_SECONDS: RESEND_SECONDS,
+  generateCode: generateCode,
+  newPendingSignup: newPendingSignup,
+  pendingExpired: pendingExpired,
+  secondsBeforeResend: secondsBeforeResend,
   hashPassword: hashPassword,
   verifyPassword: verifyPassword,
   checkPasswordStrength: checkPasswordStrength,

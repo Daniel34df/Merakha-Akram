@@ -28,6 +28,9 @@ async function withServer(run, options) {
     vault: vault,
     google: google,
     signupOpen: opts.signupOpen !== false,
+    // La vérification par code a sa propre suite (verification.test.js) : ici on
+    // éprouve les comptes eux-mêmes, sans l'étape intermédiaire.
+    verifyEmail: opts.verifyEmail === true,
     rootDir: path.join(__dirname, '..')
   });
 

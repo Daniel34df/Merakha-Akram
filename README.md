@@ -123,6 +123,12 @@ service communication, seul habilité à en autoriser l'usage.
 
 ## Comptes et boîte d'envoi personnelle
 
+À l'inscription, un **code de confirmation à six chiffres** est envoyé à
+l'adresse indiquée : le compte n'est créé qu'une fois ce code saisi. Cela évite
+qu'on s'inscrive avec le courriel d'un collègue. La vérification est active dès
+que le serveur sait envoyer un courriel ; sinon l'écran d'inscription le
+signale.
+
 Au premier démarrage du serveur, l'application propose de créer le **compte du
 bureau**. Dès qu'un compte existe, le registre n'est plus accessible sans
 connexion. On peut aussi continuer sans compte : l'application fonctionne alors
@@ -218,6 +224,7 @@ autre interface ou un import automatisé.
 | `GET` | `/api/health` | état de l'application et du courriel |
 | `GET` | `/api/auth/me` | compte connecté, s'il y en a un |
 | `POST` | `/api/auth/signup` `/login` `/logout` | comptes et sessions |
+| `POST` | `/api/auth/verify` · `/resend` | code de confirmation de l'adresse |
 | `PUT` `DELETE` | `/api/auth/mailbox/smtp` · `/api/auth/mailbox` | relier ou retirer sa boîte |
 | `GET` | `/api/auth/google/start` · `/callback` | autorisation Gmail |
 | `GET` | `/api/state` | registre + historique + réglages |
@@ -265,7 +272,7 @@ test/                 tests (node:test), sans dépendance
 ```
 
 ```bash
-npm test     # 49 tests : utilitaires, API, comptes et boîtes d'envoi
+npm test     # 62 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

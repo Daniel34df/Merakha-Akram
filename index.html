@@ -51,7 +51,24 @@
       <label for="signupPassword">Mot de passe</label>
       <input type="password" id="signupPassword" autocomplete="new-password" required>
       <p class="hint">Au moins 10 caractères. Ce mot de passe est propre à cette application — n'y remettez pas celui de votre boîte mail.</p>
+      <p class="hint" id="signupNotice"></p>
       <button class="btn" type="submit">Créer le compte</button>
+    </form>
+
+    <form id="verifyForm" class="gate-form" hidden>
+      <p class="verify-lead">
+        Un code de confirmation vient d'être envoyé à <strong id="verifyEmail"></strong>.
+        Saisissez-le pour terminer la création du compte.
+      </p>
+      <label for="verifyCode">Code reçu par courriel</label>
+      <input type="text" id="verifyCode" inputmode="numeric" autocomplete="one-time-code"
+             maxlength="6" pattern="[0-9]*" class="code-input" required>
+      <button class="btn" type="submit">Confirmer</button>
+      <div class="row-actions" style="margin-top:12px;">
+        <button type="button" class="link-btn" id="resendCodeBtn">Renvoyer le code</button>
+        <button type="button" class="link-btn" id="cancelVerifyBtn">Changer d'adresse</button>
+      </div>
+      <p class="hint" id="verifyHint"></p>
     </form>
 
     <div id="gateMsg"></div>
