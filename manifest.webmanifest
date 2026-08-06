@@ -1,0 +1,58 @@
+{
+  "name": "Bureau du Courrier",
+  "short_name": "Courrier",
+  "description": "Registre des destinataires et notifications de courrier reçu.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./?source=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F4F0E6",
+  "theme_color": "#16233F",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/icons/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouveau courrier reçu",
+      "short_name": "Guichet",
+      "url": "./#guichet"
+    },
+    {
+      "name": "Registre des destinataires",
+      "short_name": "Registre",
+      "url": "./#registre"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logo de l'application — visuel neutre par défaut.
+
+  POUR METTRE VOTRE LOGO : remplacez ce fichier par le vôtre, en gardant le nom
+  « logo.svg » et un dessin carré. L'en-tête de l'application et le favicon le
+  reprennent aussitôt. Pour les icônes de l'application installée, relancez
+  ensuite « node tools/make-icons.js » (voir README).
+
+  Aucun logo d'organisation n'est fourni ici : utilisez le fichier officiel
+  remis par votre service communication, seul habilité à en autoriser l'usage.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Bureau du Courrier">
+  <rect width="512" height="512" rx="96" fill="#16233F"/>
+
+  <!-- enveloppe -->
+  <g fill="none" stroke="#F4F0E6" stroke-width="20" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="104" y="152" width="304" height="208" rx="12"/>
+    <path d="M104 176 L256 288 L408 176"/>
+  </g>
+
+  <!-- sceau de cire (motif volontairement neutre : ni croix ni emblème) -->
+  <circle cx="374" cy="342" r="52" fill="#A8432E" stroke="#F4F0E6" stroke-width="14"/>
+  <circle cx="374" cy="342" r="26" fill="none" stroke="#F4F0E6" stroke-width="10" stroke-dasharray="10 9"/>
+</svg>

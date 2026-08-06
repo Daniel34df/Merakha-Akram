@@ -251,6 +251,22 @@ test('l’interface statique est servie et le parcours de répertoire bloqué', 
     assert.equal(font.status, 200, 'les polices embarquées sont servies');
     assert.equal(font.headers.get('content-type'), 'font/woff2');
 
+    const manifest = await fetch(t.base + '/manifest.webmanifest');
+    assert.equal(manifest.status, 200);
+    assert.match(manifest.headers.get('content-type'), /application\/manifest\+json/);
+    const parsed = await manifest.json();
+    assert.equal(parsed.display, 'standalone');
+    assert.ok(parsed.icons.length >= 2, 'le manifeste déclare des icônes');
+
+    const sw = await fetch(t.base + '/sw.js');
+    assert.equal(sw.status, 200);
+    assert.match(sw.headers.get('cache-control'), /no-cache/, 'le service worker doit être revalidé');
+    assert.equal(sw.headers.get('service-worker-allowed'), '/');
+
+    const icon = await fetch(t.base + '/assets/icons/icon-512.png');
+    assert.equal(icon.status, 200);
+    assert.equal(icon.headers.get('content-type'), 'image/png');
+
     const escape = await fetch(t.base + '/../../etc/passwd');
     assert.ok([403, 404].includes(escape.status), 'sortie d’arborescence refusée');
 

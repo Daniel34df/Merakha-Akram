@@ -9,20 +9,31 @@
      que le protocole file:// refuse, et l'application doit aussi fonctionner
      par simple double-clic sur ce fichier. -->
 <link rel="stylesheet" href="assets/css/fonts.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%2316233F'/><path d='M6 10h20v12H6z' fill='none' stroke='%23F4F0E6' stroke-width='2'/><path d='M6 10l10 7 10-7' fill='none' stroke='%23F4F0E6' stroke-width='2'/></svg>">
+<link rel="icon" href="assets/icons/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#16233F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Courrier">
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
 
 <div class="wrap">
   <header>
-    <div>
-      <h1>Bureau du Courrier</h1>
-      <p>Registre des destinataires &amp; notifications</p>
+    <div class="brand">
+      <img src="assets/icons/logo.svg" alt="" class="brand-logo" id="brandLogo">
+      <div>
+        <h1>Bureau du Courrier</h1>
+        <p>Registre des destinataires &amp; notifications</p>
+      </div>
     </div>
     <div class="header-right">
       <div class="date-stamp" id="dateStamp"></div>
-      <div class="mode-badge" id="modeBadge" title="Mode de stockage">…</div>
+      <div class="header-badges">
+        <button class="btn ghost small install-btn" id="installBtn" hidden>Installer l'application</button>
+        <div class="mode-badge" id="modeBadge" title="Mode de stockage">…</div>
+      </div>
     </div>
   </header>
 

@@ -20,6 +20,7 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.ico': 'image/x-icon',
   '.png': 'image/png',
   '.woff2': 'font/woff2',
@@ -110,12 +111,19 @@ async function serveStatic(req, res, rootDir) {
     return;
   }
 
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': MIME[path.extname(target).toLowerCase()] || 'application/octet-stream',
     'Content-Length': stat.size,
     ETag: etag,
     'Cache-Control': 'no-cache'
-  });
+  };
+  // Un service worker figé dans le cache HTTP bloquerait toute mise à jour de
+  // l'application installée : celui-ci doit toujours être revalidé.
+  if (rel === '/sw.js') {
+    headers['Cache-Control'] = 'no-cache, must-revalidate';
+    headers['Service-Worker-Allowed'] = '/';
+  }
+  res.writeHead(200, headers);
   fs.createReadStream(target).pipe(res);
 }
 

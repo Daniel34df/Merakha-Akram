@@ -156,7 +156,8 @@
       ['Stockage', (MODE_LABEL[S.mode] || {}).text + ' (' + S.mode + ')'],
       ['Envoi automatique', S.mode === 'serveur' && S.smtp ? 'Actif (SMTP)' : 'Inactif — repli sur le logiciel de courriel'],
       ['Destinataires', String(S.contacts.length)],
-      ['Notifications', String(S.history.length)]
+      ['Notifications', String(S.history.length)],
+      ['Application', installStatusText()]
     ];
     if (S.lastError) rows.push(['Dernière erreur', S.lastError]);
     $('statusList').innerHTML = rows
@@ -964,6 +965,79 @@
     setMsg('settingsMsg', 'ok', 'Modèle par défaut rétabli.');
   });
 
+  /* ═════════════ application installable ═════════════ */
+
+  const install = { prompt: null, installed: false };
+
+  function isStandalone() {
+    return (
+      (root.matchMedia && root.matchMedia('(display-mode: standalone)').matches) ||
+      root.navigator.standalone === true
+    );
+  }
+
+  function renderInstallButton() {
+    const btn = $('installBtn');
+    btn.hidden = !install.prompt || install.installed || isStandalone();
+  }
+
+  root.addEventListener('beforeinstallprompt', function (e) {
+    // On garde la main sur le moment de la proposition : elle n'a de sens
+    // qu'après un clic délibéré sur « Installer l'application ».
+    e.preventDefault();
+    install.prompt = e;
+    renderInstallButton();
+    renderStatus();
+  });
+
+  root.addEventListener('appinstalled', function () {
+    install.installed = true;
+    install.prompt = null;
+    renderInstallButton();
+    renderStatus();
+    toast('Application installée.', 'ok');
+  });
+
+  $('installBtn').addEventListener('click', async function () {
+    if (!install.prompt) return;
+    install.prompt.prompt();
+    const choice = await install.prompt.userChoice;
+    if (choice.outcome !== 'accepted') toast('Installation annulée.');
+    install.prompt = null;
+    renderInstallButton();
+  });
+
+  function installStatusText() {
+    if (isStandalone() || install.installed) return 'Installée sur ce poste';
+    if (install.prompt) return 'Installable — bouton en haut de la page';
+    if (root.location.protocol === 'file:') {
+      return 'Indisponible en ouverture directe du fichier — démarrez le serveur';
+    }
+    if (!('serviceWorker' in root.navigator)) return 'Navigateur sans prise en charge';
+    return 'Non proposée par ce navigateur (voir README)';
+  }
+
+  function registerServiceWorker() {
+    if (!('serviceWorker' in root.navigator) || root.location.protocol === 'file:') return;
+    root.navigator.serviceWorker
+      .register('sw.js')
+      .then(function (registration) {
+        registration.addEventListener('updatefound', function () {
+          const arriving = registration.installing;
+          if (!arriving) return;
+          arriving.addEventListener('statechange', function () {
+            // « installed » avec un contrôleur déjà en place = nouvelle version en attente.
+            if (arriving.state === 'installed' && root.navigator.serviceWorker.controller) {
+              toast('Nouvelle version disponible — rechargez la page.');
+            }
+          });
+        });
+      })
+      .catch(function (err) {
+        console.warn('Service worker non enregistré :', err.message);
+      });
+  }
+
   /* ═════════════ démarrage ═════════════ */
 
   function renderAll() {
@@ -1009,6 +1083,8 @@
     fillSettingsForm();
     syncCopiesFromSettings(true);
     renderAll();
+    renderInstallButton();
+    registerServiceWorker();
     nameInput.focus();
   }
 

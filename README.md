@@ -59,6 +59,54 @@ logiciel de courriel et note l'incident dans l'historique.
 
 ---
 
+## Installer l'application
+
+L'application est installable : elle s'ouvre dans sa propre fenêtre, avec son
+icône, et fonctionne sans réseau.
+
+1. Démarrez le serveur (`npm start`) et ouvrez `http://localhost:3000`.
+2. Cliquez sur **Installer l'application**, en haut à droite. Le bouton
+   n'apparaît que si le navigateur propose l'installation ; sinon, passez par le
+   menu du navigateur (Chrome et Edge : *Installer…* dans le menu ⋮ ou l'icône
+   dans la barre d'adresse ; Safari sur iPad ou iPhone : *Partager → Sur l'écran
+   d'accueil*).
+
+Deux conditions imposées par les navigateurs, pas par l'application :
+
+- l'installation exige `http://localhost` ou une adresse **https** — une
+  ouverture directe du fichier (`file://`) ne peut pas être installée, et un
+  serveur exposé en `http://` sur le réseau non plus. Pour plusieurs postes,
+  prévoyez un certificat, ou installez depuis chaque poste via un tunnel local ;
+- Firefox n'installe pas les applications web sur ordinateur : l'application y
+  reste parfaitement utilisable dans un onglet.
+
+Une fois installée, l'interface, les polices et les icônes sont conservées sur
+le poste : elle s'ouvre même sans réseau. Les données, elles, suivent le mode de
+stockage — hors ligne, un poste relié au registre partagé bascule
+automatiquement sur son stockage local, et l'indicateur en haut à droite le
+signale.
+
+### Le logo
+
+Le logo est un fichier unique : `assets/icons/logo.svg`. Remplacez-le par le
+vôtre — en-tête et favicon le reprennent immédiatement. Pour les icônes de
+l'application installée :
+
+```bash
+npm i --no-save playwright && npx playwright install chromium
+node tools/make-icons.js
+```
+
+Le script régénère les cinq PNG (dont les variantes *maskable* d'Android) depuis
+`logo.svg`. Playwright n'est utilisé que pour cette génération : ni le serveur ni
+l'interface n'en dépendent, et les PNG sont versionnés.
+
+Le visuel fourni par défaut est neutre et propre au projet. **Aucun logo
+d'organisation n'est inclus** : utilisez le fichier officiel remis par votre
+service communication, seul habilité à en autoriser l'usage.
+
+---
+
 ## Utilisation
 
 **Guichet** — on tape le nom inscrit sur la lettre. La recherche ignore les
@@ -150,6 +198,10 @@ Les erreurs sont renvoyées en JSON (`{"error": "…"}`) avec un code parlant :
 
 ```
 index.html            interface
+manifest.webmanifest  déclaration de l'application installable
+sw.js                 service worker : coquille en cache, /api toujours en direct
+assets/icons/         logo.svg (à remplacer) et icônes générées
+tools/make-icons.js   régénère les icônes depuis logo.svg
 assets/css/style.css  feuille de style
 assets/css/fonts.css  déclarations des polices embarquées
 assets/fonts/         polices (woff2, sous-ensembles latin) — 216 Ko
