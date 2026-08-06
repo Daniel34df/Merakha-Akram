@@ -203,6 +203,8 @@ async function handleApi(req, res, ctx, pathname) {
         name: String(body.name || '').trim(),
         email: String(body.email || '').trim(),
         subject: String(body.subject || '').trim(),
+        cc: String(body.cc || '').trim(),
+        bcc: String(body.bcc || '').trim(),
         date: body.date || new Date().toISOString(),
         method: body.method === 'auto' ? 'auto' : 'manuel',
         status: ['envoyé', 'préparé', 'échec'].includes(body.status) ? body.status : 'préparé'
@@ -234,10 +236,26 @@ async function handleApi(req, res, ctx, pathname) {
       if (!subject || !messageBody) {
         throw Object.assign(new Error('Sujet et corps du message requis'), { status: 400 });
       }
+      const from = String(body.from || '').trim();
+      if (from && !util.isValidAddress(from)) {
+        throw Object.assign(new Error('Expéditeur invalide'), { status: 400 });
+      }
+      const cc = util.parseAddressList(body.cc);
+      const bcc = util.parseAddressList(body.bcc);
+      if (cc.errors.length || bcc.errors.length) {
+        throw Object.assign(
+          new Error('Adresse en copie invalide : ' + cc.errors.concat(bcc.errors).join(', ')),
+          { status: 400 }
+        );
+      }
+
       const settings = Object.assign({}, DEFAULT_SETTINGS, {
         subject: subject,
         body: messageBody,
-        officeName: String(body.officeName || DEFAULT_SETTINGS.officeName).trim()
+        officeName: String(body.officeName || DEFAULT_SETTINGS.officeName).trim(),
+        from: from,
+        cc: util.formatAddressList(cc.entries),
+        bcc: util.formatAddressList(bcc.entries)
       });
       await db.write(function (data) {
         data.settings = settings;
@@ -267,19 +285,37 @@ async function handleApi(req, res, ctx, pathname) {
     const subject = body.subject ? String(body.subject) : util.renderTemplate(settings.subject, vars);
     const text = body.body ? String(body.body) : util.renderTemplate(settings.body, vars);
 
+    // De / Cc / Cci : ce que la requête précise l'emporte, sinon les réglages.
+    const from = String(body.from !== undefined ? body.from : settings.from || '').trim();
+    if (from && !util.isValidAddress(from)) {
+      throw Object.assign(new Error('Expéditeur invalide'), { status: 400 });
+    }
+    const cc = util.parseAddressList(body.cc !== undefined ? body.cc : settings.cc);
+    const bcc = util.parseAddressList(body.bcc !== undefined ? body.bcc : settings.bcc);
+    if (cc.errors.length || bcc.errors.length) {
+      throw Object.assign(
+        new Error('Adresse en copie invalide : ' + cc.errors.concat(bcc.errors).join(', ')),
+        { status: 400 }
+      );
+    }
+    const ccList = util.formatAddressList(cc.entries);
+    const bccList = util.formatAddressList(bcc.entries);
+
     let record = {
       id: crypto.randomUUID(),
       contactId: body.contactId || null,
       name: name,
       email: to,
       subject: subject,
+      cc: ccList,
+      bcc: bccList,
       date: new Date().toISOString(),
       method: 'auto',
       status: 'envoyé'
     };
 
     try {
-      await mailer.send({ to: to, subject: subject, text: text });
+      await mailer.send({ to: to, from: from, cc: ccList, bcc: bccList, subject: subject, text: text });
     } catch (err) {
       record.status = 'échec';
       await db.write(function (data) {

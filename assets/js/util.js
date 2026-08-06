@@ -39,6 +39,56 @@
     return EMAIL_RE.test((email || '').trim());
   }
 
+  /**
+   * Extrait l'adresse d'une entrée de la forme « Nom <adresse@ex.com> »
+   * ou « adresse@ex.com ». Renvoie '' si rien d'exploitable.
+   */
+  function extractEmail(entry) {
+    const s = (entry || '').toString().trim();
+    const angled = s.match(/<([^>]+)>\s*$/);
+    return (angled ? angled[1] : s).trim();
+  }
+
+  /** Une entrée d'expéditeur valide : une adresse, éventuellement précédée d'un nom. */
+  function isValidAddress(entry) {
+    return isValidEmail(extractEmail(entry));
+  }
+
+  /**
+   * Découpe une liste d'adresses séparées par des virgules, des points-virgules
+   * ou des sauts de ligne. Renvoie { entries, errors } — jamais d'exception.
+   * Les doublons (même adresse) sont retirés, en gardant la première graphie.
+   */
+  function parseAddressList(text) {
+    const entries = [];
+    const errors = [];
+    const seen = new Set();
+
+    (text || '')
+      .split(/[,;\n]+/)
+      .map(function (s) {
+        return s.trim();
+      })
+      .filter(Boolean)
+      .forEach(function (entry) {
+        if (!isValidAddress(entry)) {
+          errors.push(entry);
+          return;
+        }
+        const key = normalize(extractEmail(entry));
+        if (seen.has(key)) return;
+        seen.add(key);
+        entries.push(entry);
+      });
+
+    return { entries: entries, errors: errors };
+  }
+
+  /** Remet une liste d'adresses sous forme de chaîne « a@ex.com, b@ex.com ». */
+  function formatAddressList(entries) {
+    return (entries || []).join(', ');
+  }
+
   /** Identifiant stable, avec repli quand crypto.randomUUID n'existe pas. */
   function uuid() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -212,6 +262,10 @@
     normalize: normalize,
     escapeHtml: escapeHtml,
     isValidEmail: isValidEmail,
+    extractEmail: extractEmail,
+    isValidAddress: isValidAddress,
+    parseAddressList: parseAddressList,
+    formatAddressList: formatAddressList,
     uuid: uuid,
     renderTemplate: renderTemplate,
     sameContact: sameContact,

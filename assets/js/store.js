@@ -23,7 +23,10 @@
       'Bonjour {nom},\n\n' +
       'Vous avez un courrier à récupérer à la réception.\n\n' +
       'Merci de passer le chercher dès que possible.',
-    officeName: 'Bureau du Courrier'
+    officeName: 'Bureau du Courrier',
+    from: '',
+    cc: '',
+    bcc: ''
   };
 
   const state = {
@@ -297,7 +300,10 @@
         name: contact.name,
         email: contact.email,
         subject: message.subject,
-        body: message.body
+        body: message.body,
+        from: message.from || '',
+        cc: message.cc || '',
+        bcc: message.bcc || ''
       })
     });
     // Le serveur consigne lui-même l'envoi : on reprend son entrée telle quelle

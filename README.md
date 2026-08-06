@@ -80,8 +80,26 @@ signalées une par une, les doublons ignorés, et le reste est importé.
 exportables en CSV. Chaque entrée indique la voie utilisée : *Automatique*
 (parti du serveur) ou *Logiciel de courriel* (préparé pour l'employé·e).
 
-**Réglages** — le sujet et le corps du message, avec aperçu en direct. Variables
-disponibles : `{nom}`, `{courriel}`, `{date}`, `{bureau}`.
+**Réglages** — l'expéditeur (**De**), les copies **Cc** et **Cci** par défaut, le
+sujet et le corps du message, avec aperçu en direct. Variables disponibles :
+`{nom}`, `{courriel}`, `{date}`, `{bureau}`.
+
+Les copies s'appliquent à tous les envois. Pour n'en changer que le temps d'une
+lettre, dépliez **Copies pour cet envoi** au guichet : les champs partent des
+valeurs par défaut, et le bouton *Revenir aux copies par défaut* les rétablit.
+Plusieurs adresses se séparent par des virgules ; une adresse fautive bloque
+l'envoi et est signalée telle quelle.
+
+Deux limites à connaître sur le **De** :
+
+- il ne s'applique qu'à l'envoi automatique — `mailto:` ne permet pas d'imposer
+  un expéditeur, celui-ci reste celui du logiciel de courriel de l'employé·e ;
+- beaucoup de fournisseurs SMTP refusent un expéditeur qui ne correspond pas au
+  compte authentifié. En cas de refus, laissez le champ vide : c'est alors
+  `MAIL_FROM` qui s'applique.
+
+Le **Cci** est invisible pour les destinataires, mais reste affiché au guichet
+et dans l'historique : c'est la trace interne de l'envoi.
 
 ---
 
@@ -118,6 +136,10 @@ autre interface ou un import automatisé.
 | `GET` `PUT` | `/api/settings` | gabarit du message |
 | `POST` | `/api/notify` | envoyer un courriel et le consigner |
 
+`/api/notify` accepte `from`, `cc` et `bcc` : fournis, ils l'emportent sur les
+réglages ; absents, ce sont les réglages qui s'appliquent ; une chaîne vide
+retire la copie pour cet envoi.
+
 Les erreurs sont renvoyées en JSON (`{"error": "…"}`) avec un code parlant :
 `400` donnée invalide, `404` introuvable, `409` courriel déjà au registre,
 `502` refus du serveur de courriel, `503` envoi automatique non configuré.
@@ -143,7 +165,7 @@ test/                 tests (node:test), sans dépendance
 ```
 
 ```bash
-npm test     # 23 tests : utilitaires + API de bout en bout
+npm test     # 30 tests : utilitaires + API de bout en bout
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

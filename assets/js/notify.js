@@ -4,29 +4,45 @@
 
   const util = root.BC.util;
 
-  /** Construit le sujet et le corps à partir du gabarit des réglages. */
-  function compose(contact, settings) {
+  /**
+   * Construit le message à partir du gabarit des réglages.
+   * `overrides` permet de changer De / Cc / Cci pour un envoi précis, sans
+   * toucher aux réglages : on passe les champs à remplacer, les autres suivent
+   * les valeurs par défaut.
+   */
+  function compose(contact, settings, overrides) {
+    const o = overrides || {};
     const vars = {
       nom: contact.name,
       courriel: contact.email,
       date: new Date().toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
       bureau: settings.officeName || 'Bureau du Courrier'
     };
+    const pick = function (key) {
+      return util.formatAddressList(
+        util.parseAddressList(o[key] !== undefined ? o[key] : settings[key] || '').entries
+      );
+    };
     return {
       subject: util.renderTemplate(settings.subject, vars),
-      body: util.renderTemplate(settings.body, vars)
+      body: util.renderTemplate(settings.body, vars),
+      from: pick('from'),
+      cc: pick('cc'),
+      bcc: pick('bcc')
     };
   }
 
+  /* mailto accepte cc et bcc (RFC 6068) mais pas l'expéditeur : celui-ci est
+     imposé par le logiciel de courriel de l'employé·e. « De » ne s'applique
+     donc qu'à l'envoi automatique par le serveur. */
   function mailtoUrl(contact, message) {
-    return (
-      'mailto:' +
-      encodeURIComponent(contact.email) +
-      '?subject=' +
-      encodeURIComponent(message.subject) +
-      '&body=' +
-      encodeURIComponent(message.body)
-    );
+    const params = [
+      'subject=' + encodeURIComponent(message.subject),
+      'body=' + encodeURIComponent(message.body)
+    ];
+    if (message.cc) params.push('cc=' + encodeURIComponent(message.cc));
+    if (message.bcc) params.push('bcc=' + encodeURIComponent(message.bcc));
+    return 'mailto:' + encodeURIComponent(contact.email) + '?' + params.join('&');
   }
 
   /* Un clic sur une ancre est honoré dans bien plus de contextes (iframe cloisonnée,
@@ -69,8 +85,18 @@
     }
   }
 
-  function plainText(contact, message) {
-    return 'À : ' + contact.email + '\nSujet : ' + message.subject + '\n\n' + message.body;
+  /** Le message tel qu'il sera envoyé, en-têtes compris — pour l'aperçu et la copie. */
+  function plainText(contact, message, options) {
+    const opts = options || {};
+    const lines = [];
+    if (message.from) lines.push('De : ' + message.from);
+    lines.push('À : ' + contact.email);
+    if (message.cc) lines.push('Cc : ' + message.cc);
+    // L'invisibilité du Cci vaut pour les destinataires, pas pour l'employé·e
+    // au guichet : on l'affiche, sauf demande contraire.
+    if (message.bcc && !opts.hideBcc) lines.push('Cci : ' + message.bcc);
+    lines.push('Sujet : ' + message.subject);
+    return lines.join('\n') + '\n\n' + message.body;
   }
 
   root.BC.notify = {

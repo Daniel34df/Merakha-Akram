@@ -13,7 +13,10 @@ const DEFAULT_SETTINGS = {
     'Bonjour {nom},\n\n' +
     'Vous avez un courrier à récupérer à la réception.\n\n' +
     'Merci de passer le chercher dès que possible.',
-  officeName: 'Bureau du Courrier'
+  officeName: 'Bureau du Courrier',
+  from: '',
+  cc: '',
+  bcc: ''
 };
 
 function emptyDb() {

@@ -25,6 +25,31 @@ test('isValidEmail accepte les adresses plausibles et refuse le reste', function
   assert.ok(!util.isValidEmail(''));
 });
 
+test('extractEmail lit la forme « Nom <adresse> » comme l’adresse seule', function () {
+  assert.equal(util.extractEmail('Bureau du Courrier <courrier@exemple.com>'), 'courrier@exemple.com');
+  assert.equal(util.extractEmail('  courrier@exemple.com  '), 'courrier@exemple.com');
+  assert.ok(util.isValidAddress('Bureau du Courrier <courrier@exemple.com>'));
+  assert.ok(!util.isValidAddress('Bureau du Courrier <pas-une-adresse>'));
+});
+
+test('parseAddressList sépare, valide et dédoublonne les adresses', function () {
+  const res = util.parseAddressList('a@ex.com, b@ex.com; A@EX.COM\nc@ex.com');
+  assert.deepEqual(res.entries, ['a@ex.com', 'b@ex.com', 'c@ex.com'], 'doublon insensible à la casse retiré');
+  assert.equal(res.errors.length, 0);
+  assert.equal(util.formatAddressList(res.entries), 'a@ex.com, b@ex.com, c@ex.com');
+});
+
+test('parseAddressList signale les adresses fautives sans perdre les bonnes', function () {
+  const res = util.parseAddressList('bon@ex.com, mauvais, autre@ex.com');
+  assert.deepEqual(res.entries, ['bon@ex.com', 'autre@ex.com']);
+  assert.deepEqual(res.errors, ['mauvais']);
+});
+
+test('parseAddressList accepte une liste vide', function () {
+  assert.deepEqual(util.parseAddressList('').entries, []);
+  assert.deepEqual(util.parseAddressList(null).errors, []);
+});
+
 test('matchesQuery cherche sur le nom et le courriel, accents ignorés', function () {
   const c = { name: 'Élodie Tremblay', email: 'elo@exemple.com' };
   assert.ok(util.matchesQuery(c, 'elodie'));

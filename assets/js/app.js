@@ -19,7 +19,10 @@
     historyDate: '',
     editingId: null,
     highlight: -1,
-    suggestions: []
+    suggestions: [],
+    // Vrai dès que l'employé·e a modifié les copies au guichet : on cesse alors
+    // de les réaligner sur les réglages tant qu'elles n'ont pas été remises à zéro.
+    copiesTouched: false
   };
 
   /* ═════════════ retours visuels ═════════════ */
@@ -280,6 +283,62 @@
     }
   });
 
+  /* ═════════════ guichet : copies (Cc / Cci) ═════════════ */
+
+  /** Aligne les champs de copies sur les réglages, sauf si l'employé·e les a modifiés. */
+  function syncCopiesFromSettings(force) {
+    if (view.copiesTouched && !force) {
+      renderCopiesState();
+      return;
+    }
+    $('sendCc').value = S.settings.cc || '';
+    $('sendBcc').value = S.settings.bcc || '';
+    view.copiesTouched = false;
+    renderCopiesState();
+  }
+
+  function renderCopiesState() {
+    const cc = util.parseAddressList($('sendCc').value);
+    const bcc = util.parseAddressList($('sendBcc').value);
+    const total = cc.entries.length + bcc.entries.length;
+    const parts = [];
+    if (total) parts.push('· ' + total + (total > 1 ? ' adresses' : ' adresse'));
+    if (view.copiesTouched) parts.push('· modifié');
+    $('copiesState').textContent = parts.join(' ');
+    setMsg('copiesMsg', '', '');
+    if (cc.errors.length || bcc.errors.length) {
+      setMsg(
+        'copiesMsg',
+        'error',
+        'Adresse non reconnue : ' + esc(cc.errors.concat(bcc.errors).join(', ')) + '.'
+      );
+    }
+  }
+
+  /** Les copies retenues pour le prochain envoi, ou null si une adresse est fautive. */
+  function currentCopies() {
+    const cc = util.parseAddressList($('sendCc').value);
+    const bcc = util.parseAddressList($('sendBcc').value);
+    if (cc.errors.length || bcc.errors.length) {
+      $('copiesBox').open = true;
+      renderCopiesState();
+      return null;
+    }
+    return { cc: util.formatAddressList(cc.entries), bcc: util.formatAddressList(bcc.entries) };
+  }
+
+  ['sendCc', 'sendBcc'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      view.copiesTouched = true;
+      renderCopiesState();
+    });
+  });
+
+  $('resetCopiesBtn').addEventListener('click', function () {
+    syncCopiesFromSettings(true);
+    toast('Copies remises aux valeurs des réglages.');
+  });
+
   $('validerBtn').addEventListener('click', doSearch);
   $('clearSearchBtn').addEventListener('click', function () {
     nameInput.value = '';
@@ -389,7 +448,12 @@
   }
 
   async function sendNotification(contact, btn) {
-    const message = notify.compose(contact, S.settings);
+    const copies = currentCopies();
+    if (!copies) {
+      toast('Corrigez les adresses en copie avant d’envoyer.', 'error');
+      return;
+    }
+    const message = notify.compose(contact, S.settings, copies);
     const mailto = notify.mailtoUrl(contact, message);
     if (btn) btn.disabled = true;
 
@@ -411,6 +475,8 @@
         name: contact.name,
         email: contact.email,
         subject: message.subject,
+        cc: message.cc,
+        bcc: message.bcc,
         method: 'manuel',
         status: failure ? 'échec' : 'préparé'
       });
@@ -426,7 +492,14 @@
       (auto ? 'ok' : '') +
       '">' +
       (auto
-        ? 'Courriel envoyé automatiquement à ' + esc(contact.name) + ' (' + esc(contact.email) + ').'
+        ? 'Courriel envoyé automatiquement à ' +
+          esc(contact.name) +
+          ' (' +
+          esc(contact.email) +
+          ')' +
+          (message.cc ? ', copie à ' + esc(message.cc) : '') +
+          (message.bcc ? ', copie invisible à ' + esc(message.bcc) : '') +
+          '.'
         : 'Notification préparée pour ' +
           esc(contact.name) +
           '.<br>Si votre logiciel de courriel ne s’est pas ouvert : ' +
@@ -744,15 +817,22 @@
     }
 
     box.innerHTML =
-      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th>Date</th><th>Voie</th><th></th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th>Copies</th><th>Date</th><th>Voie</th><th></th></tr></thead><tbody>' +
       list
         .map(function (h) {
           const pill = STATUS_PILL[h.status] || STATUS_PILL['envoyé'];
+          const copies = [];
+          if (h.cc) copies.push('Cc : ' + h.cc);
+          if (h.bcc) copies.push('Cci : ' + h.bcc);
           return (
             '<tr><td>' +
             esc(h.name) +
             '</td><td>' +
             esc(h.email) +
+            '</td><td class="copies-cell"' +
+            (copies.length ? ' title="' + esc(copies.join(' · ')) + '"' : '') +
+            '>' +
+            (copies.length ? esc(copies.join(' · ')) : '—') +
             '</td><td>' +
             esc(util.formatDateTime(h.date)) +
             '</td><td>' +
@@ -777,12 +857,17 @@
       return {
         nom: h.name,
         courriel: h.email,
+        cc: h.cc || '',
+        cci: h.bcc || '',
         date: util.formatDateTime(h.date),
         voie: h.method === 'auto' ? 'automatique' : 'logiciel de courriel',
         statut: h.status || 'envoyé'
       };
     });
-    download('historique-' + stampSuffix() + '.csv', util.toCsv(rows, ['nom', 'courriel', 'date', 'voie', 'statut']));
+    download(
+      'historique-' + stampSuffix() + '.csv',
+      util.toCsv(rows, ['nom', 'courriel', 'cc', 'cci', 'date', 'voie', 'statut'])
+    );
   });
 
   $('clearHistoryBtn').addEventListener('click', async function () {
@@ -805,6 +890,9 @@
 
   function fillSettingsForm() {
     $('setOffice').value = S.settings.officeName || '';
+    $('setFrom').value = S.settings.from || '';
+    $('setCc').value = S.settings.cc || '';
+    $('setBcc').value = S.settings.bcc || '';
     $('setSubject').value = S.settings.subject || '';
     $('setBody').value = S.settings.body || '';
     renderPreview();
@@ -815,12 +903,15 @@
     const message = notify.compose(sample, {
       officeName: $('setOffice').value,
       subject: $('setSubject').value,
-      body: $('setBody').value
+      body: $('setBody').value,
+      from: $('setFrom').value,
+      cc: $('setCc').value,
+      bcc: $('setBcc').value
     });
     $('settingsPreview').textContent = notify.plainText(sample, message);
   }
 
-  ['setOffice', 'setSubject', 'setBody'].forEach(function (id) {
+  ['setOffice', 'setSubject', 'setBody', 'setFrom', 'setCc', 'setBcc'].forEach(function (id) {
     $(id).addEventListener('input', renderPreview);
   });
 
@@ -831,8 +922,34 @@
       setMsg('settingsMsg', 'error', 'Le sujet et le corps du message ne peuvent pas être vides.');
       return;
     }
+
+    const from = $('setFrom').value.trim();
+    if (from && !util.isValidAddress(from)) {
+      setMsg('settingsMsg', 'error', 'Expéditeur invalide : attendu « adresse@exemple.com » ou « Nom &lt;adresse@exemple.com&gt; ».');
+      return;
+    }
+    const cc = util.parseAddressList($('setCc').value);
+    const bcc = util.parseAddressList($('setBcc').value);
+    if (cc.errors.length || bcc.errors.length) {
+      setMsg(
+        'settingsMsg',
+        'error',
+        'Adresse en copie non reconnue : ' + esc(cc.errors.concat(bcc.errors).join(', ')) + '.'
+      );
+      return;
+    }
+
     try {
-      await store.saveSettings({ officeName: $('setOffice').value.trim(), subject: subject, body: body });
+      await store.saveSettings({
+        officeName: $('setOffice').value.trim(),
+        subject: subject,
+        body: body,
+        from: from,
+        cc: util.formatAddressList(cc.entries),
+        bcc: util.formatAddressList(bcc.entries)
+      });
+      fillSettingsForm();
+      syncCopiesFromSettings(!view.copiesTouched);
       setMsg('settingsMsg', 'ok', 'Réglages enregistrés.');
     } catch (err) {
       setMsg('settingsMsg', 'error', 'Enregistrement impossible : ' + esc(err.message));
@@ -890,6 +1007,7 @@
       toast('Démarrage en mode dégradé : ' + err.message, 'error');
     }
     fillSettingsForm();
+    syncCopiesFromSettings(true);
     renderAll();
     nameInput.focus();
   }

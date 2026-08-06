@@ -48,6 +48,25 @@
         <button class="btn ghost" id="clearSearchBtn">Effacer</button>
         <span class="hint">Entrée pour valider · ↑↓ pour parcourir les suggestions</span>
       </div>
+
+      <details class="copies" id="copiesBox">
+        <summary>Copies pour cet envoi <span class="copies-state" id="copiesState"></span></summary>
+        <div class="copies-grid">
+          <div>
+            <label for="sendCc">Cc — copie visible</label>
+            <input type="text" id="sendCc" placeholder="archives@exemple.com" autocomplete="off">
+          </div>
+          <div>
+            <label for="sendBcc">Cci — copie invisible</label>
+            <input type="text" id="sendBcc" placeholder="registre@exemple.com" autocomplete="off">
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn ghost small" id="resetCopiesBtn">Revenir aux copies par défaut</button>
+          <span class="hint">Plusieurs adresses : séparez-les par des virgules.</span>
+        </div>
+        <div id="copiesMsg"></div>
+      </details>
     </div>
 
     <div id="searchResults"></div>
@@ -108,6 +127,24 @@
       <h2>Message envoyé aux destinataires</h2>
       <label for="setOffice">Nom du bureau</label>
       <input type="text" id="setOffice" placeholder="Bureau du Courrier">
+      <label for="setFrom">De — expéditeur</label>
+      <input type="text" id="setFrom" placeholder="Bureau du Courrier &lt;courrier@exemple.com&gt;">
+      <p class="hint" style="margin:-10px 0 16px;">
+        Utilisé pour l'envoi automatique. Laissé vide, c'est <code>MAIL_FROM</code> du serveur qui
+        s'applique. Sans envoi automatique, l'expéditeur reste celui du logiciel de courriel.
+      </p>
+
+      <div class="copies-grid">
+        <div>
+          <label for="setCc">Cc — copie visible, par défaut</label>
+          <input type="text" id="setCc" placeholder="archives@exemple.com">
+        </div>
+        <div>
+          <label for="setBcc">Cci — copie invisible, par défaut</label>
+          <input type="text" id="setBcc" placeholder="registre@exemple.com">
+        </div>
+      </div>
+
       <label for="setSubject">Sujet</label>
       <input type="text" id="setSubject">
       <label for="setBody">Corps du message</label>

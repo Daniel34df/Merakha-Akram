@@ -143,6 +143,67 @@ test('le gabarit enregistré dans les réglages est utilisé par /api/notify', f
   });
 });
 
+test('De, Cc et Cci des réglages sont appliqués à l’envoi et consignés', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'Un courrier vous attend',
+      body: 'Bonjour {nom}.',
+      from: 'Bureau du Courrier <courrier@exemple.com>',
+      cc: 'archives@exemple.com, chef@exemple.com',
+      bcc: 'registre@exemple.com'
+    });
+    const res = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@exemple.com' });
+
+    assert.equal(res.status, 200);
+    const envoye = t.mailer.sent[0];
+    assert.equal(envoye.from, 'Bureau du Courrier <courrier@exemple.com>');
+    assert.equal(envoye.cc, 'archives@exemple.com, chef@exemple.com');
+    assert.equal(envoye.bcc, 'registre@exemple.com');
+
+    assert.equal(res.body.record.cc, 'archives@exemple.com, chef@exemple.com');
+    assert.equal(res.body.record.bcc, 'registre@exemple.com');
+  });
+});
+
+test('les copies passées à /api/notify l’emportent sur les réglages', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'S',
+      body: 'B',
+      cc: 'defaut@exemple.com',
+      bcc: 'defaut-cci@exemple.com'
+    });
+    await t.call('POST', '/api/notify', {
+      name: 'Ana',
+      email: 'ana@exemple.com',
+      cc: 'ponctuel@exemple.com',
+      bcc: ''
+    });
+
+    assert.equal(t.mailer.sent[0].cc, 'ponctuel@exemple.com');
+    assert.equal(t.mailer.sent[0].bcc, undefined, 'une chaîne vide retire la copie invisible');
+  });
+});
+
+test('une adresse en copie ou un expéditeur invalides sont refusés (400)', function () {
+  return withServer(async function (t) {
+    const bad = await t.call('POST', '/api/notify', {
+      name: 'Ana',
+      email: 'ana@exemple.com',
+      cc: 'bon@exemple.com, pas-une-adresse'
+    });
+    assert.equal(bad.status, 400);
+    assert.match(bad.body.error, /Adresse en copie invalide/);
+    assert.equal(t.mailer.sent.length, 0, 'rien n’est parti');
+
+    assert.equal(
+      (await t.call('PUT', '/api/settings', { subject: 'S', body: 'B', from: 'Nom <cassé>' })).status,
+      400
+    );
+    assert.equal((await t.call('PUT', '/api/settings', { subject: 'S', body: 'B', cc: 'x' })).status, 400);
+  });
+});
+
 test('des réglages vides sont refusés', function () {
   return withServer(async function (t) {
     assert.equal((await t.call('PUT', '/api/settings', { subject: '', body: 'x' })).status, 400);

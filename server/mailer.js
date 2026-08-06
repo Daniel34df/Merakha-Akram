@@ -18,6 +18,22 @@ function readConfig(env) {
   };
 }
 
+/* Un champ vide et un champ absent doivent donner le même courriel : on ramène
+   les deux à `undefined` avant l'envoi, quel que soit le mode. */
+function normalizeMessage(message, defaultFrom) {
+  const blank = function (v) {
+    return v && String(v).trim() ? String(v).trim() : undefined;
+  };
+  return {
+    from: blank(message.from) || defaultFrom,
+    to: message.to,
+    cc: blank(message.cc),
+    bcc: blank(message.bcc),
+    subject: message.subject,
+    text: message.text
+  };
+}
+
 function createMailer(env) {
   const config = readConfig(env);
 
@@ -29,8 +45,16 @@ function createMailer(env) {
       mode: 'essai',
       sent: sent,
       async send(message) {
-        sent.push(message);
-        console.log('[mail:essai] ' + message.to + ' — ' + message.subject);
+        const prepared = normalizeMessage(message, config.from || undefined);
+        sent.push(prepared);
+        console.log(
+          '[mail:essai] ' +
+            prepared.to +
+            (prepared.cc ? ' (cc ' + prepared.cc + ')' : '') +
+            (prepared.bcc ? ' (cci ' + prepared.bcc + ')' : '') +
+            ' — ' +
+            prepared.subject
+        );
         return { messageId: 'dry-run-' + sent.length };
       }
     };
@@ -73,12 +97,10 @@ function createMailer(env) {
     mode: 'smtp',
     config: { host: config.host, port: config.port, from: config.from },
     async send(message) {
-      return transport.sendMail({
-        from: config.from,
-        to: message.to,
-        subject: message.subject,
-        text: message.text
-      });
+      // L'expéditeur des réglages l'emporte, mais bien des fournisseurs SMTP
+      // refusent un « De » qui ne correspond pas au compte authentifié : en cas
+      // de doute, laissez le champ vide pour retomber sur MAIL_FROM.
+      return transport.sendMail(normalizeMessage(message, config.from));
     }
   };
 }
