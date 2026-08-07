@@ -580,6 +580,32 @@
 
   /* ---------- sauvegarde et comptes ---------- */
 
+  /** Listes de travail de la domiciliation + rapport annuel. */
+  async function loadDomiciliation(annee) {
+    return api('/domiciliation' + (annee ? '?annee=' + encodeURIComponent(annee) : ''));
+  }
+
+  /** La personne s'est présentée, avec ou sans courrier pour elle. */
+  async function enregistrerPassage(id, note) {
+    const result = await api('/contacts/' + encodeURIComponent(id) + '/passage', {
+      method: 'POST',
+      body: JSON.stringify({ note: note || '' }),
+      horsLigne: {
+        op: 'passage',
+        description: 'Passage enregistré',
+        optimiste: { enAttente: true }
+      }
+    });
+    if (result && result.contact) {
+      const i = state.contacts.findIndex(function (c) {
+        return c.id === result.contact.id;
+      });
+      if (i !== -1) state.contacts[i] = result.contact;
+      emit();
+    }
+    return result;
+  }
+
   async function loadStats() {
     return api('/stats');
   }
@@ -706,8 +732,17 @@
       box: (input.box || '').trim(),
       absentUntil: input.absentUntil || '',
       departed: !!input.departed,
-      substituteId: input.substituteId || null
+      substituteId: input.substituteId || null,
+      domicilie: !!input.domicilie,
+      domicilieDepuis: input.domicilie ? input.domicilieDepuis || '' : '',
+      domicilieJusqua: input.domicilie ? input.domicilieJusqua || '' : '',
+      domiciliationCloseLe: input.domicilie ? input.domiciliationCloseLe || '' : '',
+      domiciliationMotif: input.domicilie ? input.domiciliationMotif || '' : ''
     };
+    // Hors ligne, l'échéance se calcule ici : le serveur ne la fournira qu'au rejeu.
+    if (contact.domicilie && contact.domicilieDepuis && !contact.domicilieJusqua) {
+      contact.domicilieJusqua = root.BC.domiciliation.echeance(contact.domicilieDepuis);
+    }
     if (state.mode === 'serveur') {
       const saved = await api('/contacts', {
         method: 'POST',
@@ -751,7 +786,22 @@
       box: (patch.box || '').trim(),
       absentUntil: patch.absentUntil !== undefined ? patch.absentUntil : state.contacts[idx].absentUntil || '',
       departed: patch.departed !== undefined ? !!patch.departed : !!state.contacts[idx].departed,
-      substituteId: patch.substituteId !== undefined ? patch.substituteId : state.contacts[idx].substituteId || null
+      substituteId: patch.substituteId !== undefined ? patch.substituteId : state.contacts[idx].substituteId || null,
+      /* Domiciliation : ce que la modification ne mentionne pas est conservé.
+         Une correction de nom ne doit pas effacer une élection de domicile. */
+      domicilie: patch.domicilie !== undefined ? !!patch.domicilie : !!state.contacts[idx].domicilie,
+      domicilieDepuis:
+        patch.domicilieDepuis !== undefined ? patch.domicilieDepuis : state.contacts[idx].domicilieDepuis || '',
+      domicilieJusqua:
+        patch.domicilieJusqua !== undefined ? patch.domicilieJusqua : state.contacts[idx].domicilieJusqua || '',
+      domiciliationCloseLe:
+        patch.domiciliationCloseLe !== undefined
+          ? patch.domiciliationCloseLe
+          : state.contacts[idx].domiciliationCloseLe || '',
+      domiciliationMotif:
+        patch.domiciliationMotif !== undefined
+          ? patch.domiciliationMotif
+          : state.contacts[idx].domiciliationMotif || ''
     });
     if (state.mode === 'serveur') {
       state.contacts[idx] = await api('/contacts/' + encodeURIComponent(id), {
@@ -923,6 +973,8 @@
     relancer: relancer,
     serverBackup: serverBackup,
     loadStats: loadStats,
+    loadDomiciliation: loadDomiciliation,
+    enregistrerPassage: enregistrerPassage,
     loadJournal: loadJournal,
     changePassword: changePassword,
     listUsers: listUsers,

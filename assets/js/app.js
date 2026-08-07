@@ -4,6 +4,7 @@
 
   const util = root.BC.util;
   const store = root.BC.store;
+  const domi = root.BC.domiciliation;
   const notify = root.BC.notify;
   const S = store.state;
 
@@ -39,7 +40,10 @@
     // Réglages : onglet de gabarit affiché et brouillons non enregistrés.
     gabaritActif: 'general',
     gabaritGeneral: { subject: '', body: '' },
-    gabarits: {}
+    gabarits: {},
+    // Onglet Domiciliation : année du rapport, données servies par le serveur.
+    rapportAnnee: new Date().getFullYear(),
+    domiciliation: null
   };
 
   /* ═════════════ retours visuels ═════════════ */
@@ -1333,6 +1337,7 @@
           util.presence(c).etat === 'present' ? 'présent·e' : util.presence(c).message
         ]
       ]
+        .concat(blocDomiciliation(c))
         .map(function (r) {
           return '<div><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd></div>';
         })
@@ -1558,6 +1563,227 @@
     toast('Dossier exporté.', 'ok');
   });
 
+  /* Lignes de domiciliation ajoutées à la fiche du destinataire. Vide pour qui
+     n'est pas domicilié : inutile d'encombrer la fiche d'un dispositif qui ne
+     le concerne pas. */
+  function blocDomiciliation(contact) {
+    if (!contact.domicilie) return [];
+    const e = domi.etat(contact, S.history);
+    const lignes = [['Domiciliation', e.libelle]];
+    if (e.etat !== 'close') {
+      lignes.push([
+        'Élection de domicile',
+        e.debut ? util.formatJour(e.debut) : '—'
+      ]);
+      lignes.push([
+        'Dernier passage',
+        e.dernierPassage
+          ? util.formatJour(e.dernierPassage.slice(0, 10)) +
+            ' (' + e.joursSansPassage + ' j)' +
+            (e.absenceDepassee ? ' — seuil de ' + e.seuilAbsenceJours + ' j dépassé' : '')
+          : '—'
+      ]);
+    } else if (e.motif) {
+      lignes.push(['Motif de clôture', e.motif]);
+    }
+    return lignes;
+  }
+
+  /* ═════════════ domiciliation ═════════════ */
+
+  /* Deux listes de travail et un rapport. Tout est calculé par le serveur : le
+     même code sert au navigateur et aux tests, et deux postes ne peuvent pas
+     afficher deux vérités différentes sur une échéance. */
+
+  const ETAT_DOMI = {
+    expiree: ['failed', 'Expirée'],
+    bientot: ['manual', 'À renouveler'],
+    active: ['', 'Valable'],
+    close: ['manual', 'Close'],
+    aucune: ['manual', '—']
+  };
+
+  async function renderDomiciliation() {
+    if (S.mode !== 'serveur' || sessionManquante()) {
+      view.domiciliation = null;
+      $('tabCountDomiciliation').textContent = '0';
+      $('renouvelerTable').innerHTML =
+        '<div class="empty">Le suivi des domiciliations demande le registre partagé.</div>';
+      $('sansPassageTable').innerHTML = '';
+      $('rapportCorps').innerHTML = '';
+      return;
+    }
+    try {
+      view.domiciliation = await store.loadDomiciliation(view.rapportAnnee);
+    } catch (err) {
+      $('renouvelerTable').innerHTML = '<div class="empty">Suivi indisponible.</div>';
+      return;
+    }
+    const d = view.domiciliation;
+
+    // Le compteur de l'onglet additionne ce qui demande une action.
+    $('tabCountDomiciliation').textContent = String(d.aRenouveler.length + d.sansPassage.length);
+
+    $('countRenouveler').textContent = d.aRenouveler.length;
+    $('renouvelerTable').innerHTML = d.aRenouveler.length
+      ? tableauDomiciliation(d.aRenouveler, 'echeance')
+      : '<div class="empty">Aucune attestation n’arrive à terme. Rien à faire.</div>';
+
+    $('countSansPassage').textContent = d.sansPassage.length;
+    $('sansPassageTable').innerHTML = d.sansPassage.length
+      ? tableauDomiciliation(d.sansPassage, 'absence')
+      : '<div class="empty">Tout le monde est passé récemment.</div>';
+
+    renderRapport(d.rapport);
+    brancherDomiciliation();
+  }
+
+  function tableauDomiciliation(lignes, colonne) {
+    const entete =
+      colonne === 'echeance'
+        ? '<th>Échéance</th><th>État</th>'
+        : '<th>Dernier passage</th><th>Sans nouvelles</th>';
+    return (
+      '<div class="table-scroll"><table><thead><tr><th>N° boîte</th><th>Nom</th>' +
+      entete +
+      '<th></th></tr></thead><tbody>' +
+      lignes
+        .map(function (l) {
+          const e = l.etat;
+          const pill = ETAT_DOMI[e.etat] || ETAT_DOMI.aucune;
+          const cellules =
+            colonne === 'echeance'
+              ? '<td class="attente-cell">' +
+                (e.echeance ? esc(util.formatJour(e.echeance)) : '—') +
+                '</td><td><span class="status-pill ' + pill[0] + '">' + pill[1] + '</span></td>'
+              : '<td class="attente-cell">' +
+                (e.dernierPassage ? esc(util.formatJour(e.dernierPassage.slice(0, 10))) : '—') +
+                '</td><td class="attente-cell' + (e.absenceDepassee ? ' vieux' : '') + '">' +
+                (e.joursSansPassage === null ? '—' : e.joursSansPassage + ' j') +
+                (e.absenceDepassee ? ' — seuil dépassé' : '') +
+                '</td>';
+          return (
+            '<tr><td class="box-cell">' +
+            esc(l.box || '—') +
+            '</td><td>' +
+            esc(l.name) +
+            '</td>' +
+            cellules +
+            '<td class="actions">' +
+            '<button class="link-btn" data-domifiche="' + esc(l.id) + '">Fiche</button>' +
+            '<button class="link-btn" data-passage="' + esc(l.id) + '">Noter un passage</button>' +
+            '</td></tr>'
+          );
+        })
+        .join('') +
+      '</tbody></table></div>'
+    );
+  }
+
+  function renderRapport(r) {
+    const select = $('rapportAnnee');
+    if (!select.options.length) {
+      const courante = new Date().getFullYear();
+      let html = '';
+      for (let a = courante; a >= courante - 6; a--) {
+        html += '<option value="' + a + '"' + (a === view.rapportAnnee ? ' selected' : '') + '>' + a + '</option>';
+      }
+      select.innerHTML = html;
+    }
+
+    const motifs = Object.keys(r.motifs || {});
+    $('rapportCorps').innerHTML =
+      '<dl class="status-list">' +
+      [
+        ['Domiciliations actives', String(r.actives)],
+        ['Ouvertes dans l’année', String(r.ouvertesDansLAnnee)],
+        ['Closes dans l’année', String(r.closesDansLAnnee)],
+        ['Courriers reçus pour des personnes domiciliées', String(r.courriersRecus)],
+        ['Dont retirés', String(r.courriersRetires)]
+      ]
+        .map(function (l) {
+          return '<div><dt>' + esc(l[0]) + '</dt><dd>' + esc(l[1]) + '</dd></div>';
+        })
+        .join('') +
+      '</dl>' +
+      (motifs.length
+        ? '<h3 class="sous-titre">Motifs de clôture</h3><dl class="status-list">' +
+          motifs
+            .map(function (m) {
+              return '<div><dt>' + esc(m) + '</dt><dd>' + r.motifs[m] + '</dd></div>';
+            })
+            .join('') +
+          '</dl>'
+        : '');
+  }
+
+  function brancherDomiciliation() {
+    document.querySelectorAll('#panel-domiciliation button[data-domifiche]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        ouvrirFiche(b.dataset.domifiche);
+      });
+    });
+    document.querySelectorAll('#panel-domiciliation button[data-passage]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        noterPassage(b.dataset.passage, b);
+      });
+    });
+  }
+
+  /* Noter un passage sans courrier : c'est ce qui empêche de croire disparue
+     une personne qui est bel et bien venue. */
+  async function noterPassage(id, bouton) {
+    if (bouton) bouton.disabled = true;
+    try {
+      await store.enregistrerPassage(id, '');
+      const c = S.contacts.find(function (x) {
+        return x.id === id;
+      });
+      toast('Passage noté pour ' + ((c && c.name) || 'ce destinataire') + '.', 'ok');
+      await renderDomiciliation();
+    } catch (err) {
+      toast('Enregistrement impossible : ' + err.message, 'error');
+      if (bouton) bouton.disabled = false;
+    }
+  }
+
+  $('rapportAnnee').addEventListener('change', function (e) {
+    view.rapportAnnee = Number(e.target.value);
+    renderDomiciliation();
+  });
+
+  $('rapportXlsxBtn').addEventListener('click', function () {
+    const d = view.domiciliation;
+    if (!d) return;
+    const r = d.rapport;
+    const lignes = [
+      { poste: 'Domiciliations actives', valeur: r.actives },
+      { poste: 'Ouvertes dans l’année', valeur: r.ouvertesDansLAnnee },
+      { poste: 'Closes dans l’année', valeur: r.closesDansLAnnee },
+      { poste: 'Courriers reçus', valeur: r.courriersRecus },
+      { poste: 'Courriers retirés', valeur: r.courriersRetires }
+    ].concat(
+      Object.keys(r.motifs || {}).map(function (m) {
+        return { poste: 'Clôture — ' + m, valeur: r.motifs[m] };
+      })
+    );
+    const bytes = root.BC.xlsx.build({
+      sheetName: 'Domiciliation ' + r.annee,
+      columns: [
+        { key: 'poste', label: 'Poste', width: 46 },
+        { key: 'valeur', label: 'Nombre', width: 12 }
+      ],
+      rows: lignes
+    });
+    downloadBytes('domiciliation-' + r.annee + '.xlsx', bytes, MIME_XLSX);
+  });
+
+  $('rapportImprimerBtn').addEventListener('click', function () {
+    const d = view.domiciliation;
+    if (!d) return;
+    imprimerRapport(d.rapport);
+  });
+
   /* ═════════════ statistiques ═════════════ */
 
   /* Vrai quand le serveur exigera une session que nous n'avons pas : inutile
@@ -1742,6 +1968,50 @@
     }, 500);
   }
 
+  /* Le rapport annuel s'imprime dans la même feuille que la liste de casier :
+     un seul mécanisme d'impression, une seule feuille de style. */
+  function imprimerRapport(r) {
+    const motifs = Object.keys(r.motifs || {});
+    $('feuilleCasier').innerHTML =
+      '<h1>Domiciliation — rapport ' + r.annee + '</h1>' +
+      '<p>' +
+      esc(S.settings.officeName || 'Bureau du Courrier') +
+      ' — période du ' +
+      esc(util.formatJour(r.debut)) +
+      ' au ' +
+      esc(util.formatJour(r.fin)) +
+      '</p>' +
+      '<table><thead><tr><th>Poste</th><th>Nombre</th></tr></thead><tbody>' +
+      [
+        ['Domiciliations actives au terme de la période', r.actives],
+        ['Élections de domicile ouvertes dans l’année', r.ouvertesDansLAnnee],
+        ['Domiciliations closes dans l’année', r.closesDansLAnnee],
+        ['Courriers reçus pour des personnes domiciliées', r.courriersRecus],
+        ['Dont retirés', r.courriersRetires]
+      ]
+        .concat(
+          motifs.map(function (m) {
+            return ['Clôture — ' + m, r.motifs[m]];
+          })
+        )
+        .map(function (l) {
+          return '<tr><td>' + esc(l[0]) + '</td><td class="b">' + l[1] + '</td></tr>';
+        })
+        .join('') +
+      '</tbody></table>' +
+      '<p style="margin-top:24px;">Établi le ' +
+      new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) +
+      '. Chiffres extraits du registre ; l’appréciation des situations reste à l’équipe.</p>';
+
+    $('feuilleCasier').hidden = false;
+    document.body.classList.add('impression-casier');
+    root.print();
+    setTimeout(function () {
+      document.body.classList.remove('impression-casier');
+      $('feuilleCasier').hidden = true;
+    }, 500);
+  }
+
   $('feuilleCasierBtn').addEventListener('click', imprimerFeuilleCasier);
   $('feuilleCasierBtn2').addEventListener('click', imprimerFeuilleCasier);
 
@@ -1881,6 +2151,27 @@
 
   /* ═════════════ registre ═════════════ */
 
+  /* L'échéance se calcule sous les yeux de qui saisit : personne n'a à compter
+     douze mois de tête, et l'erreur se voit avant d'être enregistrée. */
+  function apercuEcheance() {
+    const depuis = $('newDomicilieDepuis').value;
+    $('newEcheanceApercu').textContent = depuis
+      ? 'Attestation valable jusqu’au ' + util.formatJour(domi.echeance(depuis)) + '.'
+      : 'L’échéance sera calculée à douze mois.';
+  }
+
+  $('newDomicilie').addEventListener('change', function (e) {
+    $('newDomiciliationChamps').hidden = !e.target.checked;
+    if (e.target.checked) {
+      if (!$('newDomicilieDepuis').value) {
+        $('newDomicilieDepuis').value = new Date().toISOString().slice(0, 10);
+      }
+      apercuEcheance();
+      $('newDomicilieDepuis').focus();
+    }
+  });
+  $('newDomicilieDepuis').addEventListener('input', apercuEcheance);
+
   $('addForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     const nameField = $('newName');
@@ -1900,11 +2191,28 @@
       setMsg('addMsg', 'error', 'Ce courriel est déjà au registre sous « ' + esc(existing.name) + ' ».');
       return;
     }
+    const domicilie = $('newDomicilie').checked;
+    const depuis = $('newDomicilieDepuis').value;
+    if (domicilie && !depuis) {
+      setMsg('addMsg', 'error', 'Indiquez la date d’élection de domicile.');
+      $('newDomicilieDepuis').focus();
+      return;
+    }
     try {
-      await store.addContact({ name: name, email: email, box: box });
+      await store.addContact({
+        name: name,
+        email: email,
+        box: box,
+        domicilie: domicilie,
+        domicilieDepuis: domicilie ? depuis : ''
+      });
       nameField.value = '';
       emailField.value = '';
       $('newBox').value = '';
+      $('newDomicilie').checked = false;
+      $('newDomicilieDepuis').value = '';
+      $('newDomiciliationChamps').hidden = true;
+      $('newEcheanceApercu').textContent = '';
       nameField.focus();
       setMsg(
         'addMsg',
@@ -3294,6 +3602,7 @@
     renderAccounts();
     renderStats();
     renderJournal();
+    renderDomiciliation();
   }
 
   store.onChange(renderAll);

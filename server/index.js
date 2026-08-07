@@ -78,6 +78,8 @@ async function main() {
     signupOpen: signupOpen,
     verifyEmail: verifyEmail,
     reminderDays: relanceJours,
+    domiciliationMois: Number(process.env.DOMICILIATION_MOIS || 0) || undefined,
+    domiciliationAbsenceMois: Number(process.env.DOMICILIATION_ABSENCE_MOIS || 0) || undefined,
     rootDir: ROOT
   });
 

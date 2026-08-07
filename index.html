@@ -182,7 +182,8 @@
     <button data-panel="registre" accesskey="3">Registre <span class="tab-count" id="tabCountContacts">0</span></button>
     <button data-panel="dossier" accesskey="4">Dossier <span class="tab-count" id="tabCountDossier">0</span></button>
     <button data-panel="historique" accesskey="5">Historique <span class="tab-count" id="tabCountHistory">0</span></button>
-    <button data-panel="reglages" accesskey="6">Réglages</button>
+    <button data-panel="domiciliation" accesskey="6">Domiciliation <span class="tab-count" id="tabCountDomiciliation">0</span></button>
+    <button data-panel="reglages" accesskey="7">Réglages</button>
   </nav>
 
   <!-- ═══════════════ GUICHET ═══════════════ -->
@@ -294,6 +295,15 @@
         </div>
         <button class="btn" type="submit" id="addContactBtn">Ajouter</button>
       </form>
+      <label class="check-row" style="margin-top:6px;">
+        <input type="checkbox" id="newDomicilie">
+        Cette personne est domiciliée ici (élection de domicile)
+      </label>
+      <div id="newDomiciliationChamps" hidden>
+        <label for="newDomicilieDepuis">Date d'élection de domicile</label>
+        <input type="date" id="newDomicilieDepuis">
+        <p class="hint" id="newEcheanceApercu"></p>
+      </div>
       <div id="addMsg"></div>
     </div>
 
@@ -369,6 +379,40 @@
         </div>
       </div>
       <div id="historyTable"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ DOMICILIATION ═══════════════ -->
+  <section class="panel" id="panel-domiciliation" aria-label="Domiciliation">
+    <div class="card">
+      <h2>Attestations à renouveler (<span id="countRenouveler">0</span>)</h2>
+      <p class="hint" style="margin-bottom:14px;">
+        Une attestation d'élection de domicile périmée coupe l'accès aux droits, souvent
+        sans que personne ne s'en aperçoive avant le refus d'un guichet.
+      </p>
+      <div id="renouvelerTable"></div>
+    </div>
+
+    <div class="card">
+      <h2>Sans passage depuis longtemps (<span id="countSansPassage">0</span>)</h2>
+      <p class="hint" style="margin-bottom:14px;">
+        La domiciliation peut prendre fin après trois mois sans que la personne se soit
+        présentée ni manifestée. Un retrait de courrier compte comme passage ; une visite
+        sans courrier aussi, si elle est enregistrée depuis la fiche.
+      </p>
+      <div id="sansPassageTable"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Rapport annuel</h2>
+        <div class="toolbar">
+          <select id="rapportAnnee" class="filter-input"></select>
+          <button class="btn ghost small" id="rapportXlsxBtn">Exporter Excel</button>
+          <button class="btn ghost small" id="rapportImprimerBtn">Imprimer</button>
+        </div>
+      </div>
+      <div id="rapportCorps"></div>
     </div>
   </section>
 
@@ -600,6 +644,7 @@
 
 <script src="assets/js/util.js"></script>
 <script src="assets/js/attente.js"></script>
+<script src="assets/js/domiciliation.js"></script>
 <script src="assets/js/xlsx.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/notify.js"></script>

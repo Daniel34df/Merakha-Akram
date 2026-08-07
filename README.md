@@ -396,6 +396,49 @@ choisie, redémarrez. La manœuvre est volontairement manuelle — un bouton
 
 ---
 
+## Domiciliation
+
+Une association agréée peut servir d'adresse administrative à des personnes sans
+domicile stable : c'est cette adresse qui leur permet de recevoir les courriers
+de la CAF, de France Travail, de la préfecture, de l'assurance maladie. Deux
+échéances pèsent sur ce dispositif, et aucune ne se surveille de tête sur trois
+cents dossiers. L'onglet **Domiciliation** les tient à jour tout seul.
+
+**Attestations à renouveler.** Une attestation d'élection de domicile a une
+durée de validité — un an par défaut. Périmée, elle coupe l'accès aux droits,
+souvent sans que personne ne s'en aperçoive avant le refus d'un guichet. On
+inscrit la date d'élection de domicile ; l'échéance est calculée, affichée sous
+les yeux pendant la saisie, et le dossier remonte dans la liste un mois avant le
+terme, puis y reste s'il est dépassé.
+
+**Sans passage depuis longtemps.** La domiciliation peut prendre fin après trois
+mois sans que la personne se soit présentée ni manifestée. Le registre sait déjà
+quand chacun est venu chercher son courrier : la liste se calcule sans rien
+saisir de plus. Une visite sans courrier compte tout autant — le bouton **Noter
+un passage**, sur la fiche comme dans la liste, l'enregistre en un clic. Sans ce
+geste, quelqu'un qui vient régulièrement mais n'a jamais de courrier
+apparaîtrait comme disparu.
+
+Une attestation valable n'empêche pas d'être menacé de radiation, et
+inversement : ce sont deux problèmes distincts, et un dossier peut figurer sur
+les deux listes.
+
+**Rapport annuel.** Domiciliations actives, ouvertes et closes dans l'année,
+motifs de clôture, volume de courrier reçu et retiré. À l'écran, en classeur
+Excel, ou imprimé.
+
+Les durées se règlent, pour suivre une pratique locale :
+
+```bash
+DOMICILIATION_MOIS=12          # validité de l'attestation
+DOMICILIATION_ABSENCE_MOIS=3   # seuil d'absence
+```
+
+L'application calcule des dates ; elle ne dit pas le droit. L'appréciation de
+chaque situation reste à l'équipe.
+
+---
+
 ## Comptes du bureau
 
 Le **premier compte créé** est celui du responsable : lui seul peut retirer un
@@ -498,6 +541,8 @@ autre interface ou un import automatisé.
 | `GET` | `/api/state` | registre + historique + réglages |
 | `GET` `POST` | `/api/contacts` | lister / ajouter un destinataire |
 | `PUT` `DELETE` | `/api/contacts/:id` | modifier / supprimer |
+| `POST` | `/api/contacts/:id/passage` | la personne s'est présentée |
+| `GET` | `/api/domiciliation` | échéances, absences, rapport annuel |
 | `GET` `POST` `DELETE` | `/api/history` | historique : lire, ajouter, vider |
 | `GET` | `/api/history/by-code/:code` | fiche du courrier, sans rien modifier |
 | `POST` | `/api/history/pickup-by-code` | remise après vérification |

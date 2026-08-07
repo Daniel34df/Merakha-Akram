@@ -863,3 +863,166 @@ test('un nom de porteur démesuré est refusé', function () {
     assert.ok(!t.db.data.history[0].pickedUpAt);
   });
 });
+
+/* ---------- domiciliation ---------- */
+
+const JOURS = 24 * 60 * 60 * 1000;
+const jourIso = function (decalage) {
+  return new Date(Date.now() + decalage * JOURS).toISOString().slice(0, 10);
+};
+
+test('l’échéance de l’attestation est calculée si on ne la donne pas', function () {
+  return withServer(async function (t) {
+    const c = await t.call('POST', '/api/contacts', {
+      name: 'Ana Blin',
+      email: 'ana@ex.com',
+      domicilie: true,
+      domicilieDepuis: '2026-03-15'
+    });
+    assert.equal(c.status, 201);
+    assert.equal(c.body.domicilie, true);
+    assert.equal(c.body.domicilieJusqua, '2027-03-15', 'douze mois plus tard');
+  });
+});
+
+test('une échéance fournie l’emporte sur le calcul', function () {
+  return withServer(async function (t) {
+    const c = await t.call('POST', '/api/contacts', {
+      name: 'Ana',
+      email: 'ana@ex.com',
+      domicilie: true,
+      domicilieDepuis: '2026-03-15',
+      domicilieJusqua: '2026-09-15'
+    });
+    assert.equal(c.body.domicilieJusqua, '2026-09-15');
+  });
+});
+
+test('les dates de domiciliation incohérentes sont refusées', function () {
+  return withServer(async function (t) {
+    assert.equal(
+      (await t.call('POST', '/api/contacts', {
+        name: 'Ana', email: 'ana@ex.com', domicilie: true, domicilieDepuis: '15/03/2026'
+      })).status,
+      400
+    );
+    const inverse = await t.call('POST', '/api/contacts', {
+      name: 'Bo', email: 'bo@ex.com', domicilie: true,
+      domicilieDepuis: '2026-06-01', domicilieJusqua: '2026-01-01'
+    });
+    assert.equal(inverse.status, 400);
+    assert.match(inverse.body.error, /précède/);
+  });
+});
+
+test('un destinataire non domicilié ne garde aucune date de domiciliation', function () {
+  return withServer(async function (t) {
+    const c = await t.call('POST', '/api/contacts', {
+      name: 'Ana', email: 'ana@ex.com', domicilieDepuis: '2026-03-15', domiciliationMotif: 'x'
+    });
+    assert.equal(c.body.domicilie, false);
+    assert.equal(c.body.domicilieDepuis, '');
+    assert.equal(c.body.domiciliationMotif, '');
+  });
+});
+
+test('un passage sans courrier est enregistré et consigné', function () {
+  return withServer(async function (t) {
+    const c = (await t.call('POST', '/api/contacts', {
+      name: 'Ana', email: 'ana@ex.com', domicilie: true, domicilieDepuis: jourIso(-200)
+    })).body;
+
+    const passage = await t.call('POST', '/api/contacts/' + c.id + '/passage', { note: 'rien pour elle' });
+    assert.equal(passage.status, 200);
+    assert.equal(passage.body.contact.passages.length, 1);
+    assert.equal(passage.body.contact.passages[0].note, 'rien pour elle');
+    assert.ok(Date.parse(passage.body.contact.passages[0].at));
+
+    const journal = await t.call('GET', '/api/journal');
+    assert.ok(
+      journal.body.entrees.some(function (e) {
+        return e.action === 'passage enregistré' && e.cible === 'Ana';
+      })
+    );
+
+    assert.equal((await t.call('POST', '/api/contacts/inconnu/passage', {})).status, 404);
+  });
+});
+
+test('la modification d’un destinataire ne perd pas ses passages', function () {
+  return withServer(async function (t) {
+    const c = (await t.call('POST', '/api/contacts', { name: 'Ana', email: 'ana@ex.com' })).body;
+    await t.call('POST', '/api/contacts/' + c.id + '/passage', {});
+    await t.call('PUT', '/api/contacts/' + c.id, { name: 'Ana Blin', email: 'ana@ex.com' });
+
+    const relu = (await t.call('GET', '/api/contacts')).body[0];
+    assert.equal(relu.name, 'Ana Blin');
+    assert.equal(relu.passages.length, 1, 'les passages survivent à une modification de fiche');
+  });
+});
+
+test('/api/domiciliation dresse les deux listes de travail', function () {
+  return withServer(async function (t) {
+    // Attestation qui arrive à terme, mais personne assidue : elle est passée
+    // récemment, elle ne doit donc figurer que sur la liste des renouvellements.
+    const proche = (await t.call('POST', '/api/contacts', {
+      name: 'Échéance Proche', email: 'e@ex.com', box: 'A-01',
+      domicilie: true, domicilieDepuis: jourIso(-345)
+    })).body;
+    await t.call('POST', '/api/contacts/' + proche.id + '/passage', {});
+    // Attestation valable, mais plus aucun signe de vie.
+    await t.call('POST', '/api/contacts', {
+      name: 'Disparu', email: 'd@ex.com', box: 'A-02',
+      domicilie: true, domicilieDepuis: jourIso(-120)
+    });
+    // Dossier sain.
+    const sain = (await t.call('POST', '/api/contacts', {
+      name: 'À Jour', email: 'j@ex.com', domicilie: true, domicilieDepuis: jourIso(-20)
+    })).body;
+    await t.call('POST', '/api/contacts/' + sain.id + '/passage', {});
+
+    const res = await t.call('GET', '/api/domiciliation');
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.aRenouveler.map(function (d) { return d.name; }), ['Échéance Proche']);
+    assert.deepEqual(res.body.sansPassage.map(function (d) { return d.name; }), ['Disparu']);
+    assert.equal(res.body.aRenouveler[0].box, 'A-01', 'la boîte accompagne la ligne');
+    assert.equal(res.body.reglages.validiteMois, 12);
+    assert.equal(res.body.reglages.absenceMois, 3);
+  });
+});
+
+test('le rapport annuel est servi par l’API', function () {
+  return withServer(async function (t) {
+    const annee = new Date().getFullYear();
+    await t.call('POST', '/api/contacts', {
+      name: 'Ouverte', email: 'o@ex.com', domicilie: true, domicilieDepuis: annee + '-02-10'
+    });
+    await t.call('POST', '/api/contacts', {
+      name: 'Close', email: 'c@ex.com', domicilie: true,
+      domicilieDepuis: annee + '-01-05',
+      domiciliationCloseLe: annee + '-06-30',
+      domiciliationMotif: 'déménagement'
+    });
+
+    const res = await t.call('GET', '/api/domiciliation?annee=' + annee);
+    assert.equal(res.body.rapport.annee, annee);
+    assert.equal(res.body.rapport.ouvertesDansLAnnee, 2);
+    assert.equal(res.body.rapport.closesDansLAnnee, 1);
+    assert.equal(res.body.rapport.actives, 1);
+    assert.deepEqual(res.body.rapport.motifs, { 'déménagement': 1 });
+  });
+});
+
+test('un dossier peut figurer à la fois en renouvellement et en risque de radiation', function () {
+  return withServer(async function (t) {
+    // Attestation bientôt échue ET plus aucun signe de vie : les deux listes
+    // le montrent, parce que ce sont deux problèmes distincts.
+    await t.call('POST', '/api/contacts', {
+      name: 'Doublement en peine', email: 'x@ex.com',
+      domicilie: true, domicilieDepuis: jourIso(-345)
+    });
+    const res = await t.call('GET', '/api/domiciliation');
+    assert.equal(res.body.aRenouveler.length, 1);
+    assert.equal(res.body.sansPassage.length, 1);
+  });
+});

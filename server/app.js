@@ -13,6 +13,7 @@ const { DEFAULT_SETTINGS, sauvegarder, consigner } = require('./db.js');
 const auth = require('./auth.js');
 const { createUserMailer } = require('./mailer.js');
 const reminders = require('./reminders.js');
+const domiciliation = require('../assets/js/domiciliation.js');
 
 const VERSION = '1.0.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -148,13 +149,40 @@ function cleanContact(input) {
   if (absentUntil && !/^\d{4}-\d{2}-\d{2}$/.test(absentUntil)) {
     throw Object.assign(new Error('Date d’absence invalide (attendu AAAA-MM-JJ)'), { status: 400 });
   }
+
+  /* Élection de domicile. L'attestation a une échéance : si elle n'est pas
+     fournie, on la calcule à partir de la date d'élection, ce qui évite de la
+     saisir deux fois — et de la saisir faux. */
+  const domicilie = !!(input && input.domicilie);
+  const jourValide = function (valeur, quoi) {
+    const v = String(valeur || '').trim();
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      throw Object.assign(new Error(quoi + ' invalide (attendu AAAA-MM-JJ)'), { status: 400 });
+    }
+    return v;
+  };
+  const domicilieDepuis = jourValide(input && input.domicilieDepuis, 'Date d’élection de domicile');
+  let domicilieJusqua = jourValide(input && input.domicilieJusqua, 'Échéance de l’attestation');
+  if (domicilie && domicilieDepuis && !domicilieJusqua) {
+    domicilieJusqua = domiciliation.echeance(domicilieDepuis);
+  }
+  if (domicilieDepuis && domicilieJusqua && domicilieJusqua < domicilieDepuis) {
+    throw Object.assign(new Error('L’échéance précède la date d’élection de domicile'), { status: 400 });
+  }
+  const closeLe = jourValide(input && input.domiciliationCloseLe, 'Date de clôture');
+
   return {
     name: name,
     email: email,
     box: box,
     absentUntil: absentUntil,
     departed: !!(input && input.departed),
-    substituteId: String((input && input.substituteId) || '').trim() || null
+    substituteId: String((input && input.substituteId) || '').trim() || null,
+    domicilie: domicilie,
+    domicilieDepuis: domicilie ? domicilieDepuis : '',
+    domicilieJusqua: domicilie ? domicilieJusqua : '',
+    domiciliationCloseLe: domicilie ? closeLe : '',
+    domiciliationMotif: domicilie ? String((input && input.domiciliationMotif) || '').trim().slice(0, 200) : ''
   };
 }
 
@@ -1020,6 +1048,45 @@ async function handleApi(req, res, ctx, pathname) {
     }
   }
 
+  /* Passage sans courrier : la personne s'est présentée, il n'y avait rien pour
+     elle. Sans cette trace, le registre la croirait absente depuis des mois et
+     la ferait apparaître sur la liste des radiations à venir. */
+  const passageMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/passage$/);
+  if (passageMatch && method === 'POST') {
+    const id = decodeURIComponent(passageMatch[1]);
+    const contact = (db.data.contacts || []).find(function (c) {
+      return c.id === id;
+    });
+    if (!contact) throw Object.assign(new Error('Destinataire introuvable'), { status: 404 });
+
+    const corps = await readBody(req);
+    const note = String((corps && corps.note) || '').trim().slice(0, 200);
+    await db.write(function (data) {
+      const cible = data.contacts.find(function (c) {
+        return c.id === id;
+      });
+      if (!Array.isArray(cible.passages)) cible.passages = [];
+      cible.passages.unshift({
+        at: new Date().toISOString(),
+        par: currentUser ? currentUser.name : null,
+        note: note
+      });
+      // Seuls les passages récents servent au calcul : on borne la liste.
+      if (cible.passages.length > 50) cible.passages.length = 50;
+    });
+    await consigner(db, {
+      qui: currentUser && currentUser.name,
+      action: 'passage enregistré',
+      cible: contact.name,
+      details: note
+    });
+    return sendJson(res, 200, {
+      contact: db.data.contacts.find(function (c) {
+        return c.id === id;
+      })
+    });
+  }
+
   const contactMatch = pathname.match(/^\/api\/contacts\/([^/]+)$/);
   if (contactMatch) {
     const id = decodeURIComponent(contactMatch[1]);
@@ -1282,6 +1349,41 @@ async function handleApi(req, res, ctx, pathname) {
     }
   }
 
+  /* --- domiciliation --- */
+
+  if (pathname === '/api/domiciliation' && method === 'GET') {
+    const parsed = new URL(req.url, 'http://localhost');
+    const annee = Number(parsed.searchParams.get('annee')) || new Date().getFullYear();
+    const options = {
+      validiteMois: Number(ctx.domiciliationMois) || undefined,
+      absenceMois: Number(ctx.domiciliationAbsenceMois) || undefined
+    };
+    const contacts = db.data.contacts || [];
+    const history = db.data.history || [];
+
+    /* On ne renvoie que ce qu'il faut pour afficher : nom, boîte, dates. Les
+       listes de travail n'ont pas besoin de transporter tout le dossier. */
+    const alleger = function (d) {
+      return {
+        id: d.contact.id,
+        name: d.contact.name,
+        box: d.contact.box || '',
+        email: d.contact.email || '',
+        etat: d.etat
+      };
+    };
+
+    return sendJson(res, 200, {
+      aRenouveler: domiciliation.aRenouveler(contacts, history, options).map(alleger),
+      sansPassage: domiciliation.sansPassage(contacts, history, options).map(alleger),
+      rapport: domiciliation.rapportAnnuel(contacts, history, { annee: annee }),
+      reglages: {
+        validiteMois: options.validiteMois || domiciliation.DEFAUTS.validiteMois,
+        absenceMois: options.absenceMois || domiciliation.DEFAUTS.absenceMois
+      }
+    });
+  }
+
   /* --- réglages --- */
 
   if (pathname === '/api/settings') {
@@ -1504,7 +1606,12 @@ function createServer(options) {
     signupThrottle: options.signupThrottle || auth.createThrottle({ max: 5, windowMs: 60 * 60 * 1000 }),
     signupOpen: options.signupOpen !== false,
     // Par défaut, on vérifie l'adresse dès que le serveur sait envoyer un courriel.
-    verifyEmail: options.verifyEmail !== undefined ? options.verifyEmail : !!(options.mailer && options.mailer.enabled)
+    verifyEmail: options.verifyEmail !== undefined ? options.verifyEmail : !!(options.mailer && options.mailer.enabled),
+    /* Domiciliation : durée de validité de l'attestation et seuil d'absence.
+       Les valeurs courantes sont dans le module ; ces réglages permettent de
+       suivre une pratique locale sans toucher au code. */
+    domiciliationMois: options.domiciliationMois,
+    domiciliationAbsenceMois: options.domiciliationAbsenceMois
   });
 
   return http.createServer(async function (req, res) {
