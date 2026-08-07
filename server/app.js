@@ -77,6 +77,14 @@ function isSameOriginRequest(req) {
   }
 }
 
+/* Absence de session valide — le seul 401 qui doit renvoyer le client derrière
+   l'écran de connexion. Les autres refus (mot de passe actuel erroné, droits
+   insuffisants) portent un autre code : sans cette distinction, une faute de
+   frappe dans un formulaire déconnecterait l'employé·e. */
+function sessionExpiree() {
+  return Object.assign(new Error('Connexion requise'), { status: 401, code: 'session' });
+}
+
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(
@@ -274,6 +282,33 @@ async function sendVerificationCode(ctx, pending, code) {
   });
 }
 
+/* Code de réinitialisation d'un mot de passe oublié. Le message dit clairement
+   qu'aucun changement n'a encore eu lieu : quelqu'un qui reçoit ce courriel sans
+   l'avoir demandé doit savoir que son compte est intact. */
+async function sendResetCode(ctx, user, code) {
+  const bureau = (ctx.db.data.settings && ctx.db.data.settings.officeName) || 'Bureau du Courrier';
+  await ctx.mailer.send({
+    to: user.email,
+    subject: 'Votre code de réinitialisation : ' + code,
+    text:
+      'Bonjour ' +
+      user.name +
+      ',\n\n' +
+      'Vous avez demandé à choisir un nouveau mot de passe sur ' +
+      bureau +
+      '.\n\n' +
+      '    ' +
+      code +
+      '\n\n' +
+      'Ce code est valable ' +
+      auth.RESET_MINUTES +
+      ' minutes.\n\n' +
+      'Votre mot de passe actuel fonctionne toujours : rien n’a changé tant que ' +
+      'ce code n’a pas été utilisé. Si vous n’êtes pas à l’origine de cette ' +
+      'demande, ignorez ce message.'
+  });
+}
+
 /* Relance : le même message, précédé d'un rappel. L'envoi passe par la boîte de
    la personne connectée si elle en a une, sinon par le compte du serveur — la
    boucle automatique, elle, n'a personne de connecté et utilise le serveur. */
@@ -427,9 +462,10 @@ async function handleAuth(req, res, ctx, pathname) {
       }
       ctx.signupThrottle.fail(util.normalize(email));
       await db.write(function (data) {
-        // Une nouvelle demande remplace la précédente pour la même adresse.
+        // Une nouvelle demande remplace la précédente pour la même adresse ;
+        // une réinitialisation en cours sur la même adresse n'est pas touchée.
         data.pending = data.pending.filter(function (p) {
-          return util.normalize(p.email) !== util.normalize(email);
+          return util.normalize(p.email) !== util.normalize(email) || auth.pendingKind(p) !== 'signup';
         });
         data.pending.push(pending);
       });
@@ -458,9 +494,7 @@ async function handleAuth(req, res, ctx, pathname) {
     const email = String(body.email || '').trim();
     const code = String(body.code || '').trim();
 
-    const pending = (db.data.pending || []).find(function (p) {
-      return util.normalize(p.email) === util.normalize(email);
-    });
+    const pending = auth.findPending(db, email, 'signup');
     if (!pending || auth.pendingExpired(pending)) {
       throw Object.assign(new Error('Code expiré ou inscription introuvable — recommencez l’inscription'), {
         status: 410
@@ -507,9 +541,7 @@ async function handleAuth(req, res, ctx, pathname) {
   if (pathname === '/api/auth/resend' && method === 'POST') {
     const body = await readBody(req);
     const email = String(body.email || '').trim();
-    const pending = (db.data.pending || []).find(function (p) {
-      return util.normalize(p.email) === util.normalize(email);
-    });
+    const pending = auth.findPending(db, email, 'signup');
     if (!pending || auth.pendingExpired(pending)) {
       throw Object.assign(new Error('Aucune inscription en attente pour cette adresse'), { status: 410 });
     }
@@ -531,6 +563,134 @@ async function handleAuth(req, res, ctx, pathname) {
       }
     });
     sendJson(res, 200, { sent: true, email: pending.email });
+    return true;
+  }
+
+  /* --- mot de passe oublié ---
+
+     Sans cette route, un mot de passe perdu enferme dehors : le registre est
+     là, le compte aussi, mais plus personne ne peut ouvrir. La reprise passe
+     par l'adresse du compte, seule chose que le titulaire possède encore. */
+
+  if (pathname === '/api/auth/forgot' && method === 'POST') {
+    const body = await readBody(req);
+    const email = String(body.email || '').trim();
+    if (!util.isValidEmail(email)) throw Object.assign(new Error('Courriel invalide'), { status: 400 });
+
+    if (!ctx.mailer.enabled) {
+      throw Object.assign(
+        new Error(
+          'Ce serveur ne peut pas envoyer de courriel : le code ne pourrait pas vous parvenir. ' +
+            'Demandez à la personne qui administre le poste de lancer « npm run motdepasse ».'
+        ),
+        { status: 503 }
+      );
+    }
+
+    // Même frein que pour l'inscription : cette route envoie un courriel.
+    const cle = 'reset:' + util.normalize(email);
+    const limite = ctx.signupThrottle.check(cle);
+    if (limite.blocked) {
+      throw Object.assign(
+        new Error('Trop de demandes pour cette adresse. Réessayez dans ' + Math.ceil(limite.retryInSeconds / 60) + ' minute(s).'),
+        { status: 429 }
+      );
+    }
+    ctx.signupThrottle.fail(cle);
+
+    const user = auth.findUserByEmail(db, email);
+    /* Réponse identique que le compte existe ou non : sinon, cette route dirait
+       à un inconnu quelles adresses ont un compte dans ce bureau. */
+    if (user) {
+      const code = auth.generateCode();
+      const pending = auth.newPendingReset(user.id, user.email, code);
+      try {
+        await sendResetCode(ctx, user, code);
+      } catch (err) {
+        console.error('[oubli] envoi du code impossible :', err.message);
+        throw Object.assign(new Error('Le code n’a pas pu être envoyé : ' + err.message), { status: 502 });
+      }
+      await db.write(function (data) {
+        data.pending = data.pending.filter(function (p) {
+          return util.normalize(p.email) !== util.normalize(email) || auth.pendingKind(p) !== 'reset';
+        });
+        data.pending.push(pending);
+      });
+    }
+
+    sendJson(res, 202, {
+      sent: true,
+      email: email,
+      codeLength: auth.CODE_LENGTH,
+      expiresInMinutes: auth.RESET_MINUTES
+    });
+    return true;
+  }
+
+  if (pathname === '/api/auth/reset' && method === 'POST') {
+    const body = await readBody(req);
+    const email = String(body.email || '').trim();
+    const code = String(body.code || '').trim();
+
+    const pending = auth.findPending(db, email, 'reset');
+    if (!pending || auth.pendingExpired(pending)) {
+      throw Object.assign(new Error('Code expiré ou demande introuvable — recommencez'), { status: 410 });
+    }
+    if (pending.attempts >= auth.CODE_MAX_ATTEMPTS) {
+      throw Object.assign(new Error('Trop de codes erronés — recommencez la demande'), { status: 429 });
+    }
+    if (!auth.verifyPassword(code, pending.codeHash)) {
+      await db.write(function (data) {
+        const target = data.pending.find(function (p) {
+          return p.id === pending.id;
+        });
+        if (target) target.attempts++;
+      });
+      const reste = auth.CODE_MAX_ATTEMPTS - pending.attempts;
+      throw Object.assign(
+        new Error('Code incorrect.' + (reste > 0 ? ' Il reste ' + reste + ' essai(s).' : ' Recommencez la demande.')),
+        { status: 401 }
+      );
+    }
+
+    // Le code est bon : le nouveau mot de passe doit tenir les mêmes exigences.
+    const faible = auth.checkPasswordStrength(String(body.password || ''));
+    if (faible) throw Object.assign(new Error(faible), { status: 400 });
+
+    const user = (db.data.users || []).find(function (u) {
+      return u.id === pending.userId;
+    });
+    if (!user) throw Object.assign(new Error('Ce compte n’existe plus'), { status: 410 });
+
+    const session = auth.newSession(user.id);
+    await db.write(function (data) {
+      const cible = data.users.find(function (u) {
+        return u.id === user.id;
+      });
+      cible.password = auth.hashPassword(String(body.password));
+      /* Toutes les sessions tombent : si le mot de passe a été oublié parce
+         qu'un tiers l'a changé, il ne doit pas rester connecté ailleurs. */
+      data.sessions = data.sessions.filter(function (s) {
+        return s.userId !== user.id;
+      });
+      data.sessions.push(session);
+      data.pending = data.pending.filter(function (p) {
+        return p.id !== pending.id;
+      });
+    });
+    await consigner(db, {
+      qui: user.name,
+      action: 'mot de passe réinitialisé',
+      cible: user.email,
+      details: 'par code reçu par courriel'
+    });
+
+    sendJsonWithCookie(
+      res,
+      200,
+      { user: auth.publicUser(user) },
+      auth.sessionCookie(session.token, { secure: secureCookie })
+    );
     return true;
   }
 
@@ -587,11 +747,14 @@ async function handleAuth(req, res, ctx, pathname) {
 
   if (pathname === '/api/auth/password' && method === 'PUT') {
     const user = auth.userFromRequest(db, req);
-    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    if (!user) throw sessionExpiree();
     const body = await readBody(req);
 
+    /* 403 et non 401 : la session est valide, c'est la valeur saisie qui est
+       fausse. Un 401 ferait croire au client que la session a expiré et le
+       renverrait à l'écran de connexion pour une simple faute de frappe. */
     if (!auth.verifyPassword(String(body.current || ''), user.password)) {
-      throw Object.assign(new Error('Mot de passe actuel incorrect'), { status: 401 });
+      throw Object.assign(new Error('Mot de passe actuel incorrect'), { status: 403 });
     }
     const faible = auth.checkPasswordStrength(String(body.next || ''));
     if (faible) throw Object.assign(new Error(faible), { status: 400 });
@@ -614,7 +777,7 @@ async function handleAuth(req, res, ctx, pathname) {
 
   if (pathname === '/api/auth/users' && method === 'GET') {
     const user = auth.userFromRequest(db, req);
-    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    if (!user) throw sessionExpiree();
     const responsable = (db.data.users || [])[0];
     sendJson(res, 200, {
       // Le premier compte créé est celui du bureau : lui seul peut retirer un accès.
@@ -638,7 +801,7 @@ async function handleAuth(req, res, ctx, pathname) {
   const userMatch = pathname.match(/^\/api\/auth\/users\/([^/]+)$/);
   if (userMatch && method === 'DELETE') {
     const user = auth.userFromRequest(db, req);
-    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    if (!user) throw sessionExpiree();
     const responsable = (db.data.users || [])[0];
     if (!responsable || responsable.id !== user.id) {
       throw Object.assign(new Error('Seul le compte responsable peut retirer un accès'), { status: 403 });
@@ -671,7 +834,7 @@ async function handleAuth(req, res, ctx, pathname) {
 
   if (pathname === '/api/auth/mailbox' && method === 'DELETE') {
     const user = auth.userFromRequest(db, req);
-    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    if (!user) throw sessionExpiree();
     await db.write(function (data) {
       const target = data.users.find(function (u) {
         return u.id === user.id;
@@ -685,7 +848,7 @@ async function handleAuth(req, res, ctx, pathname) {
 
   if (pathname === '/api/auth/mailbox/smtp' && method === 'PUT') {
     const user = auth.userFromRequest(db, req);
-    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    if (!user) throw sessionExpiree();
     const body = await readBody(req);
     const address = String(body.address || '').trim();
     const host = String(body.host || '').trim();
@@ -717,7 +880,7 @@ async function handleAuth(req, res, ctx, pathname) {
 
   if (pathname === '/api/auth/google/start' && method === 'GET') {
     const user = auth.userFromRequest(db, req);
-    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    if (!user) throw sessionExpiree();
     if (!google.enabled) {
       throw Object.assign(new Error('Connexion Google non configurée sur ce serveur'), { status: 503 });
     }
@@ -805,7 +968,7 @@ async function handleApi(req, res, ctx, pathname) {
      Dès qu'un compte est créé, tout le reste de l'API demande une session. */
   const currentUser = auth.userFromRequest(db, req);
   if ((db.data.users || []).length > 0 && !currentUser) {
-    throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    throw sessionExpiree();
   }
 
   if (pathname === '/api/state' && method === 'GET') {
@@ -1338,7 +1501,7 @@ function createServer(options) {
       const status = err.status || 500;
       if (status >= 500 && status !== 502 && status !== 503) console.error(err);
       if (!res.headersSent) {
-        sendJson(res, status, { error: err.message, record: err.record || undefined });
+        sendJson(res, status, { error: err.message, code: err.code || undefined, record: err.record || undefined });
       }
     }
   });

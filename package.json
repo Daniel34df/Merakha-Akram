@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "MAIL_DRY_RUN=true node --watch server/index.js",
+    "motdepasse": "node tools/mot-de-passe.js",
     "test": "node --test"
   },
   "engines": {

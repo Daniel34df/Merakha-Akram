@@ -254,3 +254,173 @@ test('/api/health annonce si la vérification est active', function () {
     assert.equal((await t.call('GET', '/api/auth/me')).body.verifyEmail, true);
   });
 });
+
+/* ---------- mot de passe oublié ---------- */
+
+test('un mot de passe oublié se réinitialise par code reçu par courriel', function () {
+  return withServer(
+    async function (t) {
+      await t.call('POST', '/api/auth/signup', COMPTE);
+      await t.call('POST', '/api/auth/logout');
+      t.mailer.sent.length = 0;
+
+      const demande = await t.call('POST', '/api/auth/forgot', { email: COMPTE.email });
+      assert.equal(demande.status, 202);
+      assert.equal(demande.body.expiresInMinutes, auth.RESET_MINUTES);
+      assert.equal(t.mailer.sent.length, 1);
+      assert.equal(t.mailer.sent[0].to, COMPTE.email);
+      assert.match(t.mailer.sent[0].text, /rien n’a changé/, 'le message rassure sur le compte actuel');
+
+      const code = t.dernierCode();
+      assert.match(code, /^\d{6}$/);
+
+      // Tant que le code n'est pas utilisé, l'ancien mot de passe reste valable.
+      assert.equal((await t.call('POST', '/api/auth/login', COMPTE)).status, 200);
+      await t.call('POST', '/api/auth/logout');
+
+      const reset = await t.call('POST', '/api/auth/reset', {
+        email: COMPTE.email,
+        code: code,
+        password: 'un-tout-nouveau-mot-de-passe'
+      });
+      assert.equal(reset.status, 200);
+      assert.equal(reset.body.user.email, COMPTE.email);
+      assert.match(reset.headers.get('set-cookie') || '', /bdc_session=/, 'on est connecté dans la foulée');
+
+      // Le nouveau fonctionne, l'ancien non, et le code est consommé.
+      await t.call('POST', '/api/auth/logout');
+      assert.equal(
+        (await t.call('POST', '/api/auth/login', { email: COMPTE.email, password: 'un-tout-nouveau-mot-de-passe' })).status,
+        200
+      );
+      await t.call('POST', '/api/auth/logout');
+      assert.equal((await t.call('POST', '/api/auth/login', COMPTE)).status, 401);
+      assert.equal(t.db.data.pending.length, 0);
+    },
+    { verifyEmail: false }
+  );
+});
+
+test('la demande d’oubli ne dit pas si l’adresse a un compte', function () {
+  return withServer(
+    async function (t) {
+      await t.call('POST', '/api/auth/signup', COMPTE);
+      t.mailer.sent.length = 0;
+
+      const inconnue = await t.call('POST', '/api/auth/forgot', { email: 'personne@bureau.org' });
+      assert.equal(inconnue.status, 202, 'même réponse que pour une adresse connue');
+      assert.equal(t.mailer.sent.length, 0, 'mais aucun courriel ne part');
+      assert.equal(t.db.data.pending.length, 0);
+
+      assert.equal((await t.call('POST', '/api/auth/forgot', { email: 'pas-une-adresse' })).status, 400);
+    },
+    { verifyEmail: false }
+  );
+});
+
+test('un code de réinitialisation faux, périmé ou trop essayé est refusé', function () {
+  return withServer(
+    async function (t) {
+      await t.call('POST', '/api/auth/signup', COMPTE);
+      await t.call('POST', '/api/auth/forgot', { email: COMPTE.email });
+      const code = t.dernierCode();
+
+      const faux = String((Number(code) + 1) % 1000000).padStart(6, '0');
+      for (let i = 0; i < auth.CODE_MAX_ATTEMPTS; i++) {
+        const res = await t.call('POST', '/api/auth/reset', {
+          email: COMPTE.email,
+          code: faux,
+          password: 'un-tout-nouveau-mot-de-passe'
+        });
+        assert.equal(res.status, 401);
+      }
+      // Au-delà du quota, même le bon code ne passe plus.
+      const bloque = await t.call('POST', '/api/auth/reset', {
+        email: COMPTE.email,
+        code: code,
+        password: 'un-tout-nouveau-mot-de-passe'
+      });
+      assert.equal(bloque.status, 429);
+      assert.equal((await t.call('POST', '/api/auth/login', COMPTE)).status, 200, 'le compte est intact');
+    },
+    { verifyEmail: false }
+  );
+});
+
+test('un mot de passe faible est refusé même avec le bon code', function () {
+  return withServer(
+    async function (t) {
+      await t.call('POST', '/api/auth/signup', COMPTE);
+      await t.call('POST', '/api/auth/forgot', { email: COMPTE.email });
+      const code = t.dernierCode();
+
+      const court = await t.call('POST', '/api/auth/reset', { email: COMPTE.email, code: code, password: 'court' });
+      assert.equal(court.status, 400);
+      // Le code n'est pas consommé : on peut réessayer avec un mot de passe correct.
+      assert.equal(
+        (await t.call('POST', '/api/auth/reset', { email: COMPTE.email, code: code, password: 'assez-long-celui-ci' }))
+          .status,
+        200
+      );
+    },
+    { verifyEmail: false }
+  );
+});
+
+test('la réinitialisation ferme les sessions ouvertes ailleurs', function () {
+  return withServer(
+    async function (t) {
+      await t.call('POST', '/api/auth/signup', COMPTE);
+      const cookieAutrePoste = t.db.data.sessions[0].token;
+
+      await t.call('POST', '/api/auth/forgot', { email: COMPTE.email });
+      await t.call('POST', '/api/auth/reset', {
+        email: COMPTE.email,
+        code: t.dernierCode(),
+        password: 'un-tout-nouveau-mot-de-passe'
+      });
+
+      const restees = t.db.data.sessions.filter(function (s) {
+        return s.token === cookieAutrePoste;
+      });
+      assert.equal(restees.length, 0, 'l’ancienne session ne survit pas');
+
+      const journal = t.db.data.journal.find(function (e) {
+        return e.action === 'mot de passe réinitialisé';
+      });
+      assert.ok(journal, 'la réinitialisation figure au journal');
+    },
+    { verifyEmail: false }
+  );
+});
+
+test('sans serveur de courriel, l’oubli renvoie vers l’outil en ligne de commande', function () {
+  return withServer(
+    async function (t) {
+      await t.call('POST', '/api/auth/signup', COMPTE);
+      const res = await t.call('POST', '/api/auth/forgot', { email: COMPTE.email });
+      assert.equal(res.status, 503);
+      assert.match(res.body.error, /npm run motdepasse/);
+    },
+    { verifyEmail: false, mailerEnv: { MAIL_DRY_RUN: 'false' } }
+  );
+});
+
+test('une inscription en attente et un oubli coexistent sur la même adresse', function () {
+  return withServer(async function (t) {
+    // Inscription en attente de code (verifyEmail actif par défaut ici).
+    await t.call('POST', '/api/auth/signup', { name: 'Nouveau', email: 'nouveau@bureau.org', password: 'mot-de-passe-long' });
+    assert.equal(t.db.data.pending.length, 1);
+
+    // Un compte existant demande une réinitialisation : l'inscription en attente
+    // d'une autre adresse ne doit pas être emportée.
+    await t.call('POST', '/api/auth/signup', COMPTE);
+    await t.call('POST', '/api/auth/verify', { email: COMPTE.email, code: t.dernierCode() });
+    await t.call('POST', '/api/auth/forgot', { email: COMPTE.email });
+
+    const sortes = t.db.data.pending.map(function (p) {
+      return auth.pendingKind(p) + ':' + p.email;
+    });
+    assert.deepEqual(sortes.sort(), ['reset:marie@bureau.org', 'signup:nouveau@bureau.org']);
+  });
+});

@@ -87,12 +87,20 @@
       const err = new Error((payload && payload.error) || 'Erreur serveur (' + res.status + ')');
       err.status = res.status;
       err.payload = payload;
-      // Session expirée en cours d'usage : on repasse l'interface derrière
-      // l'écran de connexion plutôt que d'enchaîner les erreurs.
-      if (res.status === 401 && state.auth.accountsExist) {
+      /* Session expirée en cours d'usage : on repasse l'interface derrière
+         l'écran de connexion plutôt que d'enchaîner les erreurs.
+
+         Seul le code 'session' déclenche ce repli. Un 401 sans ce code veut
+         dire « la valeur saisie est fausse », pas « votre session est finie » :
+         se tromper de mot de passe actuel ne doit pas déconnecter. */
+      if (res.status === 401 && payload && payload.code === 'session' && state.auth.accountsExist) {
+        /* N'avertir l'interface que si l'état change vraiment. Sinon chaque 401
+           relance un rendu, chaque rendu relance des appels, et les appels
+           relancent des 401 : l'application se mitraille elle-même. */
+        const changement = state.auth.user !== null || state.auth.required !== true;
         state.auth.user = null;
         state.auth.required = true;
-        emit();
+        if (changement) emit();
       }
       throw err;
     }
@@ -137,6 +145,23 @@
 
   async function login(input) {
     const result = await api('/auth/login', { method: 'POST', body: JSON.stringify(input) });
+    applyAuth(result);
+    await loadServerState();
+    return result.user;
+  }
+
+  /* Mot de passe oublié : la demande, puis la reprise avec le code reçu.
+     La demande répond de la même façon que l'adresse ait un compte ou non —
+     l'interface ne peut donc rien en déduire, et n'a rien à en dire. */
+  async function forgotPassword(email) {
+    return api('/auth/forgot', { method: 'POST', body: JSON.stringify({ email: email }) });
+  }
+
+  async function resetPassword(email, code, password) {
+    const result = await api('/auth/reset', {
+      method: 'POST',
+      body: JSON.stringify({ email: email, code: code, password: password })
+    });
     applyAuth(result);
     await loadServerState();
     return result.user;
@@ -600,6 +625,8 @@
     verifySignup: verifySignup,
     resendCode: resendCode,
     login: login,
+    forgotPassword: forgotPassword,
+    resetPassword: resetPassword,
     logout: logout,
     connectSmtpMailbox: connectSmtpMailbox,
     disconnectMailbox: disconnectMailbox,

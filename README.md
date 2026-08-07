@@ -366,6 +366,32 @@ qu'on veut quand on soupçonne un accès indésirable.
 Retirer un accès ferme immédiatement les sessions de la personne. Le registre et
 l'historique ne sont pas touchés.
 
+### Mot de passe oublié
+
+Le lien **Mot de passe oublié ?** figure sous le formulaire de connexion. Il
+demande l'adresse du compte et y envoie un code à six chiffres, valable trente
+minutes. Tant que le code n'a pas servi, l'ancien mot de passe continue de
+fonctionner — recevoir ce courriel sans l'avoir demandé n'a donc aucune
+conséquence. Une fois le nouveau mot de passe choisi, toutes les sessions
+ouvertes sont fermées et la personne est connectée dans la foulée.
+
+La réponse est la même que l'adresse ait un compte ou non : ce formulaire ne
+peut pas servir à découvrir qui est inscrit dans ce bureau.
+
+**Si le bureau n'a pas de serveur de courriel**, le code ne peut arriver nulle
+part. La reprise se fait alors depuis la machine qui héberge le registre :
+
+```bash
+npm run motdepasse                          # liste les comptes
+npm run motdepasse -- marie@bureau.org      # tire un mot de passe et l'affiche
+npm run motdepasse -- marie@bureau.org "le mot de passe choisi"
+```
+
+La commande ferme les sessions du compte concerné et inscrit l'opération au
+journal. Elle n'exige aucun mot de passe : avoir la main sur cette machine, c'est
+déjà avoir accès au fichier du registre. Le serveur peut tourner pendant
+l'opération.
+
 ---
 
 ## Sécurité
@@ -426,6 +452,7 @@ autre interface ou un import automatisé.
 | `GET` | `/api/auth/me` | compte connecté, s'il y en a un |
 | `POST` | `/api/auth/signup` `/login` `/logout` | comptes et sessions |
 | `POST` | `/api/auth/verify` · `/resend` | code de confirmation de l'adresse |
+| `POST` | `/api/auth/forgot` · `/reset` | mot de passe oublié : code puis nouveau mot de passe |
 | `PUT` `DELETE` | `/api/auth/mailbox/smtp` · `/api/auth/mailbox` | relier ou retirer sa boîte |
 | `GET` | `/api/auth/google/start` · `/callback` | autorisation Gmail |
 | `GET` | `/api/state` | registre + historique + réglages |
@@ -445,6 +472,11 @@ Les erreurs sont renvoyées en JSON (`{"error": "…"}`) avec un code parlant :
 `400` donnée invalide, `404` introuvable, `409` courriel déjà au registre,
 `502` refus du serveur de courriel, `503` envoi automatique non configuré.
 
+Un `401` accompagné de `{"code": "session"}` — et lui seul — signifie que la
+session a expiré ; l'interface renvoie alors à l'écran de connexion. Un refus
+portant sur la valeur envoyée (mot de passe actuel erroné, par exemple) répond
+`403` : la session reste ouverte, une faute de frappe ne déconnecte personne.
+
 ---
 
 ## Développement
@@ -455,6 +487,7 @@ manifest.webmanifest  déclaration de l'application installable
 sw.js                 service worker : coquille en cache, /api toujours en direct
 assets/icons/         logo.svg (à remplacer) et icônes générées
 tools/make-icons.js   régénère les icônes depuis logo.svg
+tools/mot-de-passe.js rend l'accès à un compte depuis le poste serveur
 tools/guide-nodejs.html      guide animé : installer Node.js sur Windows
 tools/enregistrer-guide.js   filme ce guide et produit une vidéo
 demarrer.cmd          lanceur Windows : démarre le serveur et ouvre l'application

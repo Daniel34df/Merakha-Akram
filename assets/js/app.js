@@ -555,9 +555,17 @@
     const type = util.typeCourrier(record.type);
     const abs = contact.email ? util.presence(contact) : { etat: 'present', message: '' };
 
+    // Ce que l'agent doit sortir du casier : le total, pas seulement l'enveloppe
+    // dont le code a été présenté.
+    const total = 1 + autres.length;
+
     const lignes = [
       ligneFiche('Destinataire', record.name),
       ligneFiche('Numéro de boîte', contact.box || '—', 'box-cell'),
+      ligneFiche(
+        'Courriers à remettre',
+        total === 1 ? '1 courrier' : total + ' courriers (celui-ci + ' + autres.length + ')'
+      ),
       ligneFiche('Type de courrier', type.label),
       ligneFiche(
         'Reçu le',
@@ -585,6 +593,7 @@
       '<span class="code-pill">' + esc(record.pickupCode || '----') + '</span>' +
       '<strong>' + esc(record.name) + '</strong>' +
       (contact.box ? '<span class="box-cell">boîte ' + esc(contact.box) + '</span>' : '') +
+      '<span class="compte-pill">' + total + ' courrier' + (total > 1 ? 's' : '') + '</span>' +
       '</div>' +
       '<dl class="status-list">' + lignes.join('') + '</dl>' +
       (autres.length
@@ -1416,11 +1425,21 @@
 
   /* ═════════════ statistiques ═════════════ */
 
+  /* Vrai quand le serveur exigera une session que nous n'avons pas : inutile
+     d'aller chercher des données qui reviendront en 401. */
+  function sessionManquante() {
+    return S.auth.accountsExist && !S.auth.user;
+  }
+
   async function renderStats() {
     const box = $('statsCorps');
     if (S.mode !== 'serveur') {
       // Hors serveur, on calcule sur ce que ce poste connaît.
       box.innerHTML = '<p class="hint">Statistiques du registre de ce poste.</p>' + tableauStats(statsLocales());
+      return;
+    }
+    if (sessionManquante()) {
+      box.innerHTML = '';
       return;
     }
     try {
@@ -1492,8 +1511,8 @@
 
   async function renderJournal() {
     const carte = $('journalCard');
-    carte.hidden = S.mode !== 'serveur';
-    if (S.mode !== 'serveur') return;
+    carte.hidden = S.mode !== 'serveur' || sessionManquante();
+    if (carte.hidden) return;
     try {
       const data = await store.loadJournal(100);
       $('journalTable').innerHTML = data.entrees.length
@@ -2386,6 +2405,18 @@
     gate.hidden = !needed;
     document.body.style.overflow = needed ? 'hidden' : '';
     $('gateSkip').hidden = !firstRun;
+
+    /* Un écran de connexion sans aucun formulaire visible est une impasse :
+       l'écran s'affiche, mais rien ne permet d'entrer. Cela survient quand la
+       session tombe alors qu'une étape intermédiaire était ouverte. On retombe
+       alors sur la connexion. */
+    if (needed) {
+      const formulaires = ['loginForm', 'signupForm', 'verifyForm', 'associateForm', 'forgotForm', 'resetForm'];
+      const visible = formulaires.some(function (id) {
+        return $(id) && !$(id).hidden;
+      });
+      if (!visible) showGateForm(S.auth.accountsExist ? 'login' : 'signup');
+    }
     const notice = $('signupNotice');
     if (notice) {
       notice.textContent = S.auth.verifyEmail
@@ -2418,8 +2449,11 @@
     $('signupForm').hidden = which !== 'signup';
     $('verifyForm').hidden = which !== 'verify';
     $('associateForm').hidden = which !== 'associate';
-    // Ni le code ni l'association ne sont des onglets : on les masque pendant.
-    $('gateTabs').hidden = which === 'verify' || which === 'associate';
+    $('forgotForm').hidden = which !== 'forgot';
+    $('resetForm').hidden = which !== 'reset';
+    // Seuls Connexion et Créer un compte sont des onglets : les étapes
+    // intermédiaires (code, association, oubli) masquent la barre.
+    $('gateTabs').hidden = which !== 'login' && which !== 'signup';
     setMsg('gateMsg', '', '');
   }
 
@@ -2447,6 +2481,74 @@
       afterLogin();
     } catch (err) {
       setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
+
+  /* ── mot de passe oublié ──
+     Un mot de passe perdu ne doit pas condamner le registre. La reprise passe
+     par l'adresse du compte ; le formulaire de saisie du code s'ouvre dans tous
+     les cas, y compris pour une adresse sans compte — le serveur répond la même
+     chose des deux côtés, et l'interface ne peut donc rien laisser filtrer. */
+
+  function ouvrirOubli() {
+    view.gateFormChosen = true;
+    $('gateSubtitle').textContent = 'Retrouver l’accès à votre compte';
+    $('forgotEmail').value = $('loginEmail').value.trim();
+    showGateForm('forgot');
+    $('forgotEmail').focus();
+  }
+
+  function revenirConnexion() {
+    view.gateFormChosen = true;
+    $('gateSubtitle').textContent = 'Connectez-vous pour accéder au registre';
+    showGateForm('login');
+    $('loginEmail').focus();
+  }
+
+  $('forgotBtn').addEventListener('click', ouvrirOubli);
+  $('backToLoginBtn').addEventListener('click', revenirConnexion);
+  $('resetBackBtn').addEventListener('click', revenirConnexion);
+
+  $('forgotForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const email = $('forgotEmail').value.trim();
+    setMsg('gateMsg', '', 'Envoi du code…');
+    try {
+      const res = await store.forgotPassword(email);
+      setMsg('gateMsg', '', '');
+      $('gateSubtitle').textContent = 'Choisissez un nouveau mot de passe';
+      $('resetEmail').textContent = email;
+      $('resetCode').value = '';
+      $('resetPassword').value = '';
+      $('resetHint').textContent =
+        'Le code est valable ' + (res.expiresInMinutes || 30) +
+        ' minutes. Pensez à regarder dans les indésirables.';
+      showGateForm('reset');
+      $('resetCode').focus();
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
+
+  $('resetForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const code = $('resetCode').value.replace(/\D/g, '');
+    if (code.length !== 6) {
+      setMsg('gateMsg', 'error', 'Le code compte six chiffres.');
+      return;
+    }
+    setMsg('gateMsg', '', 'Vérification…');
+    try {
+      await store.resetPassword($('resetEmail').textContent, code, $('resetPassword').value);
+      $('resetPassword').value = '';
+      setMsg('gateMsg', '', '');
+      $('gateSubtitle').textContent = 'Connectez-vous pour accéder au registre';
+      showGateForm('login');
+      afterLogin();
+      toast('Mot de passe changé. Vous êtes connecté·e.');
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+      $('resetCode').select();
     }
   });
 
@@ -2836,20 +2938,26 @@
     }
   }
 
+  /* Le retour s'affiche dans le bloc du mot de passe, pas au bas de la carte :
+     un refus qu'on ne voit pas ressemble à une application qui ne répond plus. */
   $('changePasswordBtn').addEventListener('click', async function () {
     const actuel = $('pwdCurrent').value;
     const suivant = $('pwdNext').value;
     if (!actuel || !suivant) {
-      setMsg('accountsMsg', 'error', 'Renseignez le mot de passe actuel et le nouveau.');
+      setMsg('passwordMsg', 'error', 'Renseignez le mot de passe actuel et le nouveau.');
       return;
     }
+    setMsg('passwordMsg', '', 'Changement…');
     try {
       await store.changePassword(actuel, suivant);
       $('pwdCurrent').value = '';
       $('pwdNext').value = '';
-      setMsg('accountsMsg', 'ok', 'Mot de passe changé. Les autres sessions ont été fermées.');
+      setMsg('passwordMsg', 'ok', 'Mot de passe changé. Les autres sessions ont été fermées.');
     } catch (err) {
-      setMsg('accountsMsg', 'error', esc(err.message));
+      // La session reste ouverte : seule la valeur saisie était fausse.
+      setMsg('passwordMsg', 'error', esc(err.message));
+      $('pwdCurrent').focus();
+      $('pwdCurrent').select();
     }
   });
 
@@ -2910,10 +3018,17 @@
 
     /* Quand une nouvelle version prend le contrôle, la page affichée vient
        encore de l'ancienne : sans ce rechargement, il faudrait recharger deux
-       fois pour voir la mise à jour. Le drapeau interdit toute boucle. */
+       fois pour voir la mise à jour. Le drapeau interdit toute boucle.
+
+       Mais à la toute première visite, il n'y a pas d'ancienne version : le
+       service worker s'installe et prend la main dans la foulée. Recharger là
+       n'apporte rien et vide le formulaire en cours de saisie — une inscription
+       tapée pendant ces deux secondes disparaissait. On ne recharge donc que
+       s'il y avait déjà un contrôleur au chargement de la page. */
+    const premiereInstallation = !root.navigator.serviceWorker.controller;
     let reloading = false;
     root.navigator.serviceWorker.addEventListener('controllerchange', function () {
-      if (reloading) return;
+      if (reloading || premiereInstallation) return;
       reloading = true;
       root.location.reload();
     });

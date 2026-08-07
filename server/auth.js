@@ -85,6 +85,10 @@ function newPendingSignup(input, code) {
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
+    // Deux sortes d'attentes partagent la même liste : la création d'un compte
+    // et la réinitialisation d'un mot de passe oublié. Les entrées antérieures
+    // à cette distinction n'ont pas de champ « kind » : ce sont des inscriptions.
+    kind: 'signup',
     name: input.name,
     email: input.email,
     password: input.password, // déjà haché par l'appelant
@@ -96,6 +100,39 @@ function newPendingSignup(input, code) {
     expiresAt: new Date(now + CODE_MINUTES * 60 * 1000).toISOString(),
     lastSentAt: new Date(now).toISOString()
   };
+}
+
+/* Demande de réinitialisation. Le code vaut moins longtemps qu'un code
+   d'inscription : il ouvre l'accès à un compte existant, pas à un compte vide. */
+const RESET_MINUTES = 30;
+
+function newPendingReset(userId, email, code) {
+  const now = Date.now();
+  return {
+    id: crypto.randomUUID(),
+    kind: 'reset',
+    userId: userId,
+    email: email,
+    codeHash: hashPassword(code),
+    attempts: 0,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + RESET_MINUTES * 60 * 1000).toISOString(),
+    lastSentAt: new Date(now).toISOString()
+  };
+}
+
+function pendingKind(pending) {
+  return (pending && pending.kind) || 'signup';
+}
+
+/** Retrouve l'attente en cours pour une adresse, d'une sorte donnée. */
+function findPending(db, email, kind) {
+  const wanted = util.normalize(email);
+  return (
+    (db.data.pending || []).find(function (p) {
+      return util.normalize(p.email) === wanted && pendingKind(p) === (kind || 'signup');
+    }) || null
+  );
 }
 
 function pendingExpired(pending) {
@@ -244,8 +281,12 @@ module.exports = {
   CODE_MINUTES: CODE_MINUTES,
   CODE_MAX_ATTEMPTS: CODE_MAX_ATTEMPTS,
   RESEND_SECONDS: RESEND_SECONDS,
+  RESET_MINUTES: RESET_MINUTES,
   generateCode: generateCode,
   newPendingSignup: newPendingSignup,
+  newPendingReset: newPendingReset,
+  pendingKind: pendingKind,
+  findPending: findPending,
   pendingExpired: pendingExpired,
   secondsBeforeResend: secondsBeforeResend,
   hashPassword: hashPassword,

@@ -310,8 +310,30 @@ test('changer son mot de passe ferme les autres sessions', function () {
 test('un mot de passe actuel faux ou un nouveau trop faible sont refusés', function () {
   return withServer(async function (t) {
     await t.call('POST', '/api/auth/signup', COMPTE);
-    assert.equal((await t.call('PUT', '/api/auth/password', { current: 'faux', next: 'assez-long-pourtant' })).status, 401);
+
+    /* 403 et non 401 : la session reste valide. Un 401 est réservé à
+       « votre session a expiré » — le client s'en sert pour renvoyer à l'écran
+       de connexion, et une faute de frappe ne doit pas déconnecter. */
+    const faux = await t.call('PUT', '/api/auth/password', { current: 'faux', next: 'assez-long-pourtant' });
+    assert.equal(faux.status, 403);
+    assert.equal(faux.body.code, undefined, 'aucun code de session : le client garde la session');
     assert.equal((await t.call('PUT', '/api/auth/password', { current: COMPTE.password, next: 'court' })).status, 400);
+
+    // La session survit : on peut enchaîner avec le bon mot de passe.
+    assert.equal((await t.call('GET', '/api/contacts')).status, 200);
+    assert.equal(
+      (await t.call('PUT', '/api/auth/password', { current: COMPTE.password, next: 'le-bon-cette-fois' })).status,
+      200
+    );
+  });
+});
+
+test('une session absente répond 401 avec le code « session »', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', COMPTE);
+    const res = await fetch(t.base + '/api/contacts', { headers: { Cookie: 'bdc_session=invente' } });
+    assert.equal(res.status, 401);
+    assert.equal((await res.json()).code, 'session');
   });
 });
 

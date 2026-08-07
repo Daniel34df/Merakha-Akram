@@ -41,6 +41,44 @@
       <label for="loginPassword">Mot de passe</label>
       <input type="password" id="loginPassword" autocomplete="current-password" required>
       <button class="btn" type="submit">Se connecter</button>
+      <div class="row-actions" style="margin-top:12px;">
+        <button type="button" class="link-btn" id="forgotBtn">Mot de passe oublié ?</button>
+      </div>
+    </form>
+
+    <form id="forgotForm" class="gate-form" hidden>
+      <p class="verify-lead">
+        Indiquez l'adresse de votre compte : un code à six chiffres vous y sera envoyé.
+        Votre mot de passe actuel continue de fonctionner tant que vous ne l'avez pas remplacé.
+      </p>
+      <label for="forgotEmail">Courriel du compte</label>
+      <input type="email" id="forgotEmail" autocomplete="username" required>
+      <button class="btn" type="submit">Envoyer le code</button>
+      <div class="row-actions" style="margin-top:12px;">
+        <button type="button" class="link-btn" id="backToLoginBtn">Revenir à la connexion</button>
+      </div>
+      <p class="hint">
+        Si le bureau n'a pas de serveur de courriel, la personne qui administre le poste
+        peut rendre l'accès avec la commande <code>npm run motdepasse</code>.
+      </p>
+    </form>
+
+    <form id="resetForm" class="gate-form" hidden>
+      <p class="verify-lead">
+        Si un compte existe pour <strong id="resetEmail"></strong>, un code vient d'y être envoyé.
+        Saisissez-le et choisissez votre nouveau mot de passe.
+      </p>
+      <label for="resetCode">Code reçu par courriel</label>
+      <input type="text" id="resetCode" inputmode="numeric" autocomplete="one-time-code"
+             maxlength="6" pattern="[0-9]*" class="code-input" required>
+      <label for="resetPassword">Nouveau mot de passe</label>
+      <input type="password" id="resetPassword" autocomplete="new-password" required>
+      <p class="hint">Au moins 10 caractères. Toutes les sessions ouvertes seront fermées.</p>
+      <button class="btn" type="submit">Changer le mot de passe</button>
+      <div class="row-actions" style="margin-top:12px;">
+        <button type="button" class="link-btn" id="resetBackBtn">Revenir à la connexion</button>
+      </div>
+      <p class="hint" id="resetHint"></p>
     </form>
 
     <form id="signupForm" class="gate-form" hidden>
@@ -469,6 +507,7 @@
         <input type="password" id="pwdNext" autocomplete="new-password">
         <p class="hint">Au moins 10 caractères. Les autres sessions ouvertes seront fermées.</p>
         <button class="btn" id="changePasswordBtn">Changer</button>
+        <div id="passwordMsg"></div>
       </details>
 
       <div id="usersList"></div>
