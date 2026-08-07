@@ -17,7 +17,7 @@
    Changer CACHE_VERSION invalide l'ancien cache au prochain chargement. */
 'use strict';
 
-const CACHE_VERSION = 'bdc-v3';
+const CACHE_VERSION = 'bdc-v4';
 
 /** Le code doit toujours être cohérent avec lui-même : réseau d'abord. */
 function isCode(url) {

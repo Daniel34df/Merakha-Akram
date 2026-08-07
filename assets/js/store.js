@@ -260,6 +260,33 @@
     return entree;
   }
 
+  /** Consulte un courrier par son code, sans rien modifier. */
+  async function lookupByCode(code) {
+    if (state.mode === 'serveur') return api('/history/by-code/' + encodeURIComponent(code));
+
+    const record = state.history.find(function (h) {
+      return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
+    });
+    if (!record) {
+      const err = new Error('Aucun courrier en attente avec ce code');
+      err.status = 404;
+      throw err;
+    }
+    const contact =
+      state.contacts.find(function (c) {
+        return c.id === record.contactId || util.normalize(c.email) === util.normalize(record.email);
+      }) || null;
+    const autres = state.history.filter(function (h) {
+      return (
+        h.id !== record.id &&
+        !h.pickedUpAt &&
+        !h.closedAt &&
+        util.normalize(h.email) === util.normalize(record.email)
+      );
+    });
+    return { record: record, contact: contact, autres: autres };
+  }
+
   /** Remise au guichet par le code présenté par le destinataire. */
   async function pickupByCode(code, signature) {
     if (state.mode !== 'serveur') {
@@ -268,6 +295,8 @@
       });
       if (!entree) throw new Error('Aucun courrier en attente avec ce code');
       entree.pickedUpAt = new Date().toISOString();
+      entree.pickedUpByCode = true;
+      entree.signature = signature || null;
       persistLocal();
       emit();
       return entree;
@@ -576,6 +605,7 @@
     disconnectMailbox: disconnectMailbox,
     setPickedUp: setPickedUp,
     pickupByCode: pickupByCode,
+    lookupByCode: lookupByCode,
     closeMail: closeMail,
     relancer: relancer,
     serverBackup: serverBackup,

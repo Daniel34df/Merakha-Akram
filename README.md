@@ -197,9 +197,9 @@ entre **Par nom** et **Par n° de boîte**. En mode boîte, seul le numéro rép
 on tape ce qu'on lit sur l'enveloppe, sans penser au sélecteur.
 
 **Remise** — un onglet à part, séparé du guichet : d'un côté le courrier qui
-arrive, de l'autre celui qui repart. On y saisit le code de retrait, ou on
-retrouve le courrier dans la liste des courriers en attente, filtrable par nom
-ou par boîte.
+arrive, de l'autre celui qui repart. On y saisit le code de retrait — la fiche
+du courrier s'affiche pour vérification avant de valider — ou on retrouve le
+courrier dans la liste des courriers en attente, filtrable par nom ou par boîte.
 
 **Registre** — ajout, modification et suppression des destinataires (avec leur
 numéro de boîte), filtre, import et export. Un courriel déjà présent est refusé, avec le nom sous
@@ -229,6 +229,15 @@ Le destinataire le présente au guichet, l'agent le saisit dans *Remise d'un
 courrier*, et le courrier est marqué récupéré automatiquement. Plus d'oubli de
 cochage, et une trace exacte de ce qui a été remis. Les codes sont uniques parmi
 les courriers en attente.
+
+Le code **n'emporte pas la remise** : il ouvre d'abord une **fiche de
+vérification** — destinataire, numéro de boîte, type de courrier, date de
+réception et jours d'attente, adresse prévenue, nombre de relances, et l'absence
+éventuelle de la personne. L'agent voit ce qu'il s'apprête à remettre avant de
+valider ; c'est ce coup d'œil qui évite de donner l'enveloppe à la mauvaise
+personne. Si le destinataire a **d'autres courriers en attente**, ils sont
+listés et cochés d'avance : un seul passage au guichet suffit. *Confirmer la
+remise* ouvre le pavé de signature ; *Annuler* n'a rien changé.
 
 **Recherche tolérante** — quand aucun nom ne correspond exactement, l'application
 propose les plus proches : « Tremblet » suggère « Élodie Tremblay ». Les noms
@@ -423,6 +432,8 @@ autre interface ou un import automatisé.
 | `GET` `POST` | `/api/contacts` | lister / ajouter un destinataire |
 | `PUT` `DELETE` | `/api/contacts/:id` | modifier / supprimer |
 | `GET` `POST` `DELETE` | `/api/history` | historique : lire, ajouter, vider |
+| `GET` | `/api/history/by-code/:code` | fiche du courrier, sans rien modifier |
+| `POST` | `/api/history/pickup-by-code` | remise après vérification |
 | `GET` `PUT` | `/api/settings` | gabarit du message |
 | `POST` | `/api/notify` | envoyer un courriel et le consigner |
 

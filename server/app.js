@@ -928,6 +928,36 @@ async function handleApi(req, res, ctx, pathname) {
 
   /* --- retrait par code --- */
 
+  const codeMatch = pathname.match(/^\/api\/history\/by-code\/(\d{4})$/);
+  if (codeMatch && method === 'GET') {
+    /* Consultation seule : l'agent doit voir ce qu'il s'apprête à remettre —
+       à qui, quelle boîte, depuis combien de temps — avant de valider. */
+    const code = codeMatch[1];
+    const candidats = (db.data.history || []).filter(function (h) {
+      return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
+    });
+    if (candidats.length === 0) {
+      throw Object.assign(new Error('Aucun courrier en attente avec ce code'), { status: 404 });
+    }
+    if (candidats.length > 1) {
+      throw Object.assign(new Error('Plusieurs courriers portent ce code — passez par la liste'), { status: 409 });
+    }
+    const record = candidats[0];
+    const contact = (db.data.contacts || []).find(function (c) {
+      return c.id === record.contactId || util.normalize(c.email) === util.normalize(record.email);
+    });
+    // Les autres courriers de la même personne : autant tout remettre d'un coup.
+    const autres = (db.data.history || []).filter(function (h) {
+      return (
+        h.id !== record.id &&
+        !h.pickedUpAt &&
+        !h.closedAt &&
+        util.normalize(h.email) === util.normalize(record.email)
+      );
+    });
+    return sendJson(res, 200, { record: record, contact: contact || null, autres: autres });
+  }
+
   if (pathname === '/api/history/pickup-by-code' && method === 'POST') {
     const body = await readBody(req);
     const code = String(body.code || '').replace(/\D/g, '');

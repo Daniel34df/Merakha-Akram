@@ -420,6 +420,87 @@ test('le code présenté au guichet marque le bon courrier récupéré', functio
   });
 });
 
+test('la consultation par code renseigne l’agent sans rien modifier', function () {
+  return withServer(async function (t) {
+    const contact = (
+      await t.call('POST', '/api/contacts', { name: 'Ana Blin', email: 'ana@ex.com', box: 'B-12' })
+    ).body;
+    const envoi = await t.call('POST', '/api/notify', {
+      contactId: contact.id,
+      name: 'Ana Blin',
+      email: 'ana@ex.com',
+      type: 'colis'
+    });
+    const code = envoi.body.record.pickupCode;
+    // Un second courrier pour la même personne : il doit apparaître comme « autre ».
+    await t.call('POST', '/api/notify', {
+      contactId: contact.id,
+      name: 'Ana Blin',
+      email: 'ana@ex.com',
+      type: 'recommande'
+    });
+    // Et un courrier d'une autre personne, qui n'a rien à faire dans la fiche.
+    await t.call('POST', '/api/notify', { name: 'Bo', email: 'bo@ex.com' });
+
+    const fiche = await t.call('GET', '/api/history/by-code/' + code);
+    assert.equal(fiche.status, 200);
+    assert.equal(fiche.body.record.pickupCode, code);
+    assert.equal(fiche.body.record.type, 'colis');
+    assert.equal(fiche.body.record.name, 'Ana Blin');
+    assert.equal(fiche.body.contact.box, 'B-12', 'le numéro de boîte accompagne la fiche');
+    assert.equal(fiche.body.autres.length, 1, 'seuls les courriers en attente de la même personne');
+    assert.equal(fiche.body.autres[0].type, 'recommande');
+
+    // Consulter n'est pas remettre : le courrier reste en attente.
+    const enBase = t.db.data.history.find(function (h) {
+      return h.pickupCode === code;
+    });
+    assert.ok(!enBase.pickedUpAt, 'le courrier reste en attente après une simple consultation');
+    const journal = await t.call('GET', '/api/journal');
+    assert.equal(
+      journal.body.entrees.filter(function (e) {
+        return e.action === 'courrier remis';
+      }).length,
+      0
+    );
+
+    // Un code sans courrier en attente : 404, et un code mal formé n'atteint pas la route.
+    const utilises = new Set(
+      t.db.data.history.map(function (h) {
+        return h.pickupCode;
+      })
+    );
+    let libre = '0000';
+    for (let i = 0; utilises.has(libre); i++) libre = String(i).padStart(4, '0');
+    assert.equal((await t.call('GET', '/api/history/by-code/' + libre)).status, 404);
+    assert.equal((await t.call('GET', '/api/history/by-code/12')).status, 404);
+
+    // Une fois le courrier remis, son code ne renvoie plus de fiche.
+    await t.call('POST', '/api/history/pickup-by-code', { code: code });
+    assert.equal((await t.call('GET', '/api/history/by-code/' + code)).status, 404);
+  });
+});
+
+test('deux courriers portant le même code arrêtent la remise plutôt que d’en deviner un', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    const code = envoi.body.record.pickupCode;
+    await t.db.write(function (data) {
+      data.history.push({
+        id: 'doublon',
+        name: 'Bo',
+        email: 'bo@ex.com',
+        date: new Date().toISOString(),
+        status: 'envoyé',
+        pickupCode: code
+      });
+    });
+
+    assert.equal((await t.call('GET', '/api/history/by-code/' + code)).status, 409);
+    assert.equal((await t.call('POST', '/api/history/pickup-by-code', { code: code })).status, 409);
+  });
+});
+
 /* ---------- récapitulatif ---------- */
 
 test('le récapitulatif compte la période et liste les plus anciens', function () {

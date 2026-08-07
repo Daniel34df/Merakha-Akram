@@ -524,42 +524,176 @@
 
   /* ═════════════ remise par code ═════════════ */
 
-  async function remettreParCode() {
-    const code = $('pickupCode').value.replace(/\D/g, '');
-    if (code.length !== 4) {
-      setMsg('pickupMsg', 'error', 'Le code compte quatre chiffres.');
-      return;
+  /* Un code saisi n'emporte pas la remise : il ouvre d'abord une fiche de
+     vérification. L'agent voit à qui il s'apprête à remettre, quelle boîte,
+     quel type de courrier et depuis quand il attend — c'est ce contrôle qui
+     évite de donner la lettre à la mauvaise personne. La remise n'a lieu
+     qu'après confirmation explicite. */
+
+  function effacerFiche() {
+    $('pickupDetail').innerHTML = '';
+  }
+
+  function ligneFiche(cle, valeur, classe) {
+    return (
+      '<div><dt>' +
+      esc(cle) +
+      '</dt><dd' +
+      (classe ? ' class="' + classe + '"' : '') +
+      '>' +
+      esc(valeur) +
+      '</dd></div>'
+    );
+  }
+
+  /** Affiche la fiche du courrier trouvé et attend la décision de l'agent. */
+  function afficherFicheRetrait(fiche) {
+    const record = fiche.record;
+    const contact = fiche.contact || {};
+    const autres = fiche.autres || [];
+    const jours = joursDepuis(record.date);
+    const type = util.typeCourrier(record.type);
+    const abs = contact.email ? util.presence(contact) : { etat: 'present', message: '' };
+
+    const lignes = [
+      ligneFiche('Destinataire', record.name),
+      ligneFiche('Numéro de boîte', contact.box || '—', 'box-cell'),
+      ligneFiche('Type de courrier', type.label),
+      ligneFiche(
+        'Reçu le',
+        util.formatDateTime(record.date) +
+          (jours === 0 ? ' (aujourd’hui)' : ' (' + jours + ' jour' + (jours > 1 ? 's' : '') + ')')
+      ),
+      ligneFiche('Courriel prévenu', record.email),
+      ligneFiche(
+        'Relances',
+        record.reminderCount > 0
+          ? record.reminderCount + ' relance(s) envoyée(s)'
+          : 'aucune'
+      )
+    ];
+    if (record.flaggedAt) {
+      lignes.push(ligneFiche('Signalé', 'Courrier du dossier à traiter — ' + (record.flagReason || 'non retiré')));
     }
-    try {
-      const apercu = S.history.find(function (h) {
-        return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
+    if (abs.etat !== 'present') {
+      lignes.push(ligneFiche('Présence', abs.message));
+    }
+
+    $('pickupDetail').innerHTML =
+      '<div class="fiche-retrait" id="ficheRetrait">' +
+      '<div class="fiche-retrait-tete">' +
+      '<span class="code-pill">' + esc(record.pickupCode || '----') + '</span>' +
+      '<strong>' + esc(record.name) + '</strong>' +
+      (contact.box ? '<span class="box-cell">boîte ' + esc(contact.box) + '</span>' : '') +
+      '</div>' +
+      '<dl class="status-list">' + lignes.join('') + '</dl>' +
+      (autres.length
+        ? '<div class="fiche-autres">' +
+          '<p class="hint">Cette personne a ' +
+          autres.length +
+          ' autre' + (autres.length > 1 ? 's' : '') + ' courrier' + (autres.length > 1 ? 's' : '') +
+          ' en attente. Cochez ce que vous remettez en même temps.</p>' +
+          autres
+            .map(function (h) {
+              const j = joursDepuis(h.date);
+              return (
+                '<label class="check-row"><input type="checkbox" data-aussi="' +
+                esc(h.id) +
+                '" checked> ' +
+                esc(util.typeCourrier(h.type).label) +
+                ' — reçu le ' +
+                esc(util.formatDateTime(h.date)) +
+                ' (' + (j === 0 ? 'aujourd’hui' : j + ' j') + ')' +
+                '</label>'
+              );
+            })
+            .join('') +
+          '</div>'
+        : '') +
+      '<div class="fiche-retrait-actions">' +
+      '<button class="btn" id="ficheConfirmer">Confirmer la remise</button>' +
+      '<button class="btn ghost" id="ficheAnnuler">Annuler</button>' +
+      '</div>' +
+      '</div>';
+
+    $('ficheAnnuler').addEventListener('click', function () {
+      effacerFiche();
+      setMsg('pickupMsg', '', '');
+      $('pickupCode').value = '';
+      $('pickupCode').focus();
+    });
+    $('ficheConfirmer').addEventListener('click', function () {
+      confirmerRemise(fiche);
+    });
+    // La touche Entrée valide : au guichet, on ne quitte pas le clavier.
+    $('ficheConfirmer').focus();
+  }
+
+  /** Signature puis remise effective, y compris les courriers cochés en plus. */
+  async function confirmerRemise(fiche) {
+    const bouton = $('ficheConfirmer');
+    const aussi = Array.prototype.slice
+      .call($('pickupDetail').querySelectorAll('input[data-aussi]:checked'))
+      .map(function (input) {
+        return input.dataset.aussi;
       });
-      const signature = await demanderSignature(apercu ? apercu.name : 'ce destinataire');
-      if (signature === null) return; // annulé
-      const entree = await store.pickupByCode(code, signature);
+
+    const signature = await demanderSignature(fiche.record.name);
+    if (signature === null) return; // annulé : la fiche reste affichée
+
+    if (bouton) bouton.disabled = true;
+    try {
+      const entree = await store.pickupByCode(fiche.record.pickupCode, signature);
+      for (const id of aussi) {
+        await store.setPickedUp(id, true, signature);
+      }
+      effacerFiche();
       $('pickupCode').value = '';
       stamp('Remis', entree.name);
       $('pickupCode').focus();
       setMsg(
         'pickupMsg',
         'ok',
-        'Courrier remis à <strong>' + esc(entree.name) + '</strong> — marqué récupéré.'
+        'Courrier remis à <strong>' +
+          esc(entree.name) +
+          '</strong> — marqué récupéré.' +
+          (aussi.length ? ' ' + aussi.length + ' autre(s) courrier(s) remis également.' : '')
       );
+    } catch (err) {
+      if (bouton) bouton.disabled = false;
+      setMsg('pickupMsg', 'error', esc(err.message));
+    }
+  }
+
+  /** Cherche le courrier correspondant au code et ouvre sa fiche. */
+  async function chercherParCode() {
+    const code = $('pickupCode').value.replace(/\D/g, '');
+    effacerFiche();
+    if (code.length !== 4) {
+      setMsg('pickupMsg', 'error', 'Le code compte quatre chiffres.');
+      return;
+    }
+    setMsg('pickupMsg', 'info', 'Recherche du courrier…');
+    try {
+      const fiche = await store.lookupByCode(code);
+      setMsg('pickupMsg', '', '');
+      afficherFicheRetrait(fiche);
     } catch (err) {
       setMsg('pickupMsg', 'error', esc(err.message));
       $('pickupCode').select();
     }
   }
 
-  $('pickupCodeBtn').addEventListener('click', remettreParCode);
+  $('pickupCodeBtn').addEventListener('click', chercherParCode);
   $('pickupCode').addEventListener('input', function (e) {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
-    if (e.target.value.length === 4) remettreParCode();
+    if (e.target.value.length !== 4) effacerFiche();
+    if (e.target.value.length === 4) chercherParCode();
   });
   $('pickupCode').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      remettreParCode();
+      chercherParCode();
     }
   });
 

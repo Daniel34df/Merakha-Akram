@@ -797,6 +797,58 @@ select.filter-input{
 .retrait-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .retrait-row .code-input{width:160px;margin-bottom:0;}
 
+/* ---------- fiche de vérification avant remise ---------- */
+/* Le bord laiton et l'apparition franche disent : « regardez ceci avant de
+   valider ». C'est le seul écran qui s'interpose entre le code et la remise. */
+.fiche-retrait{
+  border:1px solid var(--line);
+  border-left:4px solid var(--brass);
+  background:var(--paper-dark);
+  padding:16px 18px;
+  margin-top:4px;
+  animation:msgIn 0.25s ease;
+}
+.fiche-retrait-tete{
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:14px;
+  padding-bottom:12px;
+  border-bottom:1px solid var(--line);
+}
+.fiche-retrait-tete strong{font-size:19px;font-family:var(--typewriter);font-weight:400;}
+.code-pill{
+  font-family:var(--mono);
+  font-size:16px;
+  letter-spacing:4px;
+  background:var(--navy);
+  color:var(--paper);
+  padding:4px 10px 4px 14px;
+}
+.fiche-retrait .status-list{margin-bottom:0;}
+.fiche-retrait .status-list div{border-bottom-color:var(--line);}
+.box-cell{font-family:var(--mono);font-size:12.5px;color:var(--slate);white-space:nowrap;}
+.fiche-autres{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
+.fiche-autres .hint{margin-bottom:8px;}
+.check-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  /* Une ligne à lire, pas une étiquette de champ : on annule la casse et la
+     graisse des libellés de formulaire. */
+  font-family:var(--serif);
+  font-size:13.5px;
+  text-transform:none;
+  letter-spacing:0;
+  color:var(--navy);
+  margin-bottom:0;
+  padding:5px 0;
+  cursor:pointer;
+}
+.check-row input{margin:0;width:auto;}
+.fiche-retrait-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+
 /* ---------- fiche d'un destinataire ---------- */
 #ficheDialog{max-width:640px;width:92vw;}
 .fiche h3{
