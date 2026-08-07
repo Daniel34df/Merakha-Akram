@@ -425,6 +425,29 @@ son échéance et son état, filtrable par nom ou par boîte, exportable en Exce
 imprimable. Les deux listes suivantes ne montrent que ce qui cloche ; celle-ci
 montre tout le monde. Un agent rattaché à une antenne n'y voit que la sienne.
 
+**Imprimer l'attestation.** C'est le document que la personne présente au
+guichet de la CAF, de France Travail ou de la préfecture. Il s'imprime depuis
+trois endroits : le message de confirmation, juste après l'ouverture du dossier
+— c'est là que la personne est devant vous ; le bouton *Attestation* de chaque
+ligne du registre ; et la fiche du destinataire.
+
+L'attestation reprend l'en-tête de l'organisme, l'identité de la personne, la
+date d'élection de domicile, l'adresse à laquelle son courrier lui est adressé,
+et la date jusqu'à laquelle elle vaut. Renseignez une fois *Réglages →
+Organisme domiciliataire* : adresse, ville, agrément préfectoral. Avec plusieurs
+antennes, l'adresse de l'antenne du dossier est utilisée si elle est renseignée.
+
+Les mentions manquantes deviennent des traits à compléter à la main : mieux vaut
+une attestation à finir au stylo qu'un refus d'imprimer un jour d'affluence.
+
+**Ce qui ne s'imprime pas.** Une attestation n'est jamais délivrée pour une
+domiciliation **close**, ni pour une attestation **échue** — l'application le
+dit et ne sort rien. Un papier qui contredirait le registre enverrait quelqu'un
+se faire refuser à un guichet, avec un document de notre main à l'appui.
+
+L'application n'imite aucun formulaire officiel : c'est l'attestation de
+l'organisme, sous son propre en-tête.
+
 **Attestations à renouveler.** Une attestation d'élection de domicile a une
 durée de validité — un an par défaut. Périmée, elle coupe l'accès aux droits,
 souvent sans que personne ne s'en aperçoive avant le refus d'un guichet. On

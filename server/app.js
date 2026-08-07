@@ -329,6 +329,14 @@ function droitManquant(droit) {
   });
 }
 
+/* Un champ de texte des réglages : absent de la requête = inchangé, présent =
+   nettoyé et borné. Sans la borne, un copier-coller malheureux ferait grossir
+   le registre sans que personne ne s'en aperçoive. */
+function champTexte(valeur, actuelle, maxi) {
+  if (valeur === undefined) return String(actuelle || '');
+  return String(valeur || '').replace(/\s+/g, ' ').trim().slice(0, maxi || 200);
+}
+
 function exigerDroit(user, droit) {
   /* `user` n'est nul que sur un serveur sans aucun compte : le garde-fou
      précédent a déjà renvoyé 401 dès qu'un compte existe. Ce cas est le
@@ -1841,6 +1849,10 @@ async function handleApi(req, res, ctx, pathname) {
         subject: subject,
         body: messageBody,
         officeName: String(body.officeName || DEFAULT_SETTINGS.officeName).trim(),
+        // Identité de l'organisme, portée par l'attestation d'élection de domicile.
+        officeAdresse: champTexte(body.officeAdresse, db.data.settings.officeAdresse, 200),
+        officeVille: champTexte(body.officeVille, db.data.settings.officeVille, 80),
+        officeAgrement: champTexte(body.officeAgrement, db.data.settings.officeAgrement, 200),
         from: from,
         cc: util.formatAddressList(cc.entries),
         bcc: util.formatAddressList(bcc.entries),

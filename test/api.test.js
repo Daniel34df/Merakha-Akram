@@ -205,6 +205,48 @@ test('une adresse en copie ou un expéditeur invalides sont refusés (400)', fun
   });
 });
 
+test('l’identité de l’organisme se conserve pour les attestations', function () {
+  return withServer(async function (t) {
+    const enregistre = await t.call('PUT', '/api/settings', {
+      subject: 'S',
+      body: 'B',
+      officeName: 'Association Solidarité',
+      officeAdresse: '  12 rue des Lilas,\n 75011 Paris ',
+      officeVille: 'Paris',
+      officeAgrement: 'Agrément n° 2024-137'
+    });
+    assert.equal(enregistre.status, 200);
+    // Les blancs et les retours à la ligne sont ramenés à une seule ligne.
+    assert.equal(enregistre.body.officeAdresse, '12 rue des Lilas, 75011 Paris');
+    assert.equal(enregistre.body.officeVille, 'Paris');
+    assert.equal(enregistre.body.officeAgrement, 'Agrément n° 2024-137');
+
+    /* Un enregistrement qui ne parle pas de l'organisme ne doit pas l'effacer :
+       les réglages du message se sauvegardent de leur côté, et perdre l'adresse
+       de l'organisme se verrait au prochain guichet, pas ici. */
+    const ailleurs = await t.call('PUT', '/api/settings', { subject: 'S2', body: 'B2' });
+    assert.equal(ailleurs.body.officeAdresse, '12 rue des Lilas, 75011 Paris');
+    assert.equal(ailleurs.body.officeAgrement, 'Agrément n° 2024-137');
+
+    // Vider explicitement, en revanche, vide bien.
+    const vide = await t.call('PUT', '/api/settings', { subject: 'S', body: 'B', officeAdresse: '' });
+    assert.equal(vide.body.officeAdresse, '');
+  });
+});
+
+test('un champ d’organisme démesuré est borné', function () {
+  return withServer(async function (t) {
+    const res = await t.call('PUT', '/api/settings', {
+      subject: 'S',
+      body: 'B',
+      officeAdresse: 'a'.repeat(5000),
+      officeVille: 'b'.repeat(5000)
+    });
+    assert.equal(res.body.officeAdresse.length, 200);
+    assert.equal(res.body.officeVille.length, 80);
+  });
+});
+
 test('des réglages vides sont refusés', function () {
   return withServer(async function (t) {
     assert.equal((await t.call('PUT', '/api/settings', { subject: '', body: 'x' })).status, 400);

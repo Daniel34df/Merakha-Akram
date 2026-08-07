@@ -710,6 +710,36 @@
       <div id="mailboxMsg"></div>
     </div>
 
+    <div class="card" id="organismeCard">
+      <h2>Organisme domiciliataire</h2>
+      <p class="hint" style="margin-bottom:14px;">
+        Ce qui figure en tête des <strong>attestations d'élection de domicile</strong> :
+        c'est l'organisme qui atteste, il doit donc dire où il est et sous quel agrément il
+        domicilie. Laissé vide, l'attestation s'imprime quand même, avec des traits à
+        compléter à la main.
+      </p>
+      <label for="setAdresse">Adresse de l'organisme</label>
+      <input type="text" id="setAdresse" autocomplete="off" placeholder="12 rue des Lilas, 75011 Paris">
+      <p class="hint" style="margin:-10px 0 16px;">
+        C'est l'adresse que la personne domiciliée donnera aux administrations. Avec
+        plusieurs antennes, celle de l'antenne du dossier est utilisée si elle est renseignée.
+      </p>
+      <div class="copies-grid">
+        <div>
+          <label for="setVille">Ville — pour la mention « Fait à… »</label>
+          <input type="text" id="setVille" autocomplete="off" placeholder="Paris">
+        </div>
+        <div>
+          <label for="setAgrement">Agrément préfectoral</label>
+          <input type="text" id="setAgrement" autocomplete="off" placeholder="Agrément n° 2024-137 du 3 mars 2024">
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn" id="saveOrganismeBtn">Enregistrer</button>
+      </div>
+      <div id="organismeMsg"></div>
+    </div>
+
     <div class="card" id="backupCard">
       <h2>Sauvegarde du registre</h2>
       <p class="hint" style="margin-bottom:14px;">
@@ -888,6 +918,7 @@
     <h3 id="ficheTitre">Destinataire</h3>
     <div id="ficheCorps"></div>
     <div class="row-actions end" style="margin-top:18px;">
+      <button class="btn ghost" id="ficheAttestationBtn" hidden>Imprimer l'attestation</button>
       <button class="btn ghost" id="ficheFermer">Fermer</button>
     </div>
   </div>

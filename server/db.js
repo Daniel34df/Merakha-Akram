@@ -14,6 +14,13 @@ const DEFAULT_SETTINGS = {
     'Vous avez un courrier à récupérer à la réception.\n\n' +
     'Merci de passer le chercher dès que possible.',
   officeName: 'Bureau du Courrier',
+  /* De quoi rédiger une attestation d'élection de domicile : c'est l'organisme
+     qui atteste, il doit donc se nommer, dire où il est et sous quel agrément
+     il domicilie. Vides, l'attestation s'imprime quand même — avec des traits
+     à compléter à la main plutôt qu'un refus d'imprimer. */
+  officeAdresse: '',
+  officeVille: '',
+  officeAgrement: '',
   from: '',
   cc: '',
   bcc: '',

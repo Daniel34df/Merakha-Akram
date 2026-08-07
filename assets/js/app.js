@@ -1612,9 +1612,21 @@
           '</tbody></table></div>'
         : '<p class="hint">Aucun courrier reçu pour l’instant.</p>');
 
+    /* L'attestation ne se propose que pour une domiciliation en cours : sur la
+       fiche de quelqu'un qui n'est pas domicilié, le bouton n'aurait aucun
+       sens. */
+    const boutonAttestation = $('ficheAttestationBtn');
+    boutonAttestation.hidden = !(c.domicilie && !c.domiciliationCloseLe);
+    boutonAttestation.dataset.contact = c.id;
+
     const dlg = $('ficheDialog');
     if (typeof dlg.showModal === 'function') dlg.showModal();
   }
+
+  $('ficheAttestationBtn').addEventListener('click', function (e) {
+    $('ficheDialog').close();
+    imprimerAttestation(e.currentTarget.dataset.contact);
+  });
 
   $('ficheFermer').addEventListener('click', function () {
     $('ficheDialog').close();
@@ -1937,7 +1949,11 @@
           (c.box ? ' Boîte ' + esc(c.box) + '.' : '') +
           (c.email
             ? ' Les avis de courrier partiront à ' + esc(c.email) + '.'
-            : ' <em>Sans adresse électronique : à prévenir par téléphone.</em>')
+            : ' <em>Sans adresse électronique : à prévenir par téléphone.</em>') +
+          /* C'est maintenant que la personne est devant le guichet, et c'est
+             l'attestation qu'elle est venue chercher. La proposer plus tard,
+             c'est la faire revenir. */
+          '<br><button class="link-btn" data-attestation="' + esc(c.id) + '">Imprimer son attestation</button>'
       );
       renderAll();
     } catch (err) {
@@ -1946,6 +1962,20 @@
       btn.disabled = false;
     }
   });
+
+  /* Effacer l'application, imprimer la feuille, tout remettre en place. Le
+     même geste pour la feuille de casier, la fiche d'élection de domicile,
+     l'attestation et la liste des domiciliés. */
+  function imprimerFeuille(html) {
+    $('feuilleCasier').innerHTML = html;
+    $('feuilleCasier').hidden = false;
+    document.body.classList.add('impression-casier');
+    root.print();
+    setTimeout(function () {
+      document.body.classList.remove('impression-casier');
+      $('feuilleCasier').hidden = true;
+    }, 500);
+  }
 
   /* Fiche papier reprenant la saisie : de quoi la faire signer et la classer,
      sans imiter le formulaire officiel — celui-ci se remplit à part. */
@@ -1967,27 +1997,118 @@
       ['Numéro de boîte', c.box || '—'],
       ['Observations', c.notes || '—']
     ];
-    $('feuilleCasier').innerHTML =
+    imprimerFeuille(
       '<h1>Élection de domicile</h1>' +
-      '<p>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — ' +
-      new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) + '</p>' +
-      '<table><tbody>' +
-      lignes
-        .map(function (l) {
-          return '<tr><td>' + esc(l[0]) + '</td><td class="b">' + esc(l[1]) + '</td></tr>';
-        })
-        .join('') +
-      '</tbody></table>' +
-      '<p style="margin-top:36px;">Signature de la personne domiciliée :</p>' +
-      '<p style="margin-top:48px;">Signature de l’organisme :</p>';
-    $('feuilleCasier').hidden = false;
-    document.body.classList.add('impression-casier');
-    root.print();
-    setTimeout(function () {
-      document.body.classList.remove('impression-casier');
-      $('feuilleCasier').hidden = true;
-    }, 500);
+        '<p>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — ' +
+        new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) + '</p>' +
+        '<table><tbody>' +
+        lignes
+          .map(function (l) {
+            return '<tr><td>' + esc(l[0]) + '</td><td class="b">' + esc(l[1]) + '</td></tr>';
+          })
+          .join('') +
+        '</tbody></table>' +
+        '<p style="margin-top:36px;">Signature de la personne domiciliée :</p>' +
+        '<p style="margin-top:48px;">Signature de l’organisme :</p>'
+    );
   });
+
+  /* ── l'attestation d'élection de domicile ──
+
+     C'est le document que la personne présente au guichet de la CAF, de France
+     Travail ou de la préfecture. Il n'imite aucun formulaire officiel : c'est
+     l'attestation de l'organisme, sous son propre en-tête et son agrément.
+
+     Une seule règle de fond, et elle compte : **on n'atteste pas une
+     domiciliation close ni une attestation périmée.** Imprimer un papier qui
+     dit le contraire du registre reviendrait à envoyer quelqu'un se faire
+     refuser à un guichet, avec un document de notre main à l'appui. */
+  function adresseDomiciliation(contact) {
+    const liste = antennes();
+    const a =
+      contact && contact.antenneId
+        ? liste.find(function (x) {
+            return x.id === contact.antenneId;
+          })
+        : null;
+    return (a && a.adresse) || S.settings.officeAdresse || '';
+  }
+
+  function trait(valeur, largeur) {
+    return valeur
+      ? '<span class="attest-valeur">' + esc(valeur) + '</span>'
+      : '<span class="attest-trait" style="min-width:' + (largeur || 180) + 'px;"></span>';
+  }
+
+  function attestationHtml(contact) {
+    const e = domi.etat(contact, S.history);
+    const bureau = S.settings.officeName || 'Bureau du Courrier';
+    const adresse = adresseDomiciliation(contact);
+    const ville = S.settings.officeVille || '';
+    const aujourdhui = new Date().toLocaleDateString('fr-CA', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    return (
+      '<div class="attestation">' +
+      '<div class="attest-entete">' +
+      '<div class="attest-organisme">' + esc(bureau) + '</div>' +
+      (adresse ? '<div>' + esc(adresse) + '</div>' : '') +
+      (S.settings.officeAgrement ? '<div>' + esc(S.settings.officeAgrement) + '</div>' : '') +
+      '</div>' +
+      '<h1>Attestation d’élection de domicile</h1>' +
+      '<p class="attest-corps">Je soussigné·e, représentant l’organisme désigné ci-dessus, atteste que :</p>' +
+      '<p class="attest-corps attest-identite">' +
+      trait(contact.name, 240) +
+      (contact.naissance ? ', né·e le ' + esc(util.formatJour(contact.naissance)) : ', né·e le ' + trait('', 140)) +
+      '</p>' +
+      '<p class="attest-corps">a élu domicile auprès de notre organisme depuis le ' +
+      trait(contact.domicilieDepuis ? util.formatJour(contact.domicilieDepuis) : '', 150) +
+      '.</p>' +
+      '<p class="attest-corps">L’adresse à laquelle son courrier peut lui être adressé est :</p>' +
+      '<p class="attest-corps attest-adresse">' +
+      esc(bureau) + (adresse ? '<br>' + esc(adresse) : '<br>' + trait('', 320)) +
+      (contact.box ? '<br>Boîte ' + esc(contact.box) : '') +
+      '</p>' +
+      '<p class="attest-corps">La présente attestation est valable jusqu’au ' +
+      trait(e.echeance ? util.formatJour(e.echeance) : '', 150) +
+      '.</p>' +
+      '<p class="attest-corps attest-fait">Fait à ' + trait(ville, 140) + ', le ' + esc(aujourdhui) + '.</p>' +
+      '<div class="attest-signature"><p>Signature et cachet de l’organisme</p></div>' +
+      '</div>'
+    );
+  }
+
+  function imprimerAttestation(contactId) {
+    const c = S.contacts.find(function (x) {
+      return x.id === contactId;
+    });
+    if (!c) return;
+    if (!c.domicilie) {
+      toast('Cette personne n’est pas domiciliée ici : il n’y a rien à attester.', 'error');
+      return;
+    }
+    if (c.domiciliationCloseLe) {
+      toast(
+        'Domiciliation close le ' + util.formatJour(c.domiciliationCloseLe) + ' — pas d’attestation.',
+        'error'
+      );
+      return;
+    }
+    const e = domi.etat(c, S.history);
+    if (e.etat === 'expiree') {
+      toast(
+        'Attestation échue depuis le ' +
+          util.formatJour(e.echeance) +
+          ' : renouvelez l’élection de domicile avant d’imprimer.',
+        'error'
+      );
+      return;
+    }
+    imprimerFeuille(attestationHtml(c));
+  }
 
   /* ═════════════ domiciliation ═════════════ */
 
@@ -2070,28 +2191,22 @@
   $('activesImprimerBtn').addEventListener('click', function () {
     const lignes = activesFiltrees();
     if (!lignes.length) return;
-    $('feuilleCasier').innerHTML =
+    imprimerFeuille(
       '<h1>Personnes domiciliées</h1>' +
-      '<p>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — ' +
-      new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) +
-      ' — ' + lignes.length + ' dossier(s)</p>' +
-      '<table><thead><tr><th>N° boîte</th><th>Nom</th><th>Échéance</th></tr></thead><tbody>' +
-      lignes
-        .map(function (l) {
-          return (
-            '<tr><td>' + esc(l.box || '—') + '</td><td class="b">' + esc(l.name) + '</td><td>' +
-            esc(l.etat && l.etat.echeance ? util.formatJour(l.etat.echeance) : '—') + '</td></tr>'
-          );
-        })
-        .join('') +
-      '</tbody></table>';
-    $('feuilleCasier').hidden = false;
-    document.body.classList.add('impression-casier');
-    root.print();
-    setTimeout(function () {
-      document.body.classList.remove('impression-casier');
-      $('feuilleCasier').hidden = true;
-    }, 500);
+        '<p>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — ' +
+        new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) +
+        ' — ' + lignes.length + ' dossier(s)</p>' +
+        '<table><thead><tr><th>N° boîte</th><th>Nom</th><th>Échéance</th></tr></thead><tbody>' +
+        lignes
+          .map(function (l) {
+            return (
+              '<tr><td>' + esc(l.box || '—') + '</td><td class="b">' + esc(l.name) + '</td><td>' +
+              esc(l.etat && l.etat.echeance ? util.formatJour(l.etat.echeance) : '—') + '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table>'
+    );
   });
 
   $('activesXlsxBtn').addEventListener('click', function () {
@@ -2153,6 +2268,7 @@
             cellules +
             '<td class="actions">' +
             '<button class="link-btn" data-domifiche="' + esc(l.id) + '">Fiche</button>' +
+            '<button class="link-btn" data-attestation="' + esc(l.id) + '">Attestation</button>' +
             '<button class="link-btn" data-passage="' + esc(l.id) + '">Noter un passage</button>' +
             '</td></tr>'
           );
@@ -2205,6 +2321,8 @@
   $('panel-domiciliation').addEventListener('click', function (e) {
     const fiche = e.target.closest('button[data-domifiche]');
     if (fiche) return ouvrirFiche(fiche.dataset.domifiche);
+    const attestation = e.target.closest('button[data-attestation]');
+    if (attestation) return imprimerAttestation(attestation.dataset.attestation);
     const passage = e.target.closest('button[data-passage]');
     if (passage) return noterPassage(passage.dataset.passage, passage);
   });
@@ -3389,6 +3507,9 @@
     $('setCc').value = S.settings.cc || '';
     $('setBcc').value = S.settings.bcc || '';
     $('conservationMois').value = String(S.settings.conservationMois || 0);
+    $('setAdresse').value = S.settings.officeAdresse || '';
+    $('setVille').value = S.settings.officeVille || '';
+    $('setAgrement').value = S.settings.officeAgrement || '';
     view.gabaritGeneral = { subject: S.settings.subject || '', body: S.settings.body || '' };
     view.gabarits = JSON.parse(JSON.stringify(S.settings.templates || {}));
     view.gabaritsLangues = JSON.parse(JSON.stringify(S.settings.langues || {}));
@@ -3477,6 +3598,23 @@
       setMsg('settingsMsg', 'ok', 'Réglages enregistrés.');
     } catch (err) {
       setMsg('settingsMsg', 'error', 'Enregistrement impossible : ' + esc(err.message));
+    }
+  });
+
+  $('saveOrganismeBtn').addEventListener('click', async function () {
+    const btn = $('saveOrganismeBtn');
+    btn.disabled = true;
+    try {
+      await store.saveSettings({
+        officeAdresse: $('setAdresse').value.trim(),
+        officeVille: $('setVille').value.trim(),
+        officeAgrement: $('setAgrement').value.trim()
+      });
+      setMsg('organismeMsg', 'ok', 'Identité de l’organisme enregistrée. Les attestations la reprendront.');
+    } catch (err) {
+      setMsg('organismeMsg', 'error', 'Enregistrement impossible : ' + esc(err.message));
+    } finally {
+      btn.disabled = false;
     }
   });
 

@@ -1188,6 +1188,39 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 .feuille-casier td.b{font-family:var(--mono);font-weight:600;}
 .feuille-casier td.case{width:70px;border:1px solid var(--navy);}
 
+/* ---------- attestation d'élection de domicile ----------
+   Une page qui doit tenir devant un guichet : en-tête de l'organisme, corps
+   aéré, place pour le cachet. Les traits remplacent les mentions qu'on n'a pas
+   enregistrées — l'attestation s'imprime toujours, quitte à se compléter à la
+   main, plutôt que de refuser de sortir. */
+.attestation{max-width:17cm;margin:0 auto;line-height:1.65;}
+.attest-entete{
+  border-bottom:2px solid var(--navy);
+  padding-bottom:10px;
+  margin-bottom:28px;
+  font-size:12px;
+}
+.attest-organisme{font-family:var(--typewriter);font-size:17px;margin-bottom:2px;}
+.attestation h1{
+  font-family:var(--typewriter);
+  font-size:19px;
+  text-align:center;
+  margin:0 0 30px;
+}
+.attest-corps{font-size:13.5px;margin:0 0 16px;}
+.attest-identite{font-size:15px;margin-bottom:20px;}
+.attest-adresse{margin:6px 0 20px 28px;font-family:var(--mono);font-size:13px;}
+.attest-valeur{font-weight:600;}
+.attest-trait{
+  display:inline-block;
+  border-bottom:1px solid var(--navy);
+  height:1em;
+  vertical-align:baseline;
+}
+.attest-fait{margin-top:30px;}
+.attest-signature{margin-top:14px;text-align:right;}
+.attest-signature p{font-size:12px;color:var(--slate);margin:0 0 70px;}
+
 /* Pendant l'impression de la feuille, l'application entière s'efface. */
 body.impression-casier .feuille-casier{display:block;}
 @media print{
@@ -1197,4 +1230,7 @@ body.impression-casier .feuille-casier{display:block;}
   body.impression-casier .feuille-casier{display:block;}
   .feuille-casier{color:#000;}
   .feuille-casier td.case{border:1px solid #000;}
+  .attest-entete{border-bottom-color:#000;}
+  .attest-trait{border-bottom-color:#000;}
+  .attest-signature p{color:#000;}
 }
