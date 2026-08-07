@@ -30,6 +30,7 @@
     searchMode: 'nom',
     historyState: 'tous',
     pile: [],
+    typeCourrier: 'lettre',
     // Inscription en attente du code de confirmation.
     pendingEmail: null,
     // Adresse confirmée, en cours d'association comme boîte d'envoi.
@@ -397,10 +398,74 @@
     toast('Copies remises aux valeurs des réglages.');
   });
 
-  document.querySelectorAll('.search-modes button').forEach(function (btn) {
+  $('typeCourrier').innerHTML = util.TYPES_COURRIER.map(function (t, i) {
+    return (
+      '<button type="button" role="radio" data-type="' +
+      t.id +
+      '" aria-checked="' +
+      (i === 0 ? 'true' : 'false') +
+      '"' +
+      (i === 0 ? ' class="active"' : '') +
+      '>' +
+      esc(t.label) +
+      '</button>'
+    );
+  }).join('');
+
+  $('typeCourrier')
+    .querySelectorAll('button')
+    .forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        view.typeCourrier = btn.dataset.type;
+        $('typeCourrier')
+          .querySelectorAll('button')
+          .forEach(function (b) {
+            const actif = b === btn;
+            b.classList.toggle('active', actif);
+            b.setAttribute('aria-checked', actif ? 'true' : 'false');
+          });
+      });
+    });
+
+  /* ═════════════ remise par code ═════════════ */
+
+  async function remettreParCode() {
+    const code = $('pickupCode').value.replace(/\D/g, '');
+    if (code.length !== 4) {
+      setMsg('pickupMsg', 'error', 'Le code compte quatre chiffres.');
+      return;
+    }
+    try {
+      const entree = await store.pickupByCode(code);
+      $('pickupCode').value = '';
+      stamp('Remis', entree.name);
+      setMsg(
+        'pickupMsg',
+        'ok',
+        'Courrier remis à <strong>' + esc(entree.name) + '</strong> — marqué récupéré.'
+      );
+    } catch (err) {
+      setMsg('pickupMsg', 'error', esc(err.message));
+      $('pickupCode').select();
+    }
+  }
+
+  $('pickupCodeBtn').addEventListener('click', remettreParCode);
+  $('pickupCode').addEventListener('input', function (e) {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (e.target.value.length === 4) remettreParCode();
+  });
+  $('pickupCode').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      remettreParCode();
+    }
+  });
+
+  document.querySelectorAll('.search-modes button[data-mode]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       view.searchMode = btn.dataset.mode;
-      document.querySelectorAll('.search-modes button').forEach(function (b) {
+      document.querySelectorAll('.search-modes button[data-mode]').forEach(function (b) {
         const actif = b === btn;
         b.classList.toggle('active', actif);
         b.setAttribute('aria-checked', actif ? 'true' : 'false');
@@ -476,6 +541,50 @@
   }
 
   function renderUnknown(raw) {
+    // Avant de proposer une création, on regarde si le nom ressemble à quelqu'un.
+    const proches = view.searchMode === 'nom' ? util.suggestionsProches(S.contacts, raw, 3) : [];
+    if (proches.length) {
+      $('searchResults').innerHTML =
+        '<div class="card"><div class="msg">Aucun destinataire ne s’appelle exactement « ' +
+        esc(raw) +
+        ' ». Vouliez-vous dire :</div>' +
+        proches
+          .map(function (c) {
+            return (
+              '<div class="result-row"><div class="who">' +
+              (c.box ? '<em class="box-tag">' + esc(c.box) + '</em> ' : '') +
+              esc(c.name) +
+              '<span>' +
+              esc(c.email) +
+              '</span></div><button class="btn" data-send="' +
+              esc(c.id) +
+              '">Envoyer la notification</button></div>'
+            );
+          })
+          .join('') +
+        '<div class="row-actions"><button class="btn ghost" id="quandMemeBtn">Non, ajouter « ' +
+        esc(raw) +
+        ' » au registre</button></div></div>';
+
+      $('searchResults')
+        .querySelectorAll('button[data-send]')
+        .forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const c = S.contacts.find(function (x) {
+              return x.id === btn.dataset.send;
+            });
+            if (c) sendNotification(c, btn);
+          });
+        });
+      $('quandMemeBtn').addEventListener('click', function () {
+        renderInconnuFranc(raw);
+      });
+      return;
+    }
+    renderInconnuFranc(raw);
+  }
+
+  function renderInconnuFranc(raw) {
     $('searchResults').innerHTML =
       '<div class="card">' +
       '<div class="msg error">Aucun destinataire trouvé ' +
@@ -534,6 +643,7 @@
       return;
     }
     const message = notify.compose(contact, S.settings, copies);
+    message.type = opts.type || view.typeCourrier;
     const mailto = notify.mailtoUrl(contact, message);
     if (btn) btn.disabled = true;
 
@@ -687,6 +797,89 @@
       '</div>';
     brancherSuivi(box);
   }
+
+  /* ═════════════ fiche d'un destinataire ═════════════ */
+
+  function ouvrirFiche(contactId) {
+    const c = S.contacts.find(function (x) {
+      return x.id === contactId;
+    });
+    if (!c) return;
+
+    const courriers = S.history.filter(function (h) {
+      return h.contactId === c.id || util.normalize(h.email) === util.normalize(c.email);
+    });
+    const retires = courriers.filter(function (h) {
+      return h.pickedUpAt;
+    });
+    // Délai moyen de retrait : le chiffre qui dit si la personne vient vite.
+    const delais = retires.map(function (h) {
+      return (new Date(h.pickedUpAt) - new Date(h.date)) / 86400000;
+    });
+    const moyenne = delais.length
+      ? Math.round((delais.reduce(function (a, b) { return a + b; }, 0) / delais.length) * 10) / 10
+      : null;
+
+    $('ficheTitre').textContent = c.name;
+    $('ficheCorps').innerHTML =
+      '<dl class="status-list">' +
+      [
+        ['Numéro de boîte', c.box || '—'],
+        ['Courriel', c.email],
+        ['Courriers reçus', String(courriers.length)],
+        ['Retirés', String(retires.length)],
+        ['En attente', String(courriers.filter(enAttente).length)],
+        ['Délai moyen de retrait', moyenne === null ? '—' : moyenne + ' jour(s)']
+      ]
+        .map(function (r) {
+          return '<div><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd></div>';
+        })
+        .join('') +
+      '</dl>' +
+      (courriers.length
+        ? '<h3 class="sous-titre">Ses courriers</h3><div class="table-scroll" style="max-height:38vh;">' +
+          '<table><thead><tr><th>Reçu le</th><th>Type</th><th>État</th><th>Code</th></tr></thead><tbody>' +
+          courriers
+            .slice()
+            .sort(function (a, b) {
+              return new Date(b.date) - new Date(a.date);
+            })
+            .map(function (h) {
+              const etat = etatCourrier(h);
+              const libelle = {
+                attente: 'En attente',
+                relance: 'Relancé',
+                signale: 'À traiter',
+                recupere: 'Récupéré',
+                clos: 'Classé',
+                echec: 'Échec'
+              }[etat];
+              return (
+                '<tr' +
+                (etat === 'signale' ? ' class="vieux"' : '') +
+                '><td>' +
+                esc(util.formatDateTime(h.date)) +
+                '</td><td>' +
+                esc(util.typeCourrier(h.type).label) +
+                '</td><td>' +
+                esc(libelle) +
+                (etat === 'attente' || etat === 'relance' ? ' (' + joursDepuis(h.date) + ' j)' : '') +
+                '</td><td class="box-cell">' +
+                (enAttente(h) && h.pickupCode ? esc(h.pickupCode) : '—') +
+                '</td></tr>'
+              );
+            })
+            .join('') +
+          '</tbody></table></div>'
+        : '<p class="hint">Aucun courrier reçu pour l’instant.</p>');
+
+    const dlg = $('ficheDialog');
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+  }
+
+  $('ficheFermer').addEventListener('click', function () {
+    $('ficheDialog').close();
+  });
 
   /* ═════════════ dossier des courriers signalés ═════════════ */
 
@@ -1101,6 +1294,9 @@
             esc(c.email) +
             '</td>' +
             '<td class="actions">' +
+            '<button class="link-btn" data-fiche="' +
+            esc(c.id) +
+            '">Fiche</button>' +
             '<button class="link-btn" data-notify="' +
             esc(c.id) +
             '">Notifier</button>' +
@@ -1172,6 +1368,11 @@
         } catch (err) {
           toast('Suppression impossible : ' + err.message, 'error');
         }
+      });
+    });
+    box.querySelectorAll('button[data-fiche]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        ouvrirFiche(btn.dataset.fiche);
       });
     });
     box.querySelectorAll('button[data-notify]').forEach(function (btn) {
@@ -1343,7 +1544,7 @@
     }
 
     box.innerHTML =
-      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th>Date</th><th>Attente</th><th>Suivi</th><th></th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Type</th><th>Date</th><th>Attente</th><th>Suivi</th><th></th></tr></thead><tbody>' +
       list
         .map(function (h) {
           const pill = ETAT_PILL[etatCourrier(h)] || STATUS_PILL[h.status] || STATUS_PILL['envoyé'];
@@ -1363,7 +1564,7 @@
             esc(h.name) +
             (relances ? '<span class="relance-tag">' + relances + ' relance' + (relances > 1 ? 's' : '') + '</span>' : '') +
             '</td><td>' +
-            esc(h.email) +
+            esc(util.typeCourrier(h.type).label) +
             '</td><td>' +
             esc(util.formatDateTime(h.date)) +
             '</td><td class="attente-cell">' +

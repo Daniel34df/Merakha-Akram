@@ -156,6 +156,9 @@
                role="combobox" aria-expanded="false" aria-controls="suggestions" aria-autocomplete="list">
         <ul class="suggestions" id="suggestions" role="listbox" hidden></ul>
       </div>
+      <label for="typeCourrier">Type de courrier</label>
+      <div class="search-modes" id="typeCourrier" role="radiogroup" aria-label="Type de courrier"></div>
+
       <div class="row-actions">
         <button class="btn" id="validerBtn">Valider</button>
         <button class="btn ghost" id="clearSearchBtn">Effacer</button>
@@ -194,6 +197,19 @@
         </div>
         <div id="copiesMsg"></div>
       </details>
+    </div>
+
+    <div class="card" id="retraitCard">
+      <h2>Remise d'un courrier</h2>
+      <p class="hint" style="margin-bottom:12px;">
+        Le destinataire présente le code à quatre chiffres reçu par courriel.
+      </p>
+      <div class="retrait-row">
+        <input type="text" id="pickupCode" inputmode="numeric" maxlength="4"
+               pattern="[0-9]*" class="code-input" placeholder="0000" autocomplete="off">
+        <button class="btn" id="pickupCodeBtn">Remettre</button>
+      </div>
+      <div id="pickupMsg"></div>
     </div>
 
     <div id="searchResults"></div>
@@ -448,6 +464,16 @@
 </div>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
+
+<dialog id="ficheDialog">
+  <div class="fiche">
+    <h3 id="ficheTitre">Destinataire</h3>
+    <div id="ficheCorps"></div>
+    <div class="row-actions end" style="margin-top:18px;">
+      <button class="btn ghost" id="ficheFermer">Fermer</button>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="confirmDialog">
   <form method="dialog">

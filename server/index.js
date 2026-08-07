@@ -116,7 +116,34 @@ async function main() {
   });
 
   const ctx = { db: db, mailer: mailer, vault: vault, google: google };
+  /* Récapitulatif périodique au responsable : DIGEST_TO fixe le destinataire,
+     à défaut le premier compte créé. DIGEST_DAY=0 le désactive. */
+  const recapJour = process.env.DIGEST_DAY === undefined ? 1 : Number(process.env.DIGEST_DAY);
+  const recapHeure = Number(process.env.DIGEST_HOUR || 8);
+
+  const envoyerRecap = async function () {
+    if (!(recapJour >= 1 && recapJour <= 6)) return;
+    if (!mailer.enabled) return;
+    const destinataire = process.env.DIGEST_TO || (db.data.users[0] && db.data.users[0].email);
+    if (!destinataire) return;
+    if (!reminders.recapDu({ jour: recapJour, heure: recapHeure, dernier: db.data.lastDigestAt })) return;
+
+    const depuis = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recap = reminders.construireRecap(db.data.history, db.data.contacts, { depuis: depuis });
+    await mailer.send({
+      to: destinataire,
+      subject:
+        'Bureau du Courrier — ' + recap.enAttente + ' en attente, ' + recap.signales + ' à traiter',
+      text: reminders.recapEnTexte(recap, db.data.settings.officeName)
+    });
+    await db.write(function (data) {
+      data.lastDigestAt = new Date().toISOString();
+    });
+    console.log('[récap] envoyé à ' + destinataire);
+  };
+
   const arreterRelances = reminders.startReminderLoop(ctx, {
+    recapitulatif: envoyerRecap,
     delaiJours: relanceJours,
     escaladeJours: escaladeJours,
     envoyer: function (entree) {

@@ -10,6 +10,13 @@
 'use strict';
 
 const JOUR = 24 * 60 * 60 * 1000;
+const util = require('../assets/js/util.js');
+
+/** Délai avant relance : celui du type de courrier s'il en a un, sinon le délai général. */
+function delaiPour(entree, delaiGeneral) {
+  const propre = util.typeCourrier(entree.type).relanceJours;
+  return propre === null || propre === undefined ? delaiGeneral : propre;
+}
 
 function joursEcoules(depuis, maintenant) {
   return (maintenant - new Date(depuis).getTime()) / JOUR;
@@ -39,7 +46,7 @@ function aRelancer(history, options) {
   return (history || []).filter(function (entree) {
     if (!enAttente(entree)) return false;
     if ((entree.reminderCount || 0) >= maxRelances) return false;
-    if (joursEcoules(entree.date, maintenant) < delai) return false;
+    if (joursEcoules(entree.date, maintenant) < delaiPour(entree, delai)) return false;
     // Une relance récente suffit : on ne réécrit pas tous les jours.
     if (entree.remindedAt && joursEcoules(entree.remindedAt, maintenant) < intervalle) return false;
     return true;
@@ -67,7 +74,7 @@ function aSignaler(history, options) {
     // Le décompte part de la relance si elle a eu lieu, sinon de l'envoi : un
     // courrier qui n'a pas pu être relancé ne doit pas rester invisible.
     const reference = entree.remindedAt || entree.date;
-    const seuil = entree.remindedAt ? escalade : delai + escalade;
+    const seuil = entree.remindedAt ? escalade : delaiPour(entree, delai) + escalade;
     return joursEcoules(reference, maintenant) >= seuil;
   });
 }
@@ -111,6 +118,105 @@ function resume(history, now) {
   };
 }
 
+/* Récapitulatif périodique destiné au responsable : ce qui s'est passé sur la
+   période, et ce qui reste à traiter. Fonction pure, donc vérifiable. */
+function construireRecap(history, contacts, options) {
+  const opts = options || {};
+  const debut = new Date(opts.depuis).getTime();
+  const fin = opts.jusqua ? new Date(opts.jusqua).getTime() : Date.now();
+  const tous = history || [];
+
+  const surPeriode = function (iso) {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return t >= debut && t <= fin;
+  };
+
+  const recus = tous.filter(function (h) {
+    return surPeriode(h.date);
+  });
+  const retires = tous.filter(function (h) {
+    return surPeriode(h.pickedUpAt);
+  });
+  const attente = tous.filter(enAttente);
+  const signales = tous.filter(function (h) {
+    return etat(h) === 'signale';
+  });
+
+  const plusAnciens = attente
+    .slice()
+    .sort(function (a, b) {
+      return new Date(a.date) - new Date(b.date);
+    })
+    .slice(0, 10)
+    .map(function (h) {
+      const contact = (contacts || []).find(function (c) {
+        return c.id === h.contactId;
+      });
+      return {
+        nom: h.name,
+        boite: (contact && contact.box) || '',
+        jours: Math.floor(joursEcoules(h.date, fin)),
+        relances: h.reminderCount || 0
+      };
+    });
+
+  return {
+    debut: new Date(debut).toISOString(),
+    fin: new Date(fin).toISOString(),
+    recus: recus.length,
+    retires: retires.length,
+    enAttente: attente.length,
+    signales: signales.length,
+    plusAnciens: plusAnciens
+  };
+}
+
+/** Met le récapitulatif en texte lisible dans un courriel. */
+function recapEnTexte(recap, bureau) {
+  const jour = function (iso) {
+    return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' });
+  };
+  const lignes = [
+    'Récapitulatif du ' + jour(recap.debut) + ' au ' + jour(recap.fin) + ' — ' + (bureau || 'Bureau du Courrier'),
+    '',
+    '  Courriers reçus sur la période : ' + recap.recus,
+    '  Retirés sur la période        : ' + recap.retires,
+    '  En attente aujourd’hui        : ' + recap.enAttente,
+    '  À traiter (non retirés)       : ' + recap.signales
+  ];
+
+  if (recap.plusAnciens.length) {
+    lignes.push('', 'Les plus anciens en attente :');
+    recap.plusAnciens.forEach(function (c) {
+      lignes.push(
+        '  ' +
+          String(c.jours).padStart(3) +
+          ' j  ' +
+          (c.boite ? '[' + c.boite + '] ' : '') +
+          c.nom +
+          (c.relances ? ' (' + c.relances + ' relance' + (c.relances > 1 ? 's' : '') + ')' : '')
+      );
+    });
+  } else {
+    lignes.push('', 'Aucun courrier en attente. Rien à signaler.');
+  }
+
+  lignes.push('', 'Message automatique du Bureau du Courrier.');
+  return lignes.join('\n');
+}
+
+/** Vrai s'il est temps d'envoyer le récapitulatif (jour et heure voulus, pas déjà fait). */
+function recapDu(options) {
+  const opts = options || {};
+  const maintenant = opts.now ? new Date(opts.now) : new Date();
+  if (maintenant.getDay() !== Number(opts.jour === undefined ? 1 : opts.jour)) return false;
+  if (maintenant.getHours() < Number(opts.heure === undefined ? 8 : opts.heure)) return false;
+  if (!opts.dernier) return true;
+  // Un seul envoi par jour, même si la boucle passe plusieurs fois.
+  return joursEcoules(opts.dernier, maintenant.getTime()) >= 1;
+}
+
 /**
  * Lance la vérification périodique des relances.
  * Renvoie une fonction d'arrêt. Sans envoi possible, ne fait rien du tout.
@@ -142,6 +248,8 @@ function startReminderLoop(ctx, options) {
         }
       }
       if (dus.length) console.log('[relance] ' + dus.length + ' courrier(s) relancé(s)');
+
+      if (opts.recapitulatif) await opts.recapitulatif();
     } catch (err) {
       console.error('[relance] passe interrompue :', err.message);
     }
@@ -161,6 +269,10 @@ module.exports = {
   enAttente: enAttente,
   aRelancer: aRelancer,
   aSignaler: aSignaler,
+  delaiPour: delaiPour,
+  construireRecap: construireRecap,
+  recapEnTexte: recapEnTexte,
+  recapDu: recapDu,
   etat: etat,
   resume: resume,
   joursEcoules: joursEcoules,

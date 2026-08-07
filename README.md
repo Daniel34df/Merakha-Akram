@@ -212,6 +212,30 @@ défaut, les colonnes dans l'ordre nom, courriel, boîte, avec la virgule ou le
 point-virgule comme séparateur. Les lignes fautives sont
 signalées une par une, les doublons ignorés, et le reste est importé.
 
+**Types de courrier** — lettre, recommandé, colis, administratif. Le type choisi
+au guichet change le message envoyé et **le délai de relance** : cinq jours pour
+un colis qui encombre, sept pour un recommandé, le délai général pour une lettre
+ordinaire.
+
+**Code de retrait** — chaque notification contient un code à quatre chiffres.
+Le destinataire le présente au guichet, l'agent le saisit dans *Remise d'un
+courrier*, et le courrier est marqué récupéré automatiquement. Plus d'oubli de
+cochage, et une trace exacte de ce qui a été remis. Les codes sont uniques parmi
+les courriers en attente.
+
+**Recherche tolérante** — quand aucun nom ne correspond exactement, l'application
+propose les plus proches : « Tremblet » suggère « Élodie Tremblay ». Les noms
+sur les enveloppes sont rarement exacts.
+
+**Fiche d'un destinataire** — le bouton *Fiche* du registre montre tout son
+historique : courriers reçus, retirés, en attente, délai moyen de retrait, et
+les codes des courriers qui l'attendent encore.
+
+**Récapitulatif hebdomadaire** — chaque lundi matin, le responsable reçoit par
+courriel l'état du bureau : reçus, retirés, en attente, à traiter, et les dix
+plus anciens. Réglé par `DIGEST_DAY`, `DIGEST_HOUR` et `DIGEST_TO`
+(`DIGEST_DAY=0` le désactive).
+
 **Suivi des courriers** — chaque notification reste **en attente** tant que
 personne n'a marqué la lettre comme retirée. Le parcours se fait tout seul :
 
@@ -247,8 +271,9 @@ L'interface suit le **thème du système** : claire par défaut, sombre si votre
 poste l'est. Aucune manipulation, aucun réglage à choisir.
 
 **Réglages** — l'expéditeur (**De**), les copies **Cc** et **Cci** par défaut, le
-sujet et le corps du message, avec aperçu en direct. Variables disponibles :
-`{nom}`, `{courriel}`, `{date}`, `{bureau}`.
+sujet et le corps du message, avec aperçu en direct. Variables disponibles : `{nom}`, `{courriel}`, `{date}`, `{bureau}`, `{type}`,
+`{article}` (« Un colis », « Un courrier recommandé »…) et `{code}`. Le code de
+retrait est de toute façon ajouté au message, quel que soit le gabarit.
 
 Les copies s'appliquent à tous les envois. Pour n'en changer que le temps d'une
 lettre, dépliez **Copies pour cet envoi** au guichet : les champs partent des
@@ -403,7 +428,7 @@ test/                 tests (node:test), sans dépendance
 ```
 
 ```bash
-npm test     # 107 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
+npm test     # 114 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

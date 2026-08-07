@@ -792,3 +792,18 @@ select.filter-input{
   color:var(--navy);
   border:1px solid var(--line);
 }
+
+/* ---------- remise par code ---------- */
+.retrait-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.retrait-row .code-input{width:160px;margin-bottom:0;}
+
+/* ---------- fiche d'un destinataire ---------- */
+#ficheDialog{max-width:640px;width:92vw;}
+.fiche h3{
+  font-family:var(--typewriter);
+  font-size:17px;
+  text-transform:none;
+  letter-spacing:0.5px;
+  margin-bottom:16px;
+}
+.fiche .status-list{margin-bottom:0;}

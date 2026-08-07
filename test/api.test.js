@@ -139,7 +139,8 @@ test('le gabarit enregistré dans les réglages est utilisé par /api/notify', f
     await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@exemple.com' });
 
     assert.equal(t.mailer.sent[0].subject, 'Courrier au Réception B');
-    assert.equal(t.mailer.sent[0].text, 'Salut Ana, ton courriel est ana@exemple.com.');
+    // Le code de retrait est ajouté après le gabarit, quel que soit celui-ci.
+    assert.match(t.mailer.sent[0].text, /^Salut Ana, ton courriel est ana@exemple\.com\.\n\nCode de retrait : \d{4}\n/);
   });
 });
 

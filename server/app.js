@@ -203,6 +203,27 @@ function redirect(res, location) {
   res.end();
 }
 
+/* Code de retrait : quatre chiffres, communiqués au destinataire et présentés
+   au guichet. Ce n'est pas un secret — il ne protège rien — mais il doit être
+   unique parmi les courriers en attente, sans quoi le guichet ne saurait pas
+   lequel marquer. */
+function genererCodeRetrait(history) {
+  const pris = new Set(
+    (history || [])
+      .filter(function (h) {
+        return !h.pickedUpAt && !h.closedAt && h.pickupCode;
+      })
+      .map(function (h) {
+        return h.pickupCode;
+      })
+  );
+  for (let essai = 0; essai < 200; essai++) {
+    const code = String(crypto.randomInt(1000, 10000));
+    if (!pris.has(code)) return code;
+  }
+  return String(crypto.randomInt(1000, 10000));
+}
+
 function createUserRecord(name, email, passwordHash) {
   return {
     id: crypto.randomUUID(),
@@ -253,14 +274,22 @@ async function envoyerRelance(ctx, entree, currentUser) {
     bureau: settings.officeName
   };
   const jours = Math.floor(reminders.joursEcoules(entree.date, Date.now()));
+  const type = util.typeCourrier(entree.type);
+  vars.type = type.label;
+  vars.article = type.article;
+  vars.code = entree.pickupCode || '';
+
   const subject = 'Rappel — ' + util.renderTemplate(settings.subject, vars);
   const text =
     util.renderTemplate(settings.body, vars) +
-    '\n\n— Rappel : ce courrier vous attend depuis ' +
+    '\n\n— Rappel : ' +
+    type.article.toLowerCase() +
+    ' vous attend depuis ' +
     jours +
     ' jour' +
     (jours > 1 ? 's' : '') +
-    '.';
+    '.' +
+    (entree.pickupCode ? '\nCode de retrait : ' + entree.pickupCode : '');
 
   let sender = ctx.mailer;
   let senderLabel = 'serveur';
@@ -855,7 +884,9 @@ async function handleApi(req, res, ctx, pathname) {
         pickedUpAt: null,
         reminderCount: 0,
         flaggedAt: null,
-        closedAt: null
+        closedAt: null,
+        type: util.typeCourrier(body.type).id,
+        pickupCode: String(body.pickupCode || '') || genererCodeRetrait(db.data.history)
       };
       if (!record.name || !record.email) {
         throw Object.assign(new Error('Nom et courriel requis'), { status: 400 });
@@ -871,6 +902,43 @@ async function handleApi(req, res, ctx, pathname) {
       });
       return sendJson(res, 200, { cleared: true });
     }
+  }
+
+  /* --- retrait par code --- */
+
+  if (pathname === '/api/history/pickup-by-code' && method === 'POST') {
+    const body = await readBody(req);
+    const code = String(body.code || '').replace(/\D/g, '');
+    if (code.length !== 4) throw Object.assign(new Error('Le code compte quatre chiffres'), { status: 400 });
+
+    const candidats = (db.data.history || []).filter(function (h) {
+      return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
+    });
+    if (candidats.length === 0) {
+      throw Object.assign(new Error('Aucun courrier en attente avec ce code'), { status: 404 });
+    }
+    // Les codes sont uniques parmi les courriers en attente : au-delà d'un
+    // candidat, mieux vaut s'arrêter que de marquer le mauvais.
+    if (candidats.length > 1) {
+      throw Object.assign(new Error('Plusieurs courriers portent ce code — marquez-le depuis le dossier'), {
+        status: 409
+      });
+    }
+
+    const cible = candidats[0];
+    await db.write(function (data) {
+      const h = data.history.find(function (x) {
+        return x.id === cible.id;
+      });
+      h.pickedUpAt = new Date().toISOString();
+      h.pickedUpBy = currentUser ? currentUser.name : null;
+      h.pickedUpByCode = true;
+    });
+    return sendJson(res, 200, {
+      record: db.data.history.find(function (h) {
+        return h.id === cible.id;
+      })
+    });
   }
 
   /* --- suivi des courriers --- */
@@ -1059,8 +1127,16 @@ async function handleApi(req, res, ctx, pathname) {
       date: new Date().toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
       bureau: settings.officeName
     };
+    const type = util.typeCourrier(body.type);
+    const code = genererCodeRetrait(db.data.history);
+    vars.type = type.label;
+    vars.article = type.article;
+    vars.code = code;
+
     const subject = body.subject ? String(body.subject) : util.renderTemplate(settings.subject, vars);
-    const text = body.body ? String(body.body) : util.renderTemplate(settings.body, vars);
+    const corpsBase = body.body ? String(body.body) : util.renderTemplate(settings.body, vars);
+    // Le code voyage avec le message, quel que soit le gabarit choisi.
+    const text = corpsBase + '\n\nCode de retrait : ' + code + '\nPrésentez-le au guichet.';
 
     // De / Cc / Cci : ce que la requête précise l'emporte, sinon les réglages.
     const from = String(body.from !== undefined ? body.from : settings.from || '').trim();
@@ -1095,7 +1171,9 @@ async function handleApi(req, res, ctx, pathname) {
       pickedUpAt: null,
       reminderCount: 0,
       flaggedAt: null,
-      closedAt: null
+      closedAt: null,
+      type: type.id,
+      pickupCode: code
     };
 
     try {

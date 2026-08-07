@@ -367,3 +367,117 @@ test('la liste des comptes ne divulgue aucun secret', function () {
     assert.equal(liste.body.responsableId, t.db.data.users[0].id);
   });
 });
+
+/* ---------- types de courrier ---------- */
+
+test('chaque type a son propre délai de relance', function () {
+  const util = require('../assets/js/util.js');
+  assert.equal(util.typeCourrier('colis').relanceJours, 5);
+  assert.equal(util.typeCourrier('recommande').relanceJours, 7);
+  assert.equal(util.typeCourrier('lettre').relanceJours, null, 'la lettre suit le délai général');
+  assert.equal(util.typeCourrier('inconnu').id, 'lettre', 'un type inconnu retombe sur la lettre');
+
+  assert.equal(reminders.delaiPour({ type: 'colis' }, 15), 5);
+  assert.equal(reminders.delaiPour({ type: 'lettre' }, 15), 15);
+  assert.equal(reminders.delaiPour({}, 15), 15);
+});
+
+test('un colis est relancé avant une lettre', function () {
+  const colis = courrier(6, { type: 'colis' });
+  colis.id = 'colis';
+  const lettre = courrier(6, { type: 'lettre' });
+  const dus = reminders.aRelancer([colis, lettre], { delaiJours: 15, now: maintenant });
+  assert.deepEqual(dus.map(function (d) { return d.id; }), ['colis']);
+});
+
+/* ---------- code de retrait ---------- */
+
+test('chaque notification reçoit un code de retrait unique, transmis au destinataire', function () {
+  return withServer(async function (t) {
+    const a = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    const b = await t.call('POST', '/api/notify', { name: 'Bo', email: 'bo@ex.com' });
+
+    assert.match(a.body.record.pickupCode, /^\d{4}$/);
+    assert.notEqual(a.body.record.pickupCode, b.body.record.pickupCode);
+    assert.match(t.mailer.sent[0].text, new RegExp('Code de retrait : ' + a.body.record.pickupCode));
+  });
+});
+
+test('le code présenté au guichet marque le bon courrier récupéré', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com', type: 'colis' });
+    const code = envoi.body.record.pickupCode;
+    assert.equal(envoi.body.record.type, 'colis');
+
+    const remise = await t.call('POST', '/api/history/pickup-by-code', { code: code });
+    assert.equal(remise.status, 200);
+    assert.ok(remise.body.record.pickedUpAt);
+    assert.equal(remise.body.record.pickedUpByCode, true);
+
+    // Le même code ne sert pas deux fois : le courrier n'est plus en attente.
+    assert.equal((await t.call('POST', '/api/history/pickup-by-code', { code: code })).status, 404);
+    assert.equal((await t.call('POST', '/api/history/pickup-by-code', { code: '12' })).status, 400);
+  });
+});
+
+/* ---------- récapitulatif ---------- */
+
+test('le récapitulatif compte la période et liste les plus anciens', function () {
+  const semaine = 7 * JOUR;
+  const history = [
+    courrier(2),
+    courrier(3, { pickedUpAt: new Date(maintenant - 1 * JOUR).toISOString() }),
+    courrier(40, { flaggedAt: 'x', reminderCount: 2 }),
+    courrier(20, { closedAt: 'x' })
+  ];
+  history[2].name = 'Vieux Courrier';
+
+  const recap = reminders.construireRecap(history, [], { depuis: maintenant - semaine, jusqua: maintenant });
+  assert.equal(recap.recus, 2, 'seuls ceux de la semaine');
+  assert.equal(recap.retires, 1);
+  assert.equal(recap.enAttente, 2, 'le classé ne compte pas');
+  assert.equal(recap.signales, 1);
+  assert.equal(recap.plusAnciens[0].nom, 'Vieux Courrier');
+  assert.equal(recap.plusAnciens[0].relances, 2);
+
+  const texte = reminders.recapEnTexte(recap, 'Réception A');
+  assert.match(texte, /Réception A/);
+  assert.match(texte, /Vieux Courrier/);
+  assert.match(texte, /En attente aujourd’hui\s+: 2/);
+});
+
+test('le récapitulatif ne part que le bon jour, une seule fois', function () {
+  const lundi8h = new Date(2026, 7, 3, 8, 30); // 3 août 2026 = lundi
+  const lundi7h = new Date(2026, 7, 3, 7, 0);
+  const mardi = new Date(2026, 7, 4, 9, 0);
+
+  assert.equal(reminders.recapDu({ jour: 1, heure: 8, now: lundi8h }), true);
+  assert.equal(reminders.recapDu({ jour: 1, heure: 8, now: lundi7h }), false, 'trop tôt dans la journée');
+  assert.equal(reminders.recapDu({ jour: 1, heure: 8, now: mardi }), false, 'pas le bon jour');
+  assert.equal(
+    reminders.recapDu({ jour: 1, heure: 8, now: lundi8h, dernier: new Date(2026, 7, 3, 8, 0).toISOString() }),
+    false,
+    'déjà envoyé aujourd’hui'
+  );
+});
+
+/* ---------- recherche tolérante ---------- */
+
+test('suggestionsProches retrouve un nom mal orthographié', function () {
+  const util = require('../assets/js/util.js');
+  const contacts = [
+    { name: 'Élodie Tremblay' },
+    { name: 'Jean-François Roy' },
+    { name: 'Ana Silva' }
+  ];
+  assert.deepEqual(
+    util.suggestionsProches(contacts, 'Tremblet').map(function (c) { return c.name; }),
+    ['Élodie Tremblay']
+  );
+  assert.deepEqual(
+    util.suggestionsProches(contacts, 'silvia').map(function (c) { return c.name; }),
+    ['Ana Silva']
+  );
+  assert.deepEqual(util.suggestionsProches(contacts, 'Dupont'), [], 'aucun rapprochement abusif');
+  assert.deepEqual(util.suggestionsProches(contacts, 'ab'), [], 'trop court pour comparer');
+});

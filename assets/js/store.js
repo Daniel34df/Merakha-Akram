@@ -258,6 +258,22 @@
     return entree;
   }
 
+  /** Remise au guichet par le code présenté par le destinataire. */
+  async function pickupByCode(code) {
+    if (state.mode !== 'serveur') {
+      const entree = state.history.find(function (h) {
+        return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
+      });
+      if (!entree) throw new Error('Aucun courrier en attente avec ce code');
+      entree.pickedUpAt = new Date().toISOString();
+      persistLocal();
+      emit();
+      return entree;
+    }
+    const result = await api('/history/pickup-by-code', { method: 'POST', body: JSON.stringify({ code: code }) });
+    return remplacerEntree(result.record);
+  }
+
   /** Classe un courrier sans retrait (ou le rouvre : raison à null). */
   async function closeMail(id, raison) {
     if (state.mode === 'serveur') {
@@ -507,6 +523,7 @@
         email: contact.email,
         subject: message.subject,
         body: message.body,
+        type: message.type || 'lettre',
         from: message.from || '',
         cc: message.cc || '',
         bcc: message.bcc || ''
@@ -539,6 +556,7 @@
     connectSmtpMailbox: connectSmtpMailbox,
     disconnectMailbox: disconnectMailbox,
     setPickedUp: setPickedUp,
+    pickupByCode: pickupByCode,
     closeMail: closeMail,
     relancer: relancer,
     serverBackup: serverBackup,

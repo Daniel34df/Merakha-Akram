@@ -126,6 +126,82 @@
     return domain === 'gmail.com' || domain === 'googlemail.com';
   }
 
+  /* Types de courrier. Le délai propre à chaque type l'emporte sur le délai
+     général : un recommandé ou un colis n'attend pas aussi longtemps qu'une
+     lettre ordinaire — l'un a une valeur juridique, l'autre encombre le local. */
+  const TYPES_COURRIER = [
+    { id: 'lettre', label: 'Lettre', article: 'Un courrier', relanceJours: null },
+    { id: 'recommande', label: 'Recommandé', article: 'Un courrier recommandé', relanceJours: 7 },
+    { id: 'colis', label: 'Colis', article: 'Un colis', relanceJours: 5 },
+    { id: 'administratif', label: 'Administratif', article: 'Un courrier administratif', relanceJours: 10 }
+  ];
+
+  function typeCourrier(id) {
+    return (
+      TYPES_COURRIER.find(function (t) {
+        return t.id === id;
+      }) || TYPES_COURRIER[0]
+    );
+  }
+
+  /** Distance d'édition, pour proposer un nom quand l'orthographe diffère. */
+  function distance(a, b) {
+    const s1 = normalize(a);
+    const s2 = normalize(b);
+    if (s1 === s2) return 0;
+    if (!s1.length || !s2.length) return Math.max(s1.length, s2.length);
+
+    let precedente = [];
+    for (let j = 0; j <= s2.length; j++) precedente[j] = j;
+    for (let i = 1; i <= s1.length; i++) {
+      const courante = [i];
+      for (let j = 1; j <= s2.length; j++) {
+        const cout = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        courante[j] = Math.min(courante[j - 1] + 1, precedente[j] + 1, precedente[j - 1] + cout);
+      }
+      precedente = courante;
+    }
+    return precedente[s2.length];
+  }
+
+  /**
+   * Destinataires dont le nom ressemble à la recherche, du plus proche au moins
+   * proche. Sert quand la recherche exacte ne donne rien : les noms sur les
+   * enveloppes sont souvent approximatifs.
+   */
+  function suggestionsProches(contacts, query, limite) {
+    const q = normalize(query);
+    if (q.length < 3) return [];
+    // Tolérance proportionnelle à la longueur : deux fautes sur « Tremblay »,
+    // une seule sur « Roy », sans quoi tout ressemblerait à tout.
+    const tolerance = q.length <= 4 ? 1 : q.length <= 8 ? 2 : 3;
+
+    return (contacts || [])
+      .map(function (c) {
+        // On compare aussi mot à mot : « Tremblet » doit trouver « Élodie Tremblay ».
+        const mots = normalize(c.name).split(' ');
+        const d = Math.min.apply(
+          null,
+          [distance(c.name, query)].concat(
+            mots.map(function (mot) {
+              return distance(mot, query);
+            })
+          )
+        );
+        return { contact: c, distance: d };
+      })
+      .filter(function (r) {
+        return r.distance > 0 && r.distance <= tolerance;
+      })
+      .sort(function (a, b) {
+        return a.distance - b.distance;
+      })
+      .slice(0, limite || 3)
+      .map(function (r) {
+        return r.contact;
+      });
+  }
+
   /** Identifiant stable, avec repli quand crypto.randomUUID n'existe pas. */
   function uuid() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -354,6 +430,10 @@
     sameContact: sameContact,
     matchesQuery: matchesQuery,
     normalizeBox: normalizeBox,
+    TYPES_COURRIER: TYPES_COURRIER,
+    typeCourrier: typeCourrier,
+    distance: distance,
+    suggestionsProches: suggestionsProches,
     sortByName: sortByName,
     toCsv: toCsv,
     parseCsv: parseCsv,
