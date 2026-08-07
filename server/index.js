@@ -10,6 +10,7 @@ const { spawn } = require('node:child_process');
 const { Db, purger } = require('./db.js');
 const { createMailer } = require('./mailer.js');
 const { createVault } = require('./secrets.js');
+const auth = require('./auth.js');
 const { createGoogleOAuth } = require('./google.js');
 const { createServer, VERSION, envoyerRelance } = require('./app.js');
 const reminders = require('./reminders.js');
@@ -52,6 +53,21 @@ async function main() {
 
   const db = new Db(dbFile);
   await db.load();
+
+  /* Code maître : empreinte écrite une fois, jamais le code en clair. Il se
+     change par MASTER_CODE — indispensable, puisque la valeur par défaut est
+     publiée avec le code source. */
+  const codeMaitreVoulu = process.env.MASTER_CODE || '';
+  if (!db.data.masterCodeHash || codeMaitreVoulu) {
+    const doitEcrire =
+      !db.data.masterCodeHash ||
+      (codeMaitreVoulu && !auth.verifierCodeMaitre(db, codeMaitreVoulu));
+    if (doitEcrire) {
+      await db.write(function (data) {
+        data.masterCodeHash = auth.empreinteCodeMaitre(codeMaitreVoulu);
+      });
+    }
+  }
 
   const mailer = createMailer(process.env);
   const vault = createVault({
@@ -134,6 +150,21 @@ async function main() {
           : 'manuelles seulement (REMINDER_DAYS pour les automatiser)')
     );
     console.log('  boîte perso ' + (google.enabled ? 'connexion Google disponible' : 'Google non configuré — SMTP personnel seulement'));
+    const agents = db.data.users.filter(function (u) {
+      return u.role === 'agent';
+    }).length;
+    console.log(
+      '  accès agents ' +
+        (agents === 0
+          ? 'aucun — le responsable en crée depuis Réglages'
+          : agents + ' identifiant(s) d’agent')
+    );
+    console.log(
+      '  code maître ' +
+        (process.env.MASTER_CODE
+          ? 'défini par MASTER_CODE'
+          : 'valeur par défaut — à changer par MASTER_CODE (voir README)')
+    );
     if (String(process.env.OPEN_BROWSER || '') === '1') {
       openBrowser(protocole + '://localhost:' + port);
     }

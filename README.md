@@ -466,6 +466,69 @@ fuite, et la durée de conservation est aussi une obligation.
 
 ---
 
+## Deux façons d'entrer : responsable et agents
+
+L'application a **deux portes d'entrée**, pour deux usages différents.
+
+**Le responsable** entre avec un courriel et un mot de passe. C'est le compte
+créé au tout premier démarrage, celui du bureau. Il voit tout, règle tout, et
+c'est lui qui distribue les accès.
+
+**Un agent** entre avec un **identifiant** (`AB-1234`) et un **code d'accès** à
+six chiffres, remis par le responsable. Pas de courriel à créer, pas de mot de
+passe à retenir : un poste d'accueil tenu par plusieurs personnes n'a pas à
+gérer des boîtes mail. Il ouvre l'application depuis n'importe quel poste.
+
+### Créer un accès
+
+*Réglages → Accès des agents → Créer un accès.* On donne un nom — « Accueil du
+matin », « poste 2 » — et l'on coche ce que la personne pourra faire.
+L'identifiant est tiré au sort, le code aussi.
+
+**Le code n'est montré qu'une fois.** Il n'est conservé que haché : perdu, il
+se régénère, il ne se retrouve pas.
+
+### Ce qu'un agent peut faire
+
+Par défaut, il tient le guichet et remet le courrier — **sans voir les codes de
+retrait** et sans pouvoir modifier le registre. Sept droits se cochent un par
+un : guichet, remise, voir les codes, modifier le registre, domiciliation,
+exporter et imprimer, réglages.
+
+Le masquage n'est pas cosmétique : les codes sont **retirés du contenu envoyé
+par le serveur**, remplacés par `••••`. Un onglet de développeur ne les
+retrouverait pas. L'agent peut malgré tout remettre un courrier : il saisit le
+code que la personne lui présente, il ne le découvre pas dans l'application.
+
+Le responsable modifie les autorisations à tout moment ; le changement prend
+effet au rechargement suivant. **Suspendre** ferme aussitôt la session ouverte ;
+**régénérer le code** invalide l'ancien sur-le-champ ; **supprimer** ferme
+l'accès définitivement.
+
+### Code de reprise du compte responsable
+
+Sous le formulaire de connexion, le lien **Code de reprise** ouvre la dernière
+porte. Avec ce code, et sans être connecté, on peut changer l'adresse du compte
+responsable, changer son mot de passe, ou le supprimer — ce qui rouvre
+l'installation au prochain démarrage, sans toucher au registre ni aux accès des
+agents. Le code ne donne aucun accès aux données.
+
+Il n'est **jamais conservé en clair** : seule son empreinte est écrite au
+registre, au premier démarrage.
+
+> **À changer avant toute mise en service.** La valeur par défaut est publiée
+> avec le code source : qui lit ce dépôt la connaît. Fixez la vôtre dans `.env` :
+>
+> ```bash
+> MASTER_CODE=votre-code-a-vous
+> ```
+>
+> C'est une clé de coffre, pas un mécanisme d'authentification : elle ne vaut
+> que ce que vaut sa confidentialité. Les tentatives sont freinées, et chaque
+> usage est inscrit au journal.
+
+---
+
 ## Comptes du bureau
 
 Le **premier compte créé** est celui du responsable : lui seul peut retirer un
@@ -563,6 +626,11 @@ autre interface ou un import automatisé.
 | `POST` | `/api/auth/signup` `/login` `/logout` | comptes et sessions |
 | `POST` | `/api/auth/verify` · `/resend` | code de confirmation de l'adresse |
 | `POST` | `/api/auth/forgot` · `/reset` | mot de passe oublié : code puis nouveau mot de passe |
+| `POST` | `/api/auth/login-code` | entrée d'un agent par identifiant |
+| `GET` `POST` | `/api/auth/agents` | lister / créer un accès agent |
+| `PUT` `DELETE` | `/api/auth/agents/:id` | autorisations, suspension, suppression |
+| `POST` | `/api/auth/agents/:id/code` | régénérer le code d'accès |
+| `POST` | `/api/auth/master` | code de reprise du compte responsable |
 | `PUT` `DELETE` | `/api/auth/mailbox/smtp` · `/api/auth/mailbox` | relier ou retirer sa boîte |
 | `GET` | `/api/auth/google/start` · `/callback` | autorisation Gmail |
 | `GET` | `/api/state` | registre + historique + réglages |

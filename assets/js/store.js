@@ -349,6 +349,52 @@
     return result.user;
   }
 
+  /* Entrée par identifiant : la porte des agents. */
+  async function loginAgent(identifiant, code) {
+    const result = await api('/auth/login-code', {
+      method: 'POST',
+      body: JSON.stringify({ identifiant: identifiant, code: code })
+    });
+    applyAuth(result);
+    await loadServerState();
+    return result.user;
+  }
+
+  /* Accès des agents — réservé au responsable. */
+  async function listerAgents() {
+    return api('/auth/agents');
+  }
+
+  async function creerAgent(nom, permissions) {
+    return api('/auth/agents', {
+      method: 'POST',
+      body: JSON.stringify({ name: nom, permissions: permissions })
+    });
+  }
+
+  async function majAgent(id, patch) {
+    return api('/auth/agents/' + encodeURIComponent(id), {
+      method: 'PUT',
+      body: JSON.stringify(patch)
+    });
+  }
+
+  async function regenererCodeAgent(id) {
+    return api('/auth/agents/' + encodeURIComponent(id) + '/code', { method: 'POST' });
+  }
+
+  async function supprimerAgent(id) {
+    return api('/auth/agents/' + encodeURIComponent(id), { method: 'DELETE' });
+  }
+
+  /** Code de reprise du compte responsable. */
+  async function codeMaitre(code, action, champs) {
+    return api('/auth/master', {
+      method: 'POST',
+      body: JSON.stringify(Object.assign({ code: code, action: action || 'voir' }, champs || {}))
+    });
+  }
+
   async function logout() {
     await api('/auth/logout', { method: 'POST' });
     state.contacts = [];
@@ -976,6 +1022,13 @@
     verifySignup: verifySignup,
     resendCode: resendCode,
     login: login,
+    loginAgent: loginAgent,
+    listerAgents: listerAgents,
+    creerAgent: creerAgent,
+    majAgent: majAgent,
+    regenererCodeAgent: regenererCodeAgent,
+    supprimerAgent: supprimerAgent,
+    codeMaitre: codeMaitre,
     forgotPassword: forgotPassword,
     resetPassword: resetPassword,
     logout: logout,

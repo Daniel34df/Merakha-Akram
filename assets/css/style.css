@@ -797,6 +797,48 @@ select.filter-input{
 .retrait-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .retrait-row .code-input{width:160px;margin-bottom:0;}
 
+/* ---------- accès des agents ---------- */
+.identifiant-input{letter-spacing:6px;font-size:22px;}
+.identifiant-pill{
+  font-family:var(--mono);
+  font-size:14px;
+  letter-spacing:2px;
+  background:var(--brass);
+  color:var(--paper);
+  padding:3px 10px;
+  white-space:nowrap;
+}
+.agent-fiche{
+  border:1px solid var(--line);
+  border-left:4px solid var(--forest);
+  background:var(--paper-dark);
+  padding:14px 16px;
+  margin-bottom:12px;
+}
+/* Un accès suspendu se distingue au premier coup d'œil du reste de la liste. */
+.agent-fiche.suspendu{border-left-color:var(--rust);opacity:0.75;}
+.agent-tete{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+.agent-tete strong{font-family:var(--typewriter);font-size:16px;font-weight:400;}
+.agent-fiche summary{
+  font-family:var(--mono);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--slate);
+  cursor:pointer;
+  padding:6px 0;
+}
+.droits-grille{display:grid;gap:2px;margin:10px 0 14px;}
+.droit-ligne{align-items:flex-start;gap:10px;padding:8px 10px;background:var(--card);border:1px solid var(--line);}
+.droit-ligne input{margin-top:3px;flex:0 0 auto;}
+.droit-detail{display:block;font-size:12.5px;color:var(--slate);margin-top:2px;}
+#masterForm .code-input{letter-spacing:4px;}
+/* Dans l'écran d'entrée, le bouton colle à l'indication qui le suit. */
+.gate-form .btn{margin-bottom:12px;}
+.gate-form .hint{margin-top:0;}
+#agentsMsg .code-pill, #agentsMsg .identifiant-pill{display:inline-block;margin:6px 4px 0 0;}
+#agentsListe{margin-top:16px;}
+
 /* ---------- courrier urgent ---------- */
 /* Filet rouille en bordure de ligne : repérable en balayant la liste, sans
    crier sur toute la largeur. */

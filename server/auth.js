@@ -144,6 +144,32 @@ function secondsBeforeResend(pending) {
   return Math.max(0, Math.ceil(RESEND_SECONDS - elapsed));
 }
 
+/* ---------- code maître ---------- */
+
+/* Le code maître sert d'ultime recours sur le compte responsable : en changer
+   l'adresse, le mot de passe, ou le supprimer. Il n'est jamais conservé en
+   clair — seule son empreinte est écrite dans le registre, au premier
+   démarrage. Le connaître ne suffit donc pas à le lire dans le fichier, et le
+   changer se fait par la variable MASTER_CODE.
+
+   Il vaut ce que vaut sa confidentialité : c'est une clé de coffre, pas un
+   mécanisme d'authentification. Le freinage des tentatives s'y applique. */
+const MASTER_CODE_DEFAUT = '26366686806';
+
+function empreinteCodeMaitre(code) {
+  return hashPassword(String(code || MASTER_CODE_DEFAUT));
+}
+
+function verifierCodeMaitre(db, code) {
+  const stocke = db.data.masterCodeHash;
+  if (!stocke) {
+    // Registre antérieur au code maître : on compare au code par défaut.
+    equalizeTiming(code);
+    return String(code || '') === MASTER_CODE_DEFAUT;
+  }
+  return verifyPassword(String(code || ''), stocke);
+}
+
 /* ---------- cookies ---------- */
 
 function parseCookies(header) {
@@ -210,10 +236,19 @@ function userFromRequest(db, req) {
 function publicUser(user) {
   if (!user) return null;
   const mailbox = user.mailbox || null;
+  const roles = require('../assets/js/roles.js');
   return {
     id: user.id,
     name: user.name,
     email: user.email,
+    // Le rôle et les droits voyagent : l'interface s'en sert pour n'afficher
+    // que ce qui est ouvert. Le serveur, lui, refait le contrôle à chaque appel.
+    role: user.role || 'responsable',
+    permissions:
+      (user.role || 'responsable') === 'responsable'
+        ? roles.toutesLesPermissions(true)
+        : roles.nettoyerPermissions(user.permissions),
+    identifiant: user.identifiant || '',
     createdAt: user.createdAt,
     mailbox: mailbox
       ? {
@@ -282,6 +317,9 @@ module.exports = {
   CODE_MAX_ATTEMPTS: CODE_MAX_ATTEMPTS,
   RESEND_SECONDS: RESEND_SECONDS,
   RESET_MINUTES: RESET_MINUTES,
+  MASTER_CODE_DEFAUT: MASTER_CODE_DEFAUT,
+  empreinteCodeMaitre: empreinteCodeMaitre,
+  verifierCodeMaitre: verifierCodeMaitre,
   generateCode: generateCode,
   newPendingSignup: newPendingSignup,
   newPendingReset: newPendingReset,

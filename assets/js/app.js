@@ -5,6 +5,7 @@
   const util = root.BC.util;
   const store = root.BC.store;
   const domi = root.BC.domiciliation;
+  const roles = root.BC.roles;
   const notify = root.BC.notify;
   const S = store.state;
 
@@ -3172,7 +3173,10 @@
        session tombe alors qu'une étape intermédiaire était ouverte. On retombe
        alors sur la connexion. */
     if (needed) {
-      const formulaires = ['loginForm', 'signupForm', 'verifyForm', 'associateForm', 'forgotForm', 'resetForm'];
+      const formulaires = [
+        'loginForm', 'signupForm', 'verifyForm', 'associateForm',
+        'forgotForm', 'resetForm', 'agentForm', 'masterForm'
+      ];
       const visible = formulaires.some(function (id) {
         return $(id) && !$(id).hidden;
       });
@@ -3212,9 +3216,11 @@
     $('associateForm').hidden = which !== 'associate';
     $('forgotForm').hidden = which !== 'forgot';
     $('resetForm').hidden = which !== 'reset';
-    // Seuls Connexion et Créer un compte sont des onglets : les étapes
-    // intermédiaires (code, association, oubli) masquent la barre.
-    $('gateTabs').hidden = which !== 'login' && which !== 'signup';
+    $('agentForm').hidden = which !== 'agent';
+    $('masterForm').hidden = which !== 'master';
+    // Seules les trois portes d'entrée sont des onglets : les étapes
+    // intermédiaires (code, association, oubli, reprise) masquent la barre.
+    $('gateTabs').hidden = which !== 'login' && which !== 'signup' && which !== 'agent';
     setMsg('gateMsg', '', '');
   }
 
@@ -3265,6 +3271,119 @@
     showGateForm('login');
     $('loginEmail').focus();
   }
+
+  /* ── entrée par identifiant ── */
+
+  $('agentIdentifiant').addEventListener('input', function (e) {
+    // On met en forme pendant la frappe : « ab1234 » devient « AB-1234 ».
+    const brut = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const lettres = brut.slice(0, 2).replace(/[^A-Z]/g, '');
+    const chiffres = brut.slice(lettres.length).replace(/\D/g, '').slice(0, 4);
+    e.target.value = chiffres ? lettres + '-' + chiffres : lettres;
+    if (e.target.value.length === 7) $('agentCode').focus();
+  });
+
+  $('agentCode').addEventListener('input', function (e) {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+  });
+
+  $('agentForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const identifiant = roles.normaliserIdentifiant($('agentIdentifiant').value);
+    const code = $('agentCode').value;
+    if (!roles.identifiantValide(identifiant)) {
+      setMsg('gateMsg', 'error', 'L’identifiant s’écrit « AB-1234 ».');
+      return;
+    }
+    if (!roles.codeAccesValide(code)) {
+      setMsg('gateMsg', 'error', 'Le code d’accès compte six chiffres.');
+      return;
+    }
+    setMsg('gateMsg', '', 'Ouverture…');
+    try {
+      await store.loginAgent(identifiant, code);
+      $('agentCode').value = '';
+      setMsg('gateMsg', '', '');
+      afterLogin();
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+      $('agentCode').select();
+    }
+  });
+
+  /* ── code de reprise du compte responsable ── */
+
+  let codeMaitreSaisi = '';
+
+  $('masterBtn').addEventListener('click', function () {
+    view.gateFormChosen = true;
+    $('gateSubtitle').textContent = 'Reprise du compte responsable';
+    $('masterCode').value = '';
+    $('masterZone').hidden = true;
+    showGateForm('master');
+    $('masterCode').focus();
+  });
+
+  $('masterRetourBtn').addEventListener('click', function () {
+    codeMaitreSaisi = '';
+    revenirConnexion();
+  });
+
+  $('masterForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    setMsg('gateMsg', '', 'Vérification…');
+    try {
+      const res = await store.codeMaitre($('masterCode').value, 'voir');
+      codeMaitreSaisi = $('masterCode').value;
+      setMsg('gateMsg', '', '');
+      $('masterInfos').innerHTML =
+        '<div><dt>Nom</dt><dd>' + esc(res.responsable.name) + '</dd></div>' +
+        '<div><dt>Adresse</dt><dd>' + esc(res.responsable.email) + '</dd></div>';
+      $('masterEmail').value = res.responsable.email;
+      $('masterZone').hidden = false;
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+      $('masterCode').select();
+    }
+  });
+
+  $('masterEmailBtn').addEventListener('click', async function () {
+    try {
+      const res = await store.codeMaitre(codeMaitreSaisi, 'email', { email: $('masterEmail').value.trim() });
+      setMsg('gateMsg', 'ok', 'Adresse du responsable changée : ' + esc(res.email));
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
+
+  $('masterPasswordBtn').addEventListener('click', async function () {
+    try {
+      await store.codeMaitre(codeMaitreSaisi, 'password', { password: $('masterPassword').value });
+      $('masterPassword').value = '';
+      setMsg('gateMsg', 'ok', 'Mot de passe changé. Toutes les sessions du responsable sont fermées.');
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
+
+  $('masterDeleteBtn').addEventListener('click', async function () {
+    const ok = await confirmDialog(
+      'Supprimer le compte responsable',
+      'L’application redemandera la création du compte du bureau au prochain démarrage. ' +
+        'Le registre, l’historique et les accès des agents ne sont pas touchés.',
+      'Supprimer'
+    );
+    if (!ok) return;
+    try {
+      await store.codeMaitre(codeMaitreSaisi, 'supprimer');
+      toast('Compte responsable supprimé. Rechargez pour réinstaller.', 'ok');
+      setTimeout(function () {
+        root.location.reload();
+      }, 1500);
+    } catch (err) {
+      setMsg('gateMsg', 'error', esc(err.message));
+    }
+  });
 
   $('forgotBtn').addEventListener('click', ouvrirOubli);
   $('backToLoginBtn').addEventListener('click', revenirConnexion);
@@ -3793,6 +3912,191 @@
 
   /* Le retour s'affiche dans le bloc du mot de passe, pas au bas de la carte :
      un refus qu'on ne voit pas ressemble à une application qui ne répond plus. */
+  /* ═════════════ accès des agents ═════════════ */
+
+  /* Le responsable crée ici les accès secondaires. Un accès = un nom, un
+     identifiant tiré au sort, un code à six chiffres, et une liste de cases.
+     Le code n'est montré qu'une fois : il n'est conservé que haché. */
+
+  function casesDroits(prefixe, permissions) {
+    const p = roles.nettoyerPermissions(permissions);
+    return (
+      '<div class="droits-grille">' +
+      roles.DROITS.map(function (d) {
+        return (
+          '<label class="check-row droit-ligne"><input type="checkbox" data-droit="' +
+          esc(d.id) + '" id="' + prefixe + '-' + esc(d.id) + '"' +
+          (p[d.id] ? ' checked' : '') + '> <span><strong>' + esc(d.label) + '</strong>' +
+          '<span class="droit-detail">' + esc(d.detail) + '</span></span></label>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
+  function lireDroits(racine) {
+    const out = {};
+    racine.querySelectorAll('input[data-droit]').forEach(function (c) {
+      out[c.dataset.droit] = c.checked;
+    });
+    return out;
+  }
+
+  async function renderAgents() {
+    const carte = $('agentsCard');
+    // La gestion des accès n'appartient qu'au responsable.
+    carte.hidden = !(S.auth.user && roles.estResponsable(S.auth.user) && S.mode === 'serveur');
+    if (carte.hidden) return;
+
+    try {
+      const data = await store.listerAgents();
+      $('countAgents').textContent = data.agents.length;
+      $('agentsListe').innerHTML = data.agents.length
+        ? data.agents
+            .map(function (a) {
+              const p = roles.nettoyerPermissions(a.permissions);
+              const ouverts = roles.DROITS.filter(function (d) {
+                return p[d.id];
+              });
+              return (
+                '<div class="agent-fiche' + (a.suspendu ? ' suspendu' : '') + '" data-agent="' + esc(a.id) + '">' +
+                '<div class="agent-tete">' +
+                '<span class="identifiant-pill">' + esc(a.identifiant) + '</span>' +
+                '<strong>' + esc(a.name) + '</strong>' +
+                (a.suspendu ? '<span class="porteur-tag">suspendu</span>' : '') +
+                (p.codes ? '<span class="compte-pill">voit les codes</span>' : '') +
+                '</div>' +
+                '<p class="hint">' +
+                (a.derniereConnexion
+                  ? 'Dernière ouverture : ' + esc(util.formatDateTime(a.derniereConnexion))
+                  : 'Jamais utilisé.') +
+                ' — ' + ouverts.length + ' droit(s) ouvert(s).</p>' +
+                '<details><summary>Modifier les autorisations</summary>' +
+                casesDroits('a' + esc(a.id), p) +
+                '<div class="row-actions">' +
+                '<button class="btn small" data-agent-save="' + esc(a.id) + '">Enregistrer</button>' +
+                '<button class="btn ghost small" data-agent-code="' + esc(a.id) + '">Nouveau code d’accès</button>' +
+                '<button class="btn ghost small" data-agent-susp="' + esc(a.id) + '">' +
+                (a.suspendu ? 'Réactiver' : 'Suspendre') + '</button>' +
+                '<button class="btn ghost small danger" data-agent-del="' + esc(a.id) + '">Supprimer</button>' +
+                '</div></details></div>'
+              );
+            })
+            .join('')
+        : '<div class="empty">Aucun accès agent. Le bouton ci-dessus en crée un.</div>';
+      brancherAgents();
+    } catch (err) {
+      $('agentsListe').innerHTML = '<div class="empty">Liste indisponible : ' + esc(err.message) + '</div>';
+    }
+  }
+
+  /* Le code ne se retrouve pas : on le montre en grand, une fois, avec de quoi
+     le copier ou l'imprimer pour le remettre à la personne. */
+  function montrerCode(nom, identifiant, code) {
+    setMsg(
+      'agentsMsg',
+      'ok',
+      '<strong>Accès créé pour ' + esc(nom) + '.</strong><br>' +
+        'Notez ces deux valeurs et remettez-les à la personne : ' +
+        '<span class="identifiant-pill">' + esc(identifiant) + '</span> ' +
+        '<span class="code-pill">' + esc(code) + '</span><br>' +
+        '<em>Le code n’est pas conservé en clair : il ne pourra pas être relu. ' +
+        'Perdu, il se régénère.</em>'
+    );
+  }
+
+  function brancherAgents() {
+    const boite = $('agentsListe');
+    boite.querySelectorAll('button[data-agent-save]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        const fiche = b.closest('.agent-fiche');
+        try {
+          await store.majAgent(b.dataset.agentSave, { permissions: lireDroits(fiche) });
+          setMsg('agentsMsg', 'ok', 'Autorisations enregistrées.');
+          renderAgents();
+        } catch (err) {
+          setMsg('agentsMsg', 'error', esc(err.message));
+        }
+      });
+    });
+    boite.querySelectorAll('button[data-agent-code]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        const ok = await confirmDialog(
+          'Nouveau code d’accès',
+          'L’ancien code cessera aussitôt de fonctionner et la session ouverte sera fermée.',
+          'Régénérer'
+        );
+        if (!ok) return;
+        try {
+          const r = await store.regenererCodeAgent(b.dataset.agentCode);
+          const fiche = b.closest('.agent-fiche');
+          montrerCode(fiche.querySelector('strong').textContent, r.identifiant, r.code);
+          renderAgents();
+        } catch (err) {
+          setMsg('agentsMsg', 'error', esc(err.message));
+        }
+      });
+    });
+    boite.querySelectorAll('button[data-agent-susp]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        const fiche = b.closest('.agent-fiche');
+        const suspendre = !fiche.classList.contains('suspendu');
+        try {
+          await store.majAgent(b.dataset.agentSusp, { suspendu: suspendre });
+          setMsg('agentsMsg', 'ok', suspendre ? 'Accès suspendu, session fermée.' : 'Accès réactivé.');
+          renderAgents();
+        } catch (err) {
+          setMsg('agentsMsg', 'error', esc(err.message));
+        }
+      });
+    });
+    boite.querySelectorAll('button[data-agent-del]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        const ok = await confirmDialog(
+          'Supprimer cet accès',
+          'L’identifiant cessera définitivement de fonctionner. Le registre n’est pas touché.',
+          'Supprimer'
+        );
+        if (!ok) return;
+        try {
+          await store.supprimerAgent(b.dataset.agentDel);
+          setMsg('agentsMsg', 'ok', 'Accès supprimé.');
+          renderAgents();
+        } catch (err) {
+          setMsg('agentsMsg', 'error', esc(err.message));
+        }
+      });
+    });
+  }
+
+  $('nouvelAgentBtn').addEventListener('click', function () {
+    $('agentDroitsNeuf').innerHTML = casesDroits('neuf', roles.DEFAUT_AGENT);
+    $('nouvelAgentForm').hidden = false;
+    $('agentNom').value = '';
+    $('agentNom').focus();
+  });
+
+  $('annulerAgentBtn').addEventListener('click', function () {
+    $('nouvelAgentForm').hidden = true;
+  });
+
+  $('creerAgentBtn').addEventListener('click', async function () {
+    const nom = $('agentNom').value.trim();
+    if (!nom) {
+      setMsg('agentsMsg', 'error', 'Donnez un nom à cet accès — « Accueil du matin », « poste 2 ».');
+      $('agentNom').focus();
+      return;
+    }
+    try {
+      const r = await store.creerAgent(nom, lireDroits($('agentDroitsNeuf')));
+      $('nouvelAgentForm').hidden = true;
+      montrerCode(nom, r.agent.identifiant, r.code);
+      renderAgents();
+    } catch (err) {
+      setMsg('agentsMsg', 'error', esc(err.message));
+    }
+  });
+
   $('changePasswordBtn').addEventListener('click', async function () {
     const actuel = $('pwdCurrent').value;
     const suivant = $('pwdNext').value;
@@ -3920,6 +4224,64 @@
     renderStats();
     renderJournal();
     renderDomiciliation();
+    renderAgents();
+    appliquerDroits();
+  }
+
+  /* L'interface masque ce qui n'est pas ouvert. Le serveur refuse de toute
+     façon : cacher un bouton n'est pas une sécurité, c'est une politesse — on
+     ne propose pas une action qui sera refusée. */
+  function appliquerDroits() {
+    const u = S.auth.user;
+    // Sans compte du tout, le registre est ouvert : rien à masquer.
+    if (!u) return;
+
+    const droit = function (d) {
+      return roles.peut(u, d);
+    };
+    const onglet = function (nom, ouvert) {
+      const b = document.querySelector('nav button[data-panel="' + nom + '"]');
+      if (b) b.hidden = !ouvert;
+    };
+
+    onglet('guichet', droit('guichet'));
+    onglet('remise', droit('remise'));
+    onglet('registre', droit('registre'));
+    onglet('domiciliation', droit('domiciliation'));
+    onglet('reglages', droit('reglages') || roles.estResponsable(u));
+
+    // Un onglet masqué ne doit pas rester affiché sous les yeux.
+    const actif = document.querySelector('nav button.active');
+    if (actif && actif.hidden) {
+      const premier = document.querySelector('nav button:not([hidden])');
+      if (premier) showPanel(premier.dataset.panel);
+    }
+
+    /* Les codes de retrait masqués : le serveur les remplace déjà par des
+       points. On le dit une fois, plutôt que de laisser croire à une panne. */
+    const carte = $('retraitCard');
+    if (carte) {
+      let note = $('codesMasquesNote');
+      if (!droit('codes')) {
+        if (!note) {
+          note = document.createElement('p');
+          note.id = 'codesMasquesNote';
+          note.className = 'hint';
+          note.textContent =
+            'Les codes de retrait ne sont pas affichés avec votre accès. Saisissez celui que la personne vous présente.';
+          carte.appendChild(note);
+        }
+      } else if (note) {
+        note.remove();
+      }
+    }
+
+    // Exports et impression.
+    ['exportContactsXlsxBtn', 'exportContactsBtn', 'exportHistoryBtn', 'exportHistoryXlsxBtn',
+     'feuilleCasierBtn', 'feuilleCasierBtn2'].forEach(function (id) {
+      const b = $(id);
+      if (b) b.hidden = !droit('exports');
+    });
   }
 
   store.onChange(renderAll);

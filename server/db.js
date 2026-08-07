@@ -37,7 +37,9 @@ function emptyDb() {
     users: [],
     sessions: [],
     pending: [],
-    journal: []
+    journal: [],
+    // Empreinte du code maître : jamais le code lui-même.
+    masterCodeHash: ''
   };
 }
 
@@ -66,6 +68,7 @@ class Db {
         // Inscriptions en attente de confirmation : les codes périmés ne
         // servent plus à rien et n'ont pas à traîner dans le fichier.
         journal: Array.isArray(parsed.journal) ? parsed.journal : [],
+        masterCodeHash: typeof parsed.masterCodeHash === 'string' ? parsed.masterCodeHash : '',
         pending: Array.isArray(parsed.pending)
           ? parsed.pending.filter(function (p) {
               return p && new Date(p.expiresAt).getTime() > Date.now();

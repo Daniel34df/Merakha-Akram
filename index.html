@@ -31,7 +31,8 @@
     </div>
 
     <div class="gate-tabs" id="gateTabs">
-      <button class="active" data-form="login">Connexion</button>
+      <button class="active" data-form="login">Responsable</button>
+      <button data-form="agent">Agent</button>
       <button data-form="signup">Créer un compte</button>
     </div>
 
@@ -43,7 +44,54 @@
       <button class="btn" type="submit">Se connecter</button>
       <div class="row-actions" style="margin-top:12px;">
         <button type="button" class="link-btn" id="forgotBtn">Mot de passe oublié ?</button>
+        <button type="button" class="link-btn" id="masterBtn">Code de reprise</button>
       </div>
+    </form>
+
+    <form id="masterForm" class="gate-form" hidden>
+      <p class="verify-lead">
+        <strong>Reprise du compte responsable.</strong><br>
+        Ce code permet de changer l'adresse ou le mot de passe du compte responsable,
+        ou de le supprimer pour réinstaller l'application. Il ne donne pas accès au registre.
+      </p>
+      <label for="masterCode">Code de reprise</label>
+      <input type="password" id="masterCode" autocomplete="off" class="code-input" required>
+      <button class="btn" type="submit">Vérifier</button>
+      <div id="masterZone" hidden>
+        <h3 class="sous-titre">Compte responsable actuel</h3>
+        <dl class="status-list" id="masterInfos"></dl>
+        <label for="masterEmail">Nouvelle adresse</label>
+        <input type="email" id="masterEmail" autocomplete="off">
+        <button class="btn ghost small" type="button" id="masterEmailBtn">Changer l'adresse</button>
+        <label for="masterPassword" style="margin-top:16px;">Nouveau mot de passe</label>
+        <input type="password" id="masterPassword" autocomplete="new-password">
+        <button class="btn ghost small" type="button" id="masterPasswordBtn">Changer le mot de passe</button>
+        <p class="hint" style="margin-top:18px;">
+          Supprimer le compte responsable rouvre l'installation au prochain démarrage.
+          Le registre et l'historique ne sont pas touchés.
+        </p>
+        <button class="btn ghost small danger" type="button" id="masterDeleteBtn">Supprimer le compte responsable</button>
+      </div>
+      <div class="row-actions" style="margin-top:14px;">
+        <button type="button" class="link-btn" id="masterRetourBtn">Revenir à la connexion</button>
+      </div>
+    </form>
+
+    <form id="agentForm" class="gate-form" hidden>
+      <p class="verify-lead">
+        Entrez avec l'identifiant et le code d'accès remis par le responsable du bureau.
+        Aucun courriel, aucun mot de passe à retenir.
+      </p>
+      <label for="agentIdentifiant">Identifiant</label>
+      <input type="text" id="agentIdentifiant" placeholder="AB-1234" autocomplete="off"
+             spellcheck="false" class="code-input identifiant-input" required>
+      <label for="agentCode">Code d'accès</label>
+      <input type="text" id="agentCode" inputmode="numeric" maxlength="6" pattern="[0-9]*"
+             class="code-input" autocomplete="off" required>
+      <button class="btn" type="submit">Ouvrir le guichet</button>
+      <p class="hint">
+        Perdu ou oublié ? Le responsable en régénère un depuis <em>Réglages → Accès des agents</em>.
+      </p>
     </form>
 
     <form id="forgotForm" class="gate-form" hidden>
@@ -607,6 +655,32 @@
       <div id="accountsMsg"></div>
     </div>
 
+    <div class="card" id="agentsCard" hidden>
+      <div class="card-head">
+        <h2>Accès des agents (<span id="countAgents">0</span>)</h2>
+        <div class="toolbar">
+          <button class="btn small" id="nouvelAgentBtn">Créer un accès</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-bottom:14px;">
+        Un agent ouvre l'application sur n'importe quel poste avec un identifiant et un
+        code à six chiffres — sans courriel ni mot de passe. Vous décidez de ce qu'il voit :
+        par défaut, il tient le guichet et remet le courrier, <strong>sans voir les codes de
+        retrait</strong> ni pouvoir modifier le registre.
+      </p>
+      <div id="nouvelAgentForm" hidden>
+        <label for="agentNom">Nom de cet accès</label>
+        <input type="text" id="agentNom" placeholder="Accueil du matin, Marie B., poste 2" autocomplete="off">
+        <div id="agentDroitsNeuf"></div>
+        <div class="row-actions">
+          <button class="btn" id="creerAgentBtn">Créer l'accès</button>
+          <button class="btn ghost" id="annulerAgentBtn">Annuler</button>
+        </div>
+      </div>
+      <div id="agentsMsg"></div>
+      <div id="agentsListe"></div>
+    </div>
+
     <div class="card" id="journalCard">
       <div class="card-head">
         <h2>Journal d'activité</h2>
@@ -686,6 +760,7 @@
 
 <script src="assets/js/util.js"></script>
 <script src="assets/js/attente.js"></script>
+<script src="assets/js/roles.js"></script>
 <script src="assets/js/domiciliation.js"></script>
 <script src="assets/js/xlsx.js"></script>
 <script src="assets/js/store.js"></script>

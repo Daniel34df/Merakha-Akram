@@ -14,6 +14,7 @@ const auth = require('./auth.js');
 const { createUserMailer } = require('./mailer.js');
 const reminders = require('./reminders.js');
 const domiciliation = require('../assets/js/domiciliation.js');
+const roles = require('../assets/js/roles.js');
 
 const VERSION = '1.0.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -311,12 +312,39 @@ function genererCodeRetrait(history) {
   return String(crypto.randomInt(1000, 10000));
 }
 
-function createUserRecord(name, email, passwordHash) {
+/* Refus faute d'autorisation. Distinct du 401 « session expirée » : la session
+   est parfaitement valable, c'est le droit qui manque. */
+function droitManquant(droit) {
+  return Object.assign(new Error('Cette action n’est pas ouverte à votre accès'), {
+    status: 403,
+    code: 'droit',
+    droit: droit
+  });
+}
+
+function exigerDroit(user, droit) {
+  /* `user` n'est nul que sur un serveur sans aucun compte : le garde-fou
+     précédent a déjà renvoyé 401 dès qu'un compte existe. Ce cas est le
+     registre volontairement ouvert du premier démarrage — on ne lui applique
+     pas d'autorisations, il n'y a personne à autoriser. */
+  if (!user) return;
+  if (!roles.peut(user, droit)) throw droitManquant(droit);
+}
+
+function createUserRecord(name, email, passwordHash, options) {
+  const opts = options || {};
   return {
     id: crypto.randomUUID(),
     name: name,
     email: email,
     password: passwordHash,
+    /* Le premier compte créé est le responsable du bureau : il ouvre
+       l'application, distribue les accès et garde le contrôle. Les comptes
+       ajoutés ensuite depuis son écran sont ce qu'il décide. */
+    role: opts.role || 'responsable',
+    permissions: opts.role === 'agent' ? roles.nettoyerPermissions(opts.permissions) : null,
+    identifiant: opts.identifiant || '',
+    accessCodeHash: opts.accessCodeHash || '',
     createdAt: new Date().toISOString(),
     emailVerifiedAt: new Date().toISOString(),
     mailbox: null,
@@ -766,6 +794,300 @@ async function handleAuth(req, res, ctx, pathname) {
     return true;
   }
 
+  /* --- accès agent par identifiant --- */
+
+  /* Deuxième porte d'entrée. Un agent n'a pas de courriel à créer ni de mot de
+     passe à retenir : le responsable lui remet un identifiant et un code à six
+     chiffres, qu'il saisit sur le poste d'accueil. Même freinage que la
+     connexion par mot de passe, et même message en cas d'échec — l'un ne doit
+     pas révéler ce que l'autre cache. */
+  if (pathname === '/api/auth/login-code' && method === 'POST') {
+    const body = await readBody(req);
+    const identifiant = roles.normaliserIdentifiant(body.identifiant);
+    const cle = 'agent:' + (identifiant || 'inconnu');
+
+    const frein = throttle.check(cle);
+    if (frein.blocked) {
+      throw Object.assign(
+        new Error('Trop de tentatives. Réessayez dans ' + Math.ceil(frein.retryInSeconds / 60) + ' minute(s).'),
+        { status: 429 }
+      );
+    }
+
+    const agent = (db.data.users || []).find(function (u) {
+      return u.role === 'agent' && roles.normaliserIdentifiant(u.identifiant) === identifiant;
+    });
+    let ok = false;
+    if (agent && agent.accessCodeHash) {
+      ok = auth.verifyPassword(String(body.code || ''), agent.accessCodeHash);
+    } else {
+      auth.equalizeTiming(body.code);
+    }
+    if (!ok) {
+      throttle.fail(cle);
+      throw Object.assign(new Error('Identifiant ou code d’accès incorrect'), { status: 401 });
+    }
+    if (agent.suspendu) {
+      throw Object.assign(new Error('Cet accès a été suspendu par le responsable'), { status: 403 });
+    }
+    throttle.succeed(cle);
+
+    const session = auth.newSession(agent.id);
+    await db.write(function (data) {
+      data.sessions.push(session);
+      const cible = data.users.find(function (u) {
+        return u.id === agent.id;
+      });
+      if (cible) cible.derniereConnexion = new Date().toISOString();
+    });
+    await consigner(db, { qui: agent.name, action: 'connexion agent', cible: agent.identifiant });
+
+    return sendJsonWithCookie(
+      res,
+      200,
+      { user: auth.publicUser(agent) },
+      auth.sessionCookie(session.token, { secure: secureCookie })
+    );
+  }
+
+  /* --- comptes secondaires, créés par le responsable --- */
+
+  if (pathname === '/api/auth/agents' && (method === 'GET' || method === 'POST')) {
+    const user = auth.userFromRequest(db, req);
+    if (!user) throw sessionExpiree();
+    if (!roles.estResponsable(user)) {
+      throw Object.assign(new Error('Seul le compte responsable gère les accès'), { status: 403, code: 'droit' });
+    }
+
+    if (method === 'GET') {
+      return sendJson(res, 200, {
+        droits: roles.DROITS,
+        agents: (db.data.users || [])
+          .filter(function (u) {
+            return u.role === 'agent';
+          })
+          .map(function (u) {
+            return {
+              id: u.id,
+              name: u.name,
+              identifiant: u.identifiant,
+              permissions: roles.nettoyerPermissions(u.permissions),
+              suspendu: !!u.suspendu,
+              createdAt: u.createdAt,
+              derniereConnexion: u.derniereConnexion || null
+            };
+          })
+      });
+    }
+
+    const corps = await readBody(req);
+    const nom = String(corps.name || '').trim();
+    if (!nom) throw Object.assign(new Error('Donnez un nom à cet accès'), { status: 400 });
+
+    /* L'identifiant est tiré au sort jusqu'à en trouver un libre : le
+       responsable n'a pas à inventer un code unique. */
+    let identifiant = '';
+    for (let i = 0; i < 50 && !identifiant; i++) {
+      const essai = roles.genererIdentifiant(function (n) {
+        return crypto.randomInt(0, n);
+      });
+      const pris = (db.data.users || []).some(function (u) {
+        return roles.normaliserIdentifiant(u.identifiant) === essai;
+      });
+      if (!pris) identifiant = essai;
+    }
+    if (!identifiant) throw Object.assign(new Error('Impossible de tirer un identifiant libre'), { status: 500 });
+
+    const code = auth.generateCode();
+    const agent = createUserRecord(nom, '', '', {
+      role: 'agent',
+      permissions: corps.permissions,
+      identifiant: identifiant,
+      accessCodeHash: auth.hashPassword(code)
+    });
+    await db.write(function (data) {
+      data.users.push(agent);
+    });
+    await consigner(db, {
+      qui: user.name,
+      action: 'accès agent créé',
+      cible: nom,
+      details: identifiant
+    });
+
+    /* Le code n'est renvoyé qu'ici, une seule fois : il n'est conservé que
+       haché. Perdu, il se régénère — il ne se retrouve pas. */
+    return sendJson(res, 201, {
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        identifiant: identifiant,
+        permissions: roles.nettoyerPermissions(agent.permissions),
+        suspendu: false
+      },
+      code: code
+    });
+  }
+
+  const agentMatch = pathname.match(/^\/api\/auth\/agents\/([^/]+)(\/code)?$/);
+  if (agentMatch) {
+    const user = auth.userFromRequest(db, req);
+    if (!user) throw sessionExpiree();
+    if (!roles.estResponsable(user)) {
+      throw Object.assign(new Error('Seul le compte responsable gère les accès'), { status: 403, code: 'droit' });
+    }
+    const id = decodeURIComponent(agentMatch[1]);
+    const agent = (db.data.users || []).find(function (u) {
+      return u.id === id && u.role === 'agent';
+    });
+    if (!agent) throw Object.assign(new Error('Accès introuvable'), { status: 404 });
+
+    // Nouveau code d'accès : l'ancien cesse aussitôt de fonctionner.
+    if (agentMatch[2] && method === 'POST') {
+      const code = auth.generateCode();
+      await db.write(function (data) {
+        const cible = data.users.find(function (u) {
+          return u.id === id;
+        });
+        cible.accessCodeHash = auth.hashPassword(code);
+        // Les sessions ouvertes avec l'ancien code tombent.
+        data.sessions = data.sessions.filter(function (sess) {
+          return sess.userId !== id;
+        });
+      });
+      await consigner(db, { qui: user.name, action: 'code d’accès régénéré', cible: agent.name });
+      return sendJson(res, 200, { code: code, identifiant: agent.identifiant });
+    }
+
+    if (method === 'PUT') {
+      const corps = await readBody(req);
+      await db.write(function (data) {
+        const cible = data.users.find(function (u) {
+          return u.id === id;
+        });
+        if (corps.name !== undefined) cible.name = String(corps.name).trim() || cible.name;
+        if (corps.permissions !== undefined) {
+          cible.permissions = roles.nettoyerPermissions(corps.permissions);
+        }
+        if (corps.suspendu !== undefined) {
+          cible.suspendu = !!corps.suspendu;
+          // Suspendre ferme les sessions en cours : sinon l'accès continue.
+          if (cible.suspendu) {
+            data.sessions = data.sessions.filter(function (sess) {
+              return sess.userId !== id;
+            });
+          }
+        }
+      });
+      const relu = db.data.users.find(function (u) {
+        return u.id === id;
+      });
+      await consigner(db, { qui: user.name, action: 'accès agent modifié', cible: relu.name });
+      return sendJson(res, 200, {
+        agent: {
+          id: relu.id,
+          name: relu.name,
+          identifiant: relu.identifiant,
+          permissions: roles.nettoyerPermissions(relu.permissions),
+          suspendu: !!relu.suspendu
+        }
+      });
+    }
+
+    if (method === 'DELETE') {
+      await db.write(function (data) {
+        data.users = data.users.filter(function (u) {
+          return u.id !== id;
+        });
+        data.sessions = data.sessions.filter(function (sess) {
+          return sess.userId !== id;
+        });
+      });
+      await consigner(db, { qui: user.name, action: 'accès agent supprimé', cible: agent.name });
+      return sendJson(res, 200, { supprime: true });
+    }
+  }
+
+  /* --- code maître : reprise en main du compte responsable --- */
+
+  if (pathname === '/api/auth/master' && method === 'POST') {
+    const corps = await readBody(req);
+    const cle = 'master';
+    const frein = throttle.check(cle);
+    if (frein.blocked) {
+      throw Object.assign(
+        new Error('Trop de tentatives. Réessayez dans ' + Math.ceil(frein.retryInSeconds / 60) + ' minute(s).'),
+        { status: 429 }
+      );
+    }
+    if (!auth.verifierCodeMaitre(db, corps.code)) {
+      throttle.fail(cle);
+      throw Object.assign(new Error('Code incorrect'), { status: 401 });
+    }
+    throttle.succeed(cle);
+
+    const responsable = (db.data.users || []).find(function (u) {
+      return (u.role || 'responsable') === 'responsable';
+    });
+    if (!responsable) throw Object.assign(new Error('Aucun compte responsable'), { status: 404 });
+
+    const action = String(corps.action || 'voir');
+
+    if (action === 'voir') {
+      return sendJson(res, 200, {
+        responsable: { id: responsable.id, name: responsable.name, email: responsable.email }
+      });
+    }
+
+    if (action === 'email') {
+      const email = String(corps.email || '').trim();
+      if (!util.isValidEmail(email)) throw Object.assign(new Error('Courriel invalide'), { status: 400 });
+      await db.write(function (data) {
+        const cible = data.users.find(function (u) {
+          return u.id === responsable.id;
+        });
+        cible.email = email;
+      });
+      await consigner(db, { qui: 'code maître', action: 'adresse du responsable modifiée', cible: email });
+      return sendJson(res, 200, { ok: true, email: email });
+    }
+
+    if (action === 'password') {
+      const faible = auth.checkPasswordStrength(String(corps.password || ''));
+      if (faible) throw Object.assign(new Error(faible), { status: 400 });
+      await db.write(function (data) {
+        const cible = data.users.find(function (u) {
+          return u.id === responsable.id;
+        });
+        cible.password = auth.hashPassword(String(corps.password));
+        // Toutes les sessions du responsable tombent : on ne sait pas qui les tient.
+        data.sessions = data.sessions.filter(function (sess) {
+          return sess.userId !== responsable.id;
+        });
+      });
+      await consigner(db, { qui: 'code maître', action: 'mot de passe du responsable changé', cible: responsable.email });
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (action === 'supprimer') {
+      /* Supprimer le responsable rouvre l'installation : au prochain
+         démarrage, l'application propose de créer le compte du bureau. Le
+         registre, lui, n'est pas touché. */
+      await db.write(function (data) {
+        data.users = data.users.filter(function (u) {
+          return u.id !== responsable.id;
+        });
+        data.sessions = data.sessions.filter(function (sess) {
+          return sess.userId !== responsable.id;
+        });
+      });
+      await consigner(db, { qui: 'code maître', action: 'compte responsable supprimé', cible: responsable.email });
+      return sendJson(res, 200, { ok: true, supprime: true });
+    }
+
+    throw Object.assign(new Error('Action inconnue'), { status: 400 });
+  }
+
   if (pathname === '/api/auth/login' && method === 'POST') {
     const body = await readBody(req);
     const email = String(body.email || '').trim();
@@ -1048,7 +1370,9 @@ async function handleApi(req, res, ctx, pathname) {
     // secrets des autres employé·es.
     return sendJson(res, 200, {
       contacts: db.data.contacts,
-      history: db.data.history,
+      // Les codes sont retirés du contenu servi, pas seulement de l'affichage :
+      // un onglet de développeur suffirait à lire ce que l'interface masque.
+      history: roles.masquerCodes(db.data.history, currentUser),
       settings: db.data.settings,
       suivi: reminders.resume(db.data.history)
     });
@@ -1059,6 +1383,7 @@ async function handleApi(req, res, ctx, pathname) {
   if (pathname === '/api/contacts') {
     if (method === 'GET') return sendJson(res, 200, db.data.contacts);
     if (method === 'POST') {
+      exigerDroit(currentUser, 'registre');
       const input = cleanContact(await readBody(req));
       const clash = findDuplicate(db.data.contacts, input.email, null);
       if (clash) {
@@ -1126,6 +1451,7 @@ async function handleApi(req, res, ctx, pathname) {
     if (!existing) throw Object.assign(new Error('Destinataire introuvable'), { status: 404 });
 
     if (method === 'PUT') {
+      exigerDroit(currentUser, 'registre');
       const input = cleanContact(await readBody(req));
       const clash = findDuplicate(db.data.contacts, input.email, id);
       if (clash) {
@@ -1146,6 +1472,7 @@ async function handleApi(req, res, ctx, pathname) {
       return sendJson(res, 200, updated);
     }
     if (method === 'DELETE') {
+      exigerDroit(currentUser, 'registre');
       await db.write(function (data) {
         data.contacts = data.contacts.filter(function (c) {
           return c.id !== id;
@@ -1163,7 +1490,7 @@ async function handleApi(req, res, ctx, pathname) {
   /* --- historique --- */
 
   if (pathname === '/api/history') {
-    if (method === 'GET') return sendJson(res, 200, db.data.history);
+    if (method === 'GET') return sendJson(res, 200, roles.masquerCodes(db.data.history, currentUser));
     if (method === 'POST') {
       const body = await readBody(req);
       const record = {
@@ -1204,6 +1531,10 @@ async function handleApi(req, res, ctx, pathname) {
 
   const codeMatch = pathname.match(/^\/api\/history\/by-code\/(\d{4})$/);
   if (codeMatch && method === 'GET') {
+    /* Consulter par code suppose le droit de remettre. Un agent sans le droit
+       « codes » peut malgré tout s'en servir : il saisit le code que la
+       personne lui présente, il ne le découvre pas dans l'application. */
+    exigerDroit(currentUser, 'remise');
     /* Consultation seule : l'agent doit voir ce qu'il s'apprête à remettre —
        à qui, quelle boîte, depuis combien de temps — avant de valider. */
     const code = codeMatch[1];
@@ -1233,6 +1564,7 @@ async function handleApi(req, res, ctx, pathname) {
   }
 
   if (pathname === '/api/history/pickup-by-code' && method === 'POST') {
+    exigerDroit(currentUser, 'remise');
     const body = await readBody(req);
     const code = String(body.code || '').replace(/\D/g, '');
     if (code.length !== 4) throw Object.assign(new Error('Le code compte quatre chiffres'), { status: 400 });
@@ -1296,6 +1628,7 @@ async function handleApi(req, res, ctx, pathname) {
     if (!entree) throw Object.assign(new Error('Courrier introuvable'), { status: 404 });
 
     if (suiviMatch[2] === 'pickup' && (method === 'POST' || method === 'DELETE')) {
+      exigerDroit(currentUser, 'remise');
       const retire = method === 'POST';
       const corps = retire ? await readBody(req) : {};
       /* Signature manuscrite : une image PNG en ligne. On borne sa taille — une
@@ -1382,6 +1715,7 @@ async function handleApi(req, res, ctx, pathname) {
   /* --- domiciliation --- */
 
   if (pathname === '/api/domiciliation' && method === 'GET') {
+    exigerDroit(currentUser, 'domiciliation');
     const parsed = new URL(req.url, 'http://localhost');
     const annee = Number(parsed.searchParams.get('annee')) || new Date().getFullYear();
     const options = {
@@ -1419,6 +1753,7 @@ async function handleApi(req, res, ctx, pathname) {
   if (pathname === '/api/settings') {
     if (method === 'GET') return sendJson(res, 200, db.data.settings);
     if (method === 'PUT') {
+      exigerDroit(currentUser, 'reglages');
       const body = await readBody(req);
       const subject = String(body.subject || '').trim();
       const messageBody = String(body.body || '').trim();
@@ -1535,6 +1870,7 @@ async function handleApi(req, res, ctx, pathname) {
   }
 
   if (pathname === '/api/backup/restore' && method === 'POST') {
+    exigerDroit(currentUser, 'reglages');
     const corps = await readBody(req);
     const resultat = await restaurer(db, String((corps && corps.fichier) || ''));
     await consigner(db, {
@@ -1551,6 +1887,7 @@ async function handleApi(req, res, ctx, pathname) {
   /* --- envoi --- */
 
   if (pathname === '/api/notify' && method === 'POST') {
+    exigerDroit(currentUser, 'guichet');
     const body = await readBody(req);
     const to = String(body.email || '').trim();
     const name = String(body.name || '').trim();
@@ -1689,6 +2026,7 @@ function createServer(options) {
     /* Domiciliation : durée de validité de l'attestation et seuil d'absence.
        Les valeurs courantes sont dans le module ; ces réglages permettent de
        suivre une pratique locale sans toucher au code. */
+    masterCodeHash: options.masterCodeHash,
     domiciliationMois: options.domiciliationMois,
     domiciliationAbsenceMois: options.domiciliationAbsenceMois
   });
