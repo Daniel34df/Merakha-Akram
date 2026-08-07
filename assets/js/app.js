@@ -427,6 +427,100 @@
       });
     });
 
+  /* ═════════════ signature de remise ═════════════ */
+
+  /** Ouvre le pavé de signature. Résout avec l'image, '' si passée, null si annulée. */
+  function demanderSignature(nom) {
+    return new Promise(function (resolve) {
+      const dlg = $('signatureDialog');
+      const canvas = $('signaturePad');
+      if (!dlg || typeof dlg.showModal !== 'function' || !canvas.getContext) {
+        resolve('');
+        return;
+      }
+      $('signatureQui').textContent = 'Remise à ' + nom + '.';
+
+      const ctx = canvas.getContext('2d');
+      const styles = getComputedStyle(document.body);
+      const effacer = function () {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = styles.getPropertyValue('--card') || '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = styles.getPropertyValue('--navy') || '#16233F';
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+      };
+      effacer();
+
+      let dessine = false;
+      let vide = true;
+      const point = function (e) {
+        const r = canvas.getBoundingClientRect();
+        const src = e.touches ? e.touches[0] : e;
+        return {
+          x: ((src.clientX - r.left) / r.width) * canvas.width,
+          y: ((src.clientY - r.top) / r.height) * canvas.height
+        };
+      };
+      const debut = function (e) {
+        e.preventDefault();
+        dessine = true;
+        vide = false;
+        const p = point(e);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+      };
+      const trace = function (e) {
+        if (!dessine) return;
+        e.preventDefault();
+        const p = point(e);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      };
+      const fin = function () {
+        dessine = false;
+      };
+
+      canvas.addEventListener('mousedown', debut);
+      canvas.addEventListener('mousemove', trace);
+      root.addEventListener('mouseup', fin);
+      canvas.addEventListener('touchstart', debut, { passive: false });
+      canvas.addEventListener('touchmove', trace, { passive: false });
+      canvas.addEventListener('touchend', fin);
+
+      const terminer = function (valeur) {
+        canvas.removeEventListener('mousedown', debut);
+        canvas.removeEventListener('mousemove', trace);
+        root.removeEventListener('mouseup', fin);
+        canvas.removeEventListener('touchstart', debut);
+        canvas.removeEventListener('touchmove', trace);
+        canvas.removeEventListener('touchend', fin);
+        dlg.close();
+        resolve(valeur);
+      };
+
+      $('signatureEffacer').onclick = function () {
+        effacer();
+        vide = true;
+      };
+      $('signaturePasser').onclick = function () {
+        terminer('');
+      };
+      $('signatureValider').onclick = function () {
+        terminer(vide ? '' : canvas.toDataURL('image/png'));
+      };
+      dlg.addEventListener(
+        'cancel',
+        function () {
+          terminer(null);
+        },
+        { once: true }
+      );
+      dlg.showModal();
+    });
+  }
+
   /* ═════════════ remise par code ═════════════ */
 
   async function remettreParCode() {
@@ -436,7 +530,12 @@
       return;
     }
     try {
-      const entree = await store.pickupByCode(code);
+      const apercu = S.history.find(function (h) {
+        return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
+      });
+      const signature = await demanderSignature(apercu ? apercu.name : 'ce destinataire');
+      if (signature === null) return; // annulé
+      const entree = await store.pickupByCode(code, signature);
       $('pickupCode').value = '';
       stamp('Remis', entree.name);
       setMsg(
@@ -535,8 +634,43 @@
         const c = S.contacts.find(function (x) {
           return x.id === btn.dataset.send;
         });
-        if (c) sendNotification(c, btn);
+        if (c) notifierEnTenantCompteDesAbsences(c, btn);
       });
+    });
+  }
+
+  /** Prévient avant de notifier quelqu'un qui ne viendra pas, et propose son remplaçant. */
+  async function notifierEnTenantCompteDesAbsences(contact, btn) {
+    const etat = util.presence(contact);
+    if (etat.etat === 'present') return sendNotification(contact, btn);
+
+    const remplacant = etat.substituteId
+      ? S.contacts.find(function (c) {
+          return c.id === etat.substituteId;
+        })
+      : null;
+
+    $('searchResults').innerHTML =
+      '<div class="card"><div class="msg error"><strong>' +
+      esc(contact.name) +
+      '</strong> ' +
+      esc(etat.message) +
+      '.' +
+      (remplacant
+        ? '<br>Son courrier est à remettre à <strong>' + esc(remplacant.name) + '</strong>.'
+        : '<br>Aucun remplaçant n’est désigné.') +
+      '</div><div class="row-actions">' +
+      (remplacant ? '<button class="btn" id="notifRemplacant">Notifier ' + esc(remplacant.name) + '</button>' : '') +
+      '<button class="btn ghost" id="notifQuandMeme">Notifier ' + esc(contact.name) + ' quand même</button>' +
+      '</div></div>';
+
+    if (remplacant) {
+      $('notifRemplacant').addEventListener('click', function () {
+        sendNotification(remplacant, null, { pour: contact.name });
+      });
+    }
+    $('notifQuandMeme').addEventListener('click', function () {
+      sendNotification(contact, null);
     });
   }
 
@@ -644,6 +778,9 @@
     }
     const message = notify.compose(contact, S.settings, copies);
     message.type = opts.type || view.typeCourrier;
+    if (opts.pour) {
+      message.body += '\n\n(Ce courrier est adressé à ' + opts.pour + ', dont vous assurez le relais.)';
+    }
     const mailto = notify.mailtoUrl(contact, message);
     if (btn) btn.disabled = true;
 
@@ -829,7 +966,11 @@
         ['Courriers reçus', String(courriers.length)],
         ['Retirés', String(retires.length)],
         ['En attente', String(courriers.filter(enAttente).length)],
-        ['Délai moyen de retrait', moyenne === null ? '—' : moyenne + ' jour(s)']
+        ['Délai moyen de retrait', moyenne === null ? '—' : moyenne + ' jour(s)'],
+        [
+          'Présence',
+          util.presence(c).etat === 'present' ? 'présent·e' : util.presence(c).message
+        ]
       ]
         .map(function (r) {
           return '<div><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd></div>';
@@ -1056,6 +1197,180 @@
     toast('Dossier exporté.', 'ok');
   });
 
+  /* ═════════════ statistiques ═════════════ */
+
+  async function renderStats() {
+    const box = $('statsCorps');
+    if (S.mode !== 'serveur') {
+      // Hors serveur, on calcule sur ce que ce poste connaît.
+      box.innerHTML = '<p class="hint">Statistiques du registre de ce poste.</p>' + tableauStats(statsLocales());
+      return;
+    }
+    try {
+      box.innerHTML = tableauStats(await store.loadStats());
+    } catch (err) {
+      box.innerHTML = '<div class="empty">Statistiques indisponibles.</div>';
+    }
+  }
+
+  function statsLocales() {
+    const periode = function (jours) {
+      const depuis = Date.now() - jours * 86400000;
+      const recus = S.history.filter(function (h) {
+        return new Date(h.date).getTime() >= depuis;
+      });
+      const retires = recus.filter(function (h) {
+        return h.pickedUpAt;
+      });
+      return { recus: recus.length, retires: retires.length, taux: recus.length ? Math.round((retires.length / recus.length) * 100) : null };
+    };
+    return { total: S.history.length, semaine: periode(7), mois: periode(30), annee: periode(365), boitesActives: [], parType: {} };
+  }
+
+  function tableauStats(st) {
+    const ligne = function (titre, p) {
+      return (
+        '<tr><td>' +
+        titre +
+        '</td><td class="attente-cell">' +
+        p.recus +
+        '</td><td class="attente-cell">' +
+        p.retires +
+        '</td><td class="attente-cell">' +
+        (p.taux === null ? '—' : p.taux + ' %') +
+        '</td></tr>'
+      );
+    };
+    return (
+      '<div class="table-scroll"><table><thead><tr><th>Période</th><th>Reçus</th><th>Retirés</th><th>Taux</th></tr></thead><tbody>' +
+      ligne('7 derniers jours', st.semaine) +
+      ligne('30 derniers jours', st.mois) +
+      ligne('12 derniers mois', st.annee) +
+      '</tbody></table></div>' +
+      '<dl class="status-list" style="margin-top:16px;">' +
+      [
+        ['Total consigné', String(st.total)],
+        ['Délai moyen de retrait', st.delaiMoyenJours == null ? '—' : st.delaiMoyenJours + ' jour(s)'],
+        ['Courriers relancés', String(st.relances || 0)],
+        ['À traiter', String(st.signales || 0)]
+      ]
+        .map(function (r) {
+          return '<div><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd></div>';
+        })
+        .join('') +
+      '</dl>' +
+      (st.boitesActives && st.boitesActives.length
+        ? '<h3 class="sous-titre">Boîtes les plus actives</h3><div class="table-scroll"><table><tbody>' +
+          st.boitesActives
+            .map(function (b) {
+              return '<tr><td class="box-cell">' + esc(b.boite) + '</td><td class="attente-cell">' + b.courriers + '</td></tr>';
+            })
+            .join('') +
+          '</tbody></table></div>'
+        : '')
+    );
+  }
+
+  /* ═════════════ journal d'activité ═════════════ */
+
+  async function renderJournal() {
+    const carte = $('journalCard');
+    carte.hidden = S.mode !== 'serveur';
+    if (S.mode !== 'serveur') return;
+    try {
+      const data = await store.loadJournal(100);
+      $('journalTable').innerHTML = data.entrees.length
+        ? '<div class="table-scroll"><table><thead><tr><th>Quand</th><th>Qui</th><th>Action</th><th>Sur</th></tr></thead><tbody>' +
+          data.entrees
+            .map(function (e) {
+              return (
+                '<tr><td class="attente-cell">' +
+                esc(util.formatDateTime(e.at)) +
+                '</td><td>' +
+                esc(e.qui || '—') +
+                '</td><td>' +
+                esc(e.action) +
+                '</td><td>' +
+                esc(e.cible) +
+                (e.details ? ' <span class="hint">' + esc(e.details) + '</span>' : '') +
+                '</td></tr>'
+              );
+            })
+            .join('') +
+          '</tbody></table></div>'
+        : '<div class="empty">Aucune action consignée pour l’instant.</div>';
+    } catch (err) {
+      $('journalTable').innerHTML = '<div class="empty">Journal indisponible.</div>';
+    }
+  }
+
+  $('rafraichirJournalBtn').addEventListener('click', renderJournal);
+
+  /* ═════════════ feuille de casier ═════════════ */
+
+  $('feuilleCasierBtn').addEventListener('click', function () {
+    const attente = S.history.filter(enAttente);
+    if (attente.length === 0) {
+      toast('Aucun courrier en attente.', 'error');
+      return;
+    }
+    // Triée par numéro de boîte : c'est l'ordre dans lequel on parcourt le local.
+    const lignes = attente
+      .map(function (h) {
+        const contact = S.contacts.find(function (c) {
+          return c.id === h.contactId;
+        });
+        return {
+          boite: (contact && contact.box) || '',
+          nom: h.name,
+          jours: joursDepuis(h.date),
+          type: util.typeCourrier(h.type).label,
+          code: h.pickupCode || ''
+        };
+      })
+      .sort(function (a, b) {
+        return util.normalizeBox(a.boite).localeCompare(util.normalizeBox(b.boite), 'fr', { numeric: true });
+      });
+
+    $('feuilleCasier').innerHTML =
+      '<h1>Courriers en attente</h1>' +
+      '<p>' +
+      (S.settings.officeName || 'Bureau du Courrier') +
+      ' — ' +
+      new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) +
+      ' — ' +
+      lignes.length +
+      ' courrier(s)</p>' +
+      '<table><thead><tr><th>Boîte</th><th>Nom</th><th>Type</th><th>Attente</th><th>Code</th><th>Retiré</th></tr></thead><tbody>' +
+      lignes
+        .map(function (l) {
+          return (
+            '<tr><td class="b">' +
+            esc(l.boite || '—') +
+            '</td><td>' +
+            esc(l.nom) +
+            '</td><td>' +
+            esc(l.type) +
+            '</td><td>' +
+            l.jours +
+            ' j</td><td class="b">' +
+            esc(l.code) +
+            '</td><td class="case"></td></tr>'
+          );
+        })
+        .join('') +
+      '</tbody></table>';
+
+    $('feuilleCasier').hidden = false;
+    document.body.classList.add('impression-casier');
+    root.print();
+    // Le retour d'impression n'est pas fiable partout : on rétablit tout de suite.
+    setTimeout(function () {
+      document.body.classList.remove('impression-casier');
+      $('feuilleCasier').hidden = true;
+    }, 500);
+  });
+
   /* ═════════════ pile de courrier ═════════════ */
 
   function renderPileState() {
@@ -1244,6 +1559,17 @@
     return util.sortByName(list);
   }
 
+  /** Lit la ligne d'absence associée à un destinataire en cours de modification. */
+  function lireAbsence(id) {
+    const ligne = document.querySelector('tr[data-absence="' + CSS.escape(id) + '"]');
+    if (!ligne) return {};
+    return {
+      absentUntil: ligne.querySelector('.edit-absent').value || '',
+      departed: ligne.querySelector('.edit-departed').checked,
+      substituteId: ligne.querySelector('.edit-substitute').value || null
+    };
+  }
+
   function renderContacts() {
     $('countContacts').textContent = S.contacts.length;
     $('tabCountContacts').textContent = S.contacts.length;
@@ -1281,7 +1607,38 @@
               '<button class="link-btn" data-save="' +
               esc(c.id) +
               '">Enregistrer</button>' +
-              '<button class="link-btn" data-cancel="1">Annuler</button></td></tr>'
+              '<button class="link-btn" data-cancel="1">Annuler</button></td></tr>' +
+              '<tr data-absence="' +
+              esc(c.id) +
+              '"><td colspan="4" class="absence-edit">' +
+              '<label>Absent·e jusqu’au</label>' +
+              '<input type="date" class="edit-absent" value="' +
+              esc(c.absentUntil || '') +
+              '">' +
+              '<label class="inline"><input type="checkbox" class="edit-departed"' +
+              (c.departed ? ' checked' : '') +
+              '> a quitté l’organisme</label>' +
+              '<label>Remplaçant·e</label>' +
+              '<select class="edit-substitute"><option value="">— aucun —</option>' +
+              util
+                .sortByName(
+                  S.contacts.filter(function (autre) {
+                    return autre.id !== c.id;
+                  })
+                )
+                .map(function (autre) {
+                  return (
+                    '<option value="' +
+                    esc(autre.id) +
+                    '"' +
+                    (c.substituteId === autre.id ? ' selected' : '') +
+                    '>' +
+                    esc(autre.name) +
+                    '</option>'
+                  );
+                })
+                .join('') +
+              '</select></td></tr>'
             );
           }
           return (
@@ -1290,6 +1647,9 @@
             (c.box ? esc(c.box) : '—') +
             '</td><td>' +
             esc(c.name) +
+            (util.presence(c).etat !== 'present'
+              ? '<span class="absence-tag">' + esc(util.presence(c).message) + '</span>'
+              : '') +
             '</td><td>' +
             esc(c.email) +
             '</td>' +
@@ -1330,7 +1690,10 @@
         const row = box.querySelector('tr[data-row="' + CSS.escape(btn.dataset.save) + '"]');
         const name = row.querySelector('.edit-name').value.trim();
         const email = row.querySelector('.edit-email').value.trim();
-        const box = row.querySelector('.edit-box').value.trim();
+        // Surtout pas « box » ici : le conteneur du tableau porte déjà ce nom,
+        // et la redéclaration le rendait inaccessible dès la première ligne.
+        const boite = row.querySelector('.edit-box').value.trim();
+        const absence = lireAbsence(btn.dataset.save);
         if (!name || !util.isValidEmail(email)) {
           toast('Nom ou courriel invalide.', 'error');
           return;
@@ -1341,7 +1704,10 @@
           return;
         }
         try {
-          await store.updateContact(btn.dataset.save, { name: name, email: email, box: box });
+          await store.updateContact(
+            btn.dataset.save,
+            Object.assign({ name: name, email: email, box: boite }, absence)
+          );
           view.editingId = null;
           renderContacts();
           toast('Destinataire mis à jour.', 'ok');
@@ -1383,7 +1749,7 @@
         if (!c) return;
         showPanel('guichet');
         nameInput.value = c.name;
-        sendNotification(c);
+        notifierEnTenantCompteDesAbsences(c);
       });
     });
   }
@@ -1629,7 +1995,15 @@
       const id = btn.dataset.pickup || btn.dataset.unpickup;
       btn.addEventListener('click', async function () {
         try {
-          await store.setPickedUp(id, !!btn.dataset.pickup);
+          let signature = '';
+          if (btn.dataset.pickup) {
+            const entree = S.history.find(function (h) {
+              return h.id === id;
+            });
+            signature = await demanderSignature(entree ? entree.name : 'ce destinataire');
+            if (signature === null) return;
+          }
+          await store.setPickedUp(id, !!btn.dataset.pickup, signature);
           toast(btn.dataset.pickup ? 'Courrier marqué récupéré.' : 'Retour en attente.');
         } catch (err) {
           toast('Impossible : ' + err.message, 'error');
@@ -2355,6 +2729,8 @@
     renderPending();
     renderDossier();
     renderAccounts();
+    renderStats();
+    renderJournal();
   }
 
   store.onChange(renderAll);

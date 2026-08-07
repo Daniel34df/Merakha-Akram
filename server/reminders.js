@@ -172,6 +172,82 @@ function construireRecap(history, contacts, options) {
   };
 }
 
+/**
+ * Statistiques d'exploitation : volumes, taux de retrait, délai moyen, boîtes
+ * les plus actives. Sert au rapport annuel et à voir si le service tient.
+ */
+function statistiques(history, contacts, options) {
+  const opts = options || {};
+  const maintenant = opts.now || Date.now();
+  const tous = history || [];
+
+  const parPeriode = function (jours) {
+    const depuis = maintenant - jours * JOUR;
+    const recus = tous.filter(function (h) {
+      return new Date(h.date).getTime() >= depuis;
+    });
+    const retires = recus.filter(function (h) {
+      return !!h.pickedUpAt;
+    });
+    return {
+      recus: recus.length,
+      retires: retires.length,
+      // Le taux ne veut rien dire sur un échantillon vide.
+      taux: recus.length ? Math.round((retires.length / recus.length) * 100) : null
+    };
+  };
+
+  const delais = tous
+    .filter(function (h) {
+      return h.pickedUpAt;
+    })
+    .map(function (h) {
+      return (new Date(h.pickedUpAt) - new Date(h.date)) / JOUR;
+    });
+  const moyenne = delais.length
+    ? Math.round((delais.reduce(function (a, b) { return a + b; }, 0) / delais.length) * 10) / 10
+    : null;
+
+  const parBoite = {};
+  tous.forEach(function (h) {
+    const contact = (contacts || []).find(function (c) {
+      return c.id === h.contactId;
+    });
+    const cle = (contact && contact.box) || '(sans boîte)';
+    parBoite[cle] = (parBoite[cle] || 0) + 1;
+  });
+  const boitesActives = Object.keys(parBoite)
+    .map(function (b) {
+      return { boite: b, courriers: parBoite[b] };
+    })
+    .sort(function (a, b) {
+      return b.courriers - a.courriers;
+    })
+    .slice(0, 5);
+
+  const parType = {};
+  tous.forEach(function (h) {
+    const label = util.typeCourrier(h.type).label;
+    parType[label] = (parType[label] || 0) + 1;
+  });
+
+  return {
+    total: tous.length,
+    semaine: parPeriode(7),
+    mois: parPeriode(30),
+    annee: parPeriode(365),
+    delaiMoyenJours: moyenne,
+    relances: tous.filter(function (h) {
+      return (h.reminderCount || 0) > 0;
+    }).length,
+    signales: tous.filter(function (h) {
+      return etat(h) === 'signale';
+    }).length,
+    boitesActives: boitesActives,
+    parType: parType
+  };
+}
+
 /** Met le récapitulatif en texte lisible dans un courriel. */
 function recapEnTexte(recap, bureau) {
   const jour = function (iso) {
@@ -271,6 +347,7 @@ module.exports = {
   aSignaler: aSignaler,
   delaiPour: delaiPour,
   construireRecap: construireRecap,
+  statistiques: statistiques,
   recapEnTexte: recapEnTexte,
   recapDu: recapDu,
   etat: etat,

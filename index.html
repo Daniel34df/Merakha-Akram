@@ -257,8 +257,18 @@
   <!-- ═══════════════ DOSSIER ═══════════════ -->
   <section class="panel" id="panel-dossier" aria-label="Dossier des courriers signalés">
     <div class="card">
-      <h2>Ce que la relance a donné</h2>
+      <div class="card-head">
+        <h2>Ce que la relance a donné</h2>
+        <div class="toolbar">
+          <button class="btn ghost small" id="feuilleCasierBtn">Feuille de casier</button>
+        </div>
+      </div>
       <dl class="status-list" id="relanceBilan"></dl>
+    </div>
+
+    <div class="card">
+      <h2>Statistiques</h2>
+      <div id="statsCorps"><div class="empty">Chargement…</div></div>
     </div>
 
     <div class="card">
@@ -448,6 +458,19 @@
       <div id="accountsMsg"></div>
     </div>
 
+    <div class="card" id="journalCard">
+      <div class="card-head">
+        <h2>Journal d'activité</h2>
+        <div class="toolbar">
+          <button class="btn ghost small" id="rafraichirJournalBtn">Rafraîchir</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-bottom:12px;">
+        Qui a ajouté, modifié ou supprimé quoi. Les 100 dernières actions.
+      </p>
+      <div id="journalTable"><div class="empty">Chargement…</div></div>
+    </div>
+
     <div class="card">
       <h2>État du système</h2>
       <dl class="status-list" id="statusList"></dl>
@@ -464,6 +487,22 @@
 </div>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
+
+<div class="feuille-casier" id="feuilleCasier" hidden></div>
+
+<dialog id="signatureDialog">
+  <div class="fiche">
+    <h3>Signature de remise</h3>
+    <p class="hint" id="signatureQui"></p>
+    <canvas id="signaturePad" width="560" height="180"></canvas>
+    <p class="hint">Signez avec le doigt ou la souris.</p>
+    <div class="row-actions end" style="margin-top:14px;">
+      <button class="btn ghost" id="signatureEffacer">Effacer</button>
+      <button class="btn ghost" id="signaturePasser">Sans signature</button>
+      <button class="btn" id="signatureValider">Valider la remise</button>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="ficheDialog">
   <div class="fiche">

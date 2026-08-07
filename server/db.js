@@ -26,7 +26,8 @@ function emptyDb() {
     settings: Object.assign({}, DEFAULT_SETTINGS),
     users: [],
     sessions: [],
-    pending: []
+    pending: [],
+    journal: []
   };
 }
 
@@ -54,6 +55,7 @@ class Db {
           : [],
         // Inscriptions en attente de confirmation : les codes périmés ne
         // servent plus à rien et n'ont pas à traîner dans le fichier.
+        journal: Array.isArray(parsed.journal) ? parsed.journal : [],
         pending: Array.isArray(parsed.pending)
           ? parsed.pending.filter(function (p) {
               return p && new Date(p.expiresAt).getTime() > Date.now();
@@ -113,6 +115,25 @@ class Db {
    Le registre tient dans un seul fichier : une erreur de manipulation ou un
    disque défaillant l'emporte en entier. Une copie par jour, gardée quelques
    semaines, coûte quelques kilo-octets et évite de tout perdre. */
+/* Journal d'activité : qui a fait quoi. Dans un bureau partagé, c'est ce qui
+   évite les discussions — sans accuser personne, il suffit de regarder.
+   Le journal est borné : au-delà, les plus anciennes lignes disparaissent. */
+const JOURNAL_MAX = 2000;
+
+function consigner(db, entree) {
+  return db.write(function (data) {
+    if (!Array.isArray(data.journal)) data.journal = [];
+    data.journal.unshift({
+      at: new Date().toISOString(),
+      qui: entree.qui || null,
+      action: entree.action,
+      cible: entree.cible || '',
+      details: entree.details || ''
+    });
+    if (data.journal.length > JOURNAL_MAX) data.journal.length = JOURNAL_MAX;
+  });
+}
+
 async function sauvegarder(db, options) {
   const opts = options || {};
   const dossier = opts.dossier || path.join(path.dirname(db.file), 'sauvegardes');
@@ -141,5 +162,7 @@ module.exports = {
   Db: Db,
   DEFAULT_SETTINGS: DEFAULT_SETTINGS,
   emptyDb: emptyDb,
-  sauvegarder: sauvegarder
+  sauvegarder: sauvegarder,
+  consigner: consigner,
+  JOURNAL_MAX: JOURNAL_MAX
 };

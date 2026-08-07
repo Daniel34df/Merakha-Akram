@@ -9,7 +9,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const util = require('../assets/js/util.js');
-const { DEFAULT_SETTINGS, sauvegarder } = require('./db.js');
+const { DEFAULT_SETTINGS, sauvegarder, consigner } = require('./db.js');
 const auth = require('./auth.js');
 const { createUserMailer } = require('./mailer.js');
 const reminders = require('./reminders.js');
@@ -123,7 +123,19 @@ function cleanContact(input) {
   const box = String((input && input.box) || '').trim().slice(0, 40);
   if (!name) throw Object.assign(new Error('Nom manquant'), { status: 400 });
   if (!util.isValidEmail(email)) throw Object.assign(new Error('Courriel invalide'), { status: 400 });
-  return { name: name, email: email, box: box };
+
+  const absentUntil = String((input && input.absentUntil) || '').trim();
+  if (absentUntil && !/^\d{4}-\d{2}-\d{2}$/.test(absentUntil)) {
+    throw Object.assign(new Error('Date d’absence invalide (attendu AAAA-MM-JJ)'), { status: 400 });
+  }
+  return {
+    name: name,
+    email: email,
+    box: box,
+    absentUntil: absentUntil,
+    departed: !!(input && input.departed),
+    substituteId: String((input && input.substituteId) || '').trim() || null
+  };
 }
 
 function findDuplicate(contacts, email, exceptId) {
@@ -817,15 +829,15 @@ async function handleApi(req, res, ctx, pathname) {
       if (clash) {
         throw Object.assign(new Error('Ce courriel est déjà au registre sous « ' + clash.name + ' »'), { status: 409 });
       }
-      const contact = {
-        id: crypto.randomUUID(),
-        name: input.name,
-        email: input.email,
-        box: input.box,
-        createdAt: new Date().toISOString()
-      };
+      const contact = Object.assign({ id: crypto.randomUUID(), createdAt: new Date().toISOString() }, input);
       await db.write(function (data) {
         data.contacts.push(contact);
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'destinataire ajouté',
+        cible: contact.name,
+        details: contact.box ? 'boîte ' + contact.box : ''
       });
       return sendJson(res, 201, contact);
     }
@@ -852,6 +864,11 @@ async function handleApi(req, res, ctx, pathname) {
         });
         data.contacts[i] = updated;
       });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'destinataire modifié',
+        cible: updated.name
+      });
       return sendJson(res, 200, updated);
     }
     if (method === 'DELETE') {
@@ -859,6 +876,11 @@ async function handleApi(req, res, ctx, pathname) {
         data.contacts = data.contacts.filter(function (c) {
           return c.id !== id;
         });
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'destinataire supprimé',
+        cible: existing.name
       });
       return sendJson(res, 200, { deleted: id });
     }
@@ -925,6 +947,12 @@ async function handleApi(req, res, ctx, pathname) {
       });
     }
 
+    let signature = String(body.signature || '');
+    if (signature && !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signature)) {
+      throw Object.assign(new Error('Signature illisible'), { status: 400 });
+    }
+    if (signature.length > 80000) throw Object.assign(new Error('Signature trop volumineuse'), { status: 413 });
+
     const cible = candidats[0];
     await db.write(function (data) {
       const h = data.history.find(function (x) {
@@ -933,6 +961,13 @@ async function handleApi(req, res, ctx, pathname) {
       h.pickedUpAt = new Date().toISOString();
       h.pickedUpBy = currentUser ? currentUser.name : null;
       h.pickedUpByCode = true;
+      h.signature = signature || null;
+    });
+    await consigner(db, {
+      qui: currentUser && currentUser.name,
+      action: 'courrier remis',
+      cible: cible.name,
+      details: 'par code' + (signature ? ' avec signature' : '')
     });
     return sendJson(res, 200, {
       record: db.data.history.find(function (h) {
@@ -953,12 +988,30 @@ async function handleApi(req, res, ctx, pathname) {
 
     if (suiviMatch[2] === 'pickup' && (method === 'POST' || method === 'DELETE')) {
       const retire = method === 'POST';
+      const corps = retire ? await readBody(req) : {};
+      /* Signature manuscrite : une image PNG en ligne. On borne sa taille — une
+         signature tient largement dans quelques dizaines de kilo-octets, et le
+         registre ne doit pas enfler indéfiniment. */
+      let signature = String((corps && corps.signature) || '');
+      if (signature && !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signature)) {
+        throw Object.assign(new Error('Signature illisible'), { status: 400 });
+      }
+      if (signature.length > 80000) {
+        throw Object.assign(new Error('Signature trop volumineuse'), { status: 413 });
+      }
       await db.write(function (data) {
         const cible = data.history.find(function (h) {
           return h.id === id;
         });
         cible.pickedUpAt = retire ? new Date().toISOString() : null;
         cible.pickedUpBy = retire && currentUser ? currentUser.name : null;
+        cible.signature = retire && signature ? signature : null;
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: retire ? 'courrier remis' : 'remise annulée',
+        cible: entree.name,
+        details: retire && signature ? 'avec signature' : ''
       });
       return sendJson(res, 200, {
         record: db.data.history.find(function (h) {
@@ -1050,6 +1103,17 @@ async function handleApi(req, res, ctx, pathname) {
       });
       return sendJson(res, 200, settings);
     }
+  }
+
+  /* --- journal et statistiques --- */
+
+  if (pathname === '/api/stats' && method === 'GET') {
+    return sendJson(res, 200, reminders.statistiques(db.data.history, db.data.contacts));
+  }
+
+  if (pathname === '/api/journal' && method === 'GET') {
+    const limite = Math.min(Number(new URL(req.url, 'http://x').searchParams.get('limite') || 100), 500);
+    return sendJson(res, 200, { entrees: (db.data.journal || []).slice(0, limite) });
   }
 
   /* --- sauvegarde --- */

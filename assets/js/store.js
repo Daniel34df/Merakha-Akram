@@ -241,10 +241,11 @@
   }
 
   /** Marque un courrier retiré (ou revient en arrière). */
-  async function setPickedUp(id, retire) {
+  async function setPickedUp(id, retire, signature) {
     if (state.mode === 'serveur') {
       const result = await api('/history/' + encodeURIComponent(id) + '/pickup', {
-        method: retire ? 'POST' : 'DELETE'
+        method: retire ? 'POST' : 'DELETE',
+        body: retire && signature ? JSON.stringify({ signature: signature }) : undefined
       });
       return remplacerEntree(result.record);
     }
@@ -253,13 +254,14 @@
     });
     if (!entree) return null;
     entree.pickedUpAt = retire ? new Date().toISOString() : null;
+    entree.signature = retire && signature ? signature : null;
     persistLocal();
     emit();
     return entree;
   }
 
   /** Remise au guichet par le code présenté par le destinataire. */
-  async function pickupByCode(code) {
+  async function pickupByCode(code, signature) {
     if (state.mode !== 'serveur') {
       const entree = state.history.find(function (h) {
         return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
@@ -270,7 +272,10 @@
       emit();
       return entree;
     }
-    const result = await api('/history/pickup-by-code', { method: 'POST', body: JSON.stringify({ code: code }) });
+    const result = await api('/history/pickup-by-code', {
+      method: 'POST',
+      body: JSON.stringify({ code: code, signature: signature || '' })
+    });
     return remplacerEntree(result.record);
   }
 
@@ -303,6 +308,14 @@
   }
 
   /* ---------- sauvegarde et comptes ---------- */
+
+  async function loadStats() {
+    return api('/stats');
+  }
+
+  async function loadJournal(limite) {
+    return api('/journal?limite=' + (limite || 100));
+  }
 
   async function serverBackup() {
     return api('/backup', { method: 'POST' });
@@ -398,7 +411,10 @@
       id: util.uuid(),
       name: input.name.trim(),
       email: input.email.trim(),
-      box: (input.box || '').trim()
+      box: (input.box || '').trim(),
+      absentUntil: input.absentUntil || '',
+      departed: !!input.departed,
+      substituteId: input.substituteId || null
     };
     if (state.mode === 'serveur') {
       const saved = await api('/contacts', { method: 'POST', body: JSON.stringify(contact) });
@@ -427,7 +443,10 @@
     const updated = Object.assign({}, state.contacts[idx], {
       name: patch.name.trim(),
       email: patch.email.trim(),
-      box: (patch.box || '').trim()
+      box: (patch.box || '').trim(),
+      absentUntil: patch.absentUntil !== undefined ? patch.absentUntil : state.contacts[idx].absentUntil || '',
+      departed: patch.departed !== undefined ? !!patch.departed : !!state.contacts[idx].departed,
+      substituteId: patch.substituteId !== undefined ? patch.substituteId : state.contacts[idx].substituteId || null
     });
     if (state.mode === 'serveur') {
       state.contacts[idx] = await api('/contacts/' + encodeURIComponent(id), {
@@ -560,6 +579,8 @@
     closeMail: closeMail,
     relancer: relancer,
     serverBackup: serverBackup,
+    loadStats: loadStats,
+    loadJournal: loadJournal,
     changePassword: changePassword,
     listUsers: listUsers,
     removeUser: removeUser,

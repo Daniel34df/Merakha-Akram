@@ -202,6 +202,41 @@
       });
   }
 
+  /**
+   * État de présence d'un destinataire.
+   *   absentUntil — date 'AAAA-MM-JJ' incluse, ou vide
+   *   departed    — a quitté l'organisme, définitivement
+   *   substituteId— qui reçoit le courrier à sa place
+   *
+   * Notifier quelqu'un qui ne viendra pas est une perte sèche : le guichet doit
+   * pouvoir le dire avant d'envoyer.
+   */
+  function presence(contact, now) {
+    const c = contact || {};
+    const maintenant = now ? new Date(now) : new Date();
+    const jour = maintenant.toISOString().slice(0, 10);
+
+    if (c.departed) {
+      return { etat: 'parti', message: 'a quitté l’organisme', substituteId: c.substituteId || null };
+    }
+    if (c.absentUntil && c.absentUntil >= jour) {
+      return {
+        etat: 'absent',
+        message: 'absent·e jusqu’au ' + formatJour(c.absentUntil),
+        jusqua: c.absentUntil,
+        substituteId: c.substituteId || null
+      };
+    }
+    return { etat: 'present', message: '', substituteId: null };
+  }
+
+  /** '2026-08-15' → '15 août 2026'. */
+  function formatJour(iso) {
+    const d = new Date(iso + 'T12:00:00');
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
   /** Identifiant stable, avec repli quand crypto.randomUUID n'existe pas. */
   function uuid() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -434,6 +469,8 @@
     typeCourrier: typeCourrier,
     distance: distance,
     suggestionsProches: suggestionsProches,
+    presence: presence,
+    formatJour: formatJour,
     sortByName: sortByName,
     toCsv: toCsv,
     parseCsv: parseCsv,

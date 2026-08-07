@@ -4,6 +4,8 @@
 'use strict';
 
 const path = require('node:path');
+const fs = require('node:fs');
+const https = require('node:https');
 const { spawn } = require('node:child_process');
 const { Db } = require('./db.js');
 const { createMailer } = require('./mailer.js');
@@ -79,9 +81,29 @@ async function main() {
     rootDir: ROOT
   });
 
-  server.listen(port, host, function () {
+  /* HTTPS : indispensable dès que l'application sort du poste local — sans lui,
+     mot de passe et cookie circulent en clair, et les navigateurs refusent
+     d'installer l'application. Voir docs/mise-en-service-https.md. */
+  let ecoute = server;
+  let protocole = 'http';
+  if (process.env.HTTPS_KEY && process.env.HTTPS_CERT) {
+    try {
+      ecoute = https.createServer(
+        {
+          key: fs.readFileSync(process.env.HTTPS_KEY),
+          cert: fs.readFileSync(process.env.HTTPS_CERT)
+        },
+        server.listeners('request')[0]
+      );
+      protocole = 'https';
+    } catch (err) {
+      console.error('Certificat illisible (' + err.message + ') — démarrage en http.');
+    }
+  }
+
+  ecoute.listen(port, host, function () {
     console.log('Bureau du Courrier v' + VERSION);
-    console.log('  interface   http://localhost:' + port);
+    console.log('  interface   ' + protocole + '://localhost:' + port);
     console.log('  registre    ' + dbFile + ' (' + db.data.contacts.length + ' destinataire(s))');
     console.log(
       '  courriel    ' +
@@ -111,7 +133,7 @@ async function main() {
     );
     console.log('  boîte perso ' + (google.enabled ? 'connexion Google disponible' : 'Google non configuré — SMTP personnel seulement'));
     if (String(process.env.OPEN_BROWSER || '') === '1') {
-      openBrowser('http://localhost:' + port);
+      openBrowser(protocole + '://localhost:' + port);
     }
   });
 
@@ -168,7 +190,7 @@ async function main() {
   const shutdown = function () {
     arreterRelances();
     console.log('\nArrêt du serveur…');
-    server.close(function () {
+    ecoute.close(function () {
       process.exit(0);
     });
     setTimeout(function () {

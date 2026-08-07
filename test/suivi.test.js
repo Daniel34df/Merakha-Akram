@@ -481,3 +481,130 @@ test('suggestionsProches retrouve un nom mal orthographié', function () {
   assert.deepEqual(util.suggestionsProches(contacts, 'Dupont'), [], 'aucun rapprochement abusif');
   assert.deepEqual(util.suggestionsProches(contacts, 'ab'), [], 'trop court pour comparer');
 });
+
+/* ---------- absences ---------- */
+
+test('presence distingue présent, absent et parti', function () {
+  const util = require('../assets/js/util.js');
+  const aujourdhui = new Date(2026, 7, 7);
+  assert.equal(util.presence({}, aujourdhui).etat, 'present');
+  assert.equal(util.presence({ absentUntil: '2026-08-20' }, aujourdhui).etat, 'absent');
+  assert.equal(util.presence({ absentUntil: '2026-08-01' }, aujourdhui).etat, 'present', 'absence terminée');
+  assert.equal(util.presence({ departed: true }, aujourdhui).etat, 'parti');
+  assert.match(util.presence({ absentUntil: '2026-08-20' }, aujourdhui).message, /20 août 2026/);
+});
+
+test('les champs d’absence sont enregistrés et validés', function () {
+  return withServer(async function (t) {
+    const remplacant = (await t.call('POST', '/api/contacts', { name: 'Luc', email: 'luc@ex.com' })).body;
+    const absent = await t.call('POST', '/api/contacts', {
+      name: 'Ana',
+      email: 'ana@ex.com',
+      absentUntil: '2026-12-31',
+      substituteId: remplacant.id
+    });
+    assert.equal(absent.status, 201);
+    assert.equal(absent.body.absentUntil, '2026-12-31');
+    assert.equal(absent.body.substituteId, remplacant.id);
+
+    const mauvaise = await t.call('POST', '/api/contacts', {
+      name: 'X',
+      email: 'x@ex.com',
+      absentUntil: '31/12/2026'
+    });
+    assert.equal(mauvaise.status, 400);
+    assert.match(mauvaise.body.error, /AAAA-MM-JJ/);
+  });
+});
+
+/* ---------- signature ---------- */
+
+test('la signature est enregistrée avec la remise, et validée', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    const id = envoi.body.record.id;
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==';
+
+    const remise = await t.call('POST', '/api/history/' + id + '/pickup', { signature: png });
+    assert.equal(remise.status, 200);
+    assert.equal(remise.body.record.signature, png);
+
+    // Annuler la remise efface la signature : elle ne vaut plus rien.
+    const annule = await t.call('DELETE', '/api/history/' + id + '/pickup');
+    assert.equal(annule.body.record.signature, null);
+
+    const fausse = await t.call('POST', '/api/history/' + id + '/pickup', { signature: 'javascript:alert(1)' });
+    assert.equal(fausse.status, 400);
+
+    const enorme = await t.call('POST', '/api/history/' + id + '/pickup', {
+      signature: 'data:image/png;base64,' + 'A'.repeat(90000)
+    });
+    assert.equal(enorme.status, 413);
+  });
+});
+
+/* ---------- journal ---------- */
+
+test('le journal consigne les actions, du plus récent au plus ancien', function () {
+  return withServer(async function (t) {
+    const c = (await t.call('POST', '/api/contacts', { name: 'Ana', email: 'ana@ex.com', box: 'B-1' })).body;
+    await t.call('PUT', '/api/contacts/' + c.id, { name: 'Ana Silva', email: 'ana@ex.com' });
+    await t.call('DELETE', '/api/contacts/' + c.id);
+
+    const journal = await t.call('GET', '/api/journal');
+    assert.equal(journal.status, 200);
+    const actions = journal.body.entrees.map(function (e) {
+      return e.action;
+    });
+    assert.deepEqual(actions.slice(0, 3), [
+      'destinataire supprimé',
+      'destinataire modifié',
+      'destinataire ajouté'
+    ]);
+    assert.equal(journal.body.entrees[2].details, 'boîte B-1');
+  });
+});
+
+test('une remise par code est consignée', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    await t.call('POST', '/api/history/pickup-by-code', { code: envoi.body.record.pickupCode });
+
+    const journal = await t.call('GET', '/api/journal');
+    const remise = journal.body.entrees.find(function (e) {
+      return e.action === 'courrier remis';
+    });
+    assert.ok(remise, 'la remise figure au journal');
+    assert.match(remise.details, /par code/);
+  });
+});
+
+/* ---------- statistiques ---------- */
+
+test('les statistiques comptent par période et par boîte', function () {
+  const contacts = [
+    { id: 'c1', box: 'B-1' },
+    { id: 'c2', box: 'A-2' }
+  ];
+  const history = [
+    courrier(1, { contactId: 'c1', pickedUpAt: new Date(maintenant).toISOString(), type: 'colis' }),
+    courrier(3, { contactId: 'c1' }),
+    courrier(200, { contactId: 'c2', pickedUpAt: new Date(maintenant).toISOString() })
+  ];
+  const st = reminders.statistiques(history, contacts, { now: maintenant });
+
+  assert.equal(st.total, 3);
+  assert.equal(st.semaine.recus, 2);
+  assert.equal(st.semaine.retires, 1);
+  assert.equal(st.semaine.taux, 50);
+  assert.equal(st.annee.recus, 3);
+  assert.equal(st.boitesActives[0].boite, 'B-1');
+  assert.equal(st.boitesActives[0].courriers, 2);
+  assert.equal(st.parType.Colis, 1);
+});
+
+test('un taux ne se calcule pas sur un échantillon vide', function () {
+  const st = reminders.statistiques([], [], { now: maintenant });
+  assert.equal(st.semaine.taux, null);
+  assert.equal(st.delaiMoyenJours, null);
+});

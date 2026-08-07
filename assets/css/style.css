@@ -807,3 +807,87 @@ select.filter-input{
   margin-bottom:16px;
 }
 .fiche .status-list{margin-bottom:0;}
+
+/* ---------- absences ---------- */
+.absence-tag{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--rust);
+  border:1px solid var(--rust);
+  padding:1px 6px;
+  margin-left:8px;
+  vertical-align:1px;
+}
+td.absence-edit{
+  background:var(--paper-dark);
+  padding:12px 6px;
+  display:flex;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+td.absence-edit label{margin-bottom:0;white-space:nowrap;}
+td.absence-edit label.inline{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  text-transform:none;
+  font-family:var(--serif);
+  font-size:13.5px;
+  color:var(--navy);
+}
+td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:auto;font-size:14px;padding:6px 8px;}
+
+/* ---------- signature ---------- */
+#signatureDialog{max-width:620px;width:94vw;}
+#signaturePad{
+  width:100%;
+  height:180px;
+  border:1px solid var(--line);
+  background:var(--card);
+  touch-action:none;
+  cursor:crosshair;
+  display:block;
+}
+.signature-vue{
+  max-width:220px;
+  border:1px solid var(--line);
+  background:#fff;
+  display:block;
+  margin-top:6px;
+}
+
+/* ---------- feuille de casier (impression) ---------- */
+.feuille-casier{display:none;}
+.feuille-casier h1{
+  font-family:var(--typewriter);
+  font-size:20px;
+  margin-bottom:4px;
+}
+.feuille-casier p{font-size:13px;color:var(--slate);margin-bottom:16px;}
+.feuille-casier table{width:100%;border-collapse:collapse;font-size:13px;}
+.feuille-casier th{
+  text-align:left;
+  border-bottom:2px solid var(--navy);
+  padding:6px 4px;
+  font-family:var(--mono);
+  font-size:10px;
+  text-transform:uppercase;
+}
+.feuille-casier td{border-bottom:1px solid var(--line);padding:8px 4px;}
+.feuille-casier td.b{font-family:var(--mono);font-weight:600;}
+.feuille-casier td.case{width:70px;border:1px solid var(--navy);}
+
+/* Pendant l'impression de la feuille, l'application entière s'efface. */
+body.impression-casier .feuille-casier{display:block;}
+@media print{
+  body.impression-casier .wrap,
+  body.impression-casier .toasts,
+  body.impression-casier dialog{display:none !important;}
+  body.impression-casier .feuille-casier{display:block;}
+  .feuille-casier{color:#000;}
+  .feuille-casier td.case{border:1px solid #000;}
+}

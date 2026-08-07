@@ -294,6 +294,36 @@ et dans l'historique : c'est la trace interne de l'envoi.
 
 ---
 
+## Absences et remplaçants
+
+Un destinataire peut être marqué **absent jusqu'à une date**, ou **parti de
+l'organisme**, avec un **remplaçant** désigné. Le guichet prévient alors avant
+d'envoyer et propose de notifier le remplaçant à sa place — le message précise
+qu'il assure le relais. Sans cela, l'application notifierait quelqu'un qui ne
+viendra pas.
+
+## Signature de remise
+
+À chaque remise, un pavé de signature s'ouvre : la personne signe du doigt ou à
+la souris, et la signature est attachée au courrier. Elle peut être passée d'un
+clic quand elle n'est pas nécessaire. C'est la seule preuve réelle de remise —
+le code de retrait, lui, ne prouve rien : il évite les erreurs de marquage.
+
+## Journal et statistiques
+
+L'onglet *Réglages* tient le **journal d'activité** : qui a ajouté, modifié ou
+supprimé un destinataire, qui a remis ou classé quel courrier. Les cent
+dernières actions, bornées à deux mille en tout.
+
+L'onglet *Dossier* affiche les **statistiques** : volumes sur sept jours, trente
+jours et douze mois, taux de retrait, délai moyen, boîtes les plus actives.
+
+## Feuille de casier
+
+Le bouton **Feuille de casier** imprime la liste des courriers en attente triée
+par numéro de boîte, avec une case à cocher pour le retrait — utile quand tout
+le monde n'a pas accès à l'application.
+
 ## Sauvegarde
 
 Le registre tient dans un seul fichier. L'onglet *Réglages* propose :
@@ -343,8 +373,11 @@ Ce que le serveur applique de lui-même, sans configuration :
 - **Secrets** (jetons Google, mots de passe d'application) chiffrés en
   AES-256-GCM ; le registre est écrit en accès restreint au propriétaire.
 
-Deux choses restent à votre charge : servir l'application en **https** dès
-qu'elle sort du poste local, et sauvegarder `data/secret.key` avec le registre.
+Le serveur écoute en **https** dès que `HTTPS_KEY` et `HTTPS_CERT` sont
+renseignés — marche à suivre complète dans
+[`docs/mise-en-service-https.md`](docs/mise-en-service-https.md). Reste à votre
+charge : obtenir le certificat et sauvegarder `data/secret.key` avec le
+registre.
 
 ---
 
@@ -407,7 +440,7 @@ tools/make-icons.js   régénère les icônes depuis logo.svg
 tools/guide-nodejs.html      guide animé : installer Node.js sur Windows
 tools/enregistrer-guide.js   filme ce guide et produit une vidéo
 demarrer.cmd          lanceur Windows : démarre le serveur et ouvre l'application
-docs/                 pas à pas d'installation (Windows + Gmail)
+docs/                 installation Windows + Gmail, boîtes reliées, mise en https
 assets/css/style.css  feuille de style
 assets/css/fonts.css  déclarations des polices embarquées
 assets/fonts/         polices (woff2, sous-ensembles latin) — 216 Ko
@@ -428,7 +461,7 @@ test/                 tests (node:test), sans dépendance
 ```
 
 ```bash
-npm test     # 114 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
+npm test     # 121 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 
