@@ -19,6 +19,9 @@ bin-release/
 
 # Bureau du Courrier
 node_modules/
+# Node.js téléchargé par l'installateur — ne se versionne pas.
+runtime/
+demarrer.sh
 .env
 data/*.json
 data/*.tmp

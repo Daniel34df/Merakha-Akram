@@ -18,7 +18,38 @@ partagé*, *Session seulement*) : personne n'a à deviner où vont les données.
 
 ---
 
-## Démarrage
+## Installation en un clic
+
+**Windows** — double-cliquez sur **`installer.cmd`**. C'est tout.
+
+**macOS, Linux** — double-cliquez sur `installer.sh`, ou lancez `./installer.sh`.
+
+L'installateur ne pose aucune question et ne demande aucun droit
+administrateur. Il :
+
+1. cherche un Node.js utilisable sur le poste ;
+2. s'il n'y en a pas, télécharge la version LTS depuis `nodejs.org`, **vérifie
+   son empreinte SHA-256** et la range dans `runtime/` — rien n'est installé sur
+   le système, rien n'est ajouté au `PATH`, tout disparaît si l'on efface le
+   dossier de l'application ;
+3. écrit un fichier `.env` avec une clé de chiffrement tirée au sort ;
+4. installe `nodemailer` si le réseau le permet, et poursuit sans lui sinon ;
+5. lance les contrôles internes ;
+6. pose un raccourci sur le Bureau (Windows) ;
+7. démarre le serveur et ouvre le navigateur.
+
+Relancer l'installateur est sans danger : ce qui est déjà en place est conservé,
+`.env` compris. Les jours suivants, le raccourci du Bureau — ou `demarrer.cmd`,
+ou `./demarrer.sh` — suffit.
+
+L'envoi automatique des courriels reste à configurer une fois, si vous le
+voulez : voir *Envoi entièrement automatique* ci-dessous. Sans lui,
+l'application fonctionne et ouvre votre logiciel de courriel avec le message
+déjà rédigé.
+
+---
+
+## Démarrage à la main
 
 ### 1. Le plus simple — sans rien installer
 
@@ -61,8 +92,9 @@ npm i --no-save playwright && npx playwright install chromium
 node tools/enregistrer-guide.js
 ```
 
-Sur Windows, une fois la configuration faite, double-cliquez **`demarrer.cmd`** :
-il démarre le serveur et ouvre l'application. Aucune commande à retenir.
+Sur Windows, une fois la configuration faite, double-cliquez **`demarrer.cmd`**
+ou le raccourci posé sur le Bureau : le serveur démarre et l'application
+s'ouvre. Aucune commande à retenir.
 
 Pour une démonstration sans rien envoyer pour de vrai :
 
@@ -486,7 +518,10 @@ index.html            interface
 manifest.webmanifest  déclaration de l'application installable
 sw.js                 service worker : coquille en cache, /api toujours en direct
 assets/icons/         logo.svg (à remplacer) et icônes générées
-tools/make-icons.js   régénère les icônes depuis logo.svg
+installer.cmd         installation en un clic (Windows)
+installer.sh          installation en un clic (macOS, Linux)
+tools/installer.ps1   le travail de l'installateur Windows
+tools/make-icons.js   régénère les icônes et favicon.ico depuis logo.svg
 tools/mot-de-passe.js rend l'accès à un compte depuis le poste serveur
 tools/guide-nodejs.html      guide animé : installer Node.js sur Windows
 tools/enregistrer-guide.js   filme ce guide et produit une vidéo

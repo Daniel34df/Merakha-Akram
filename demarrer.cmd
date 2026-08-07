@@ -1,4 +1,10 @@
 @echo off
+rem Bureau du Courrier — démarrage quotidien.
+rem
+rem Si vous n'avez encore rien installé, double-cliquez plutôt sur
+rem installer.cmd : il télécharge Node.js, écrit la configuration et lance tout.
+rem Ce fichier-ci se contente de démarrer le serveur.
+
 chcp 65001 >nul
 title Bureau du Courrier
 cd /d "%~dp0"
@@ -8,30 +14,26 @@ echo   Bureau du Courrier
 echo   ------------------
 echo.
 
-where node >nul 2>nul
-if errorlevel 1 (
-  echo   Node.js n'est pas installe sur ce poste.
-  echo.
-  echo   Telechargez la version LTS sur https://nodejs.org/fr
-  echo   installez-la, puis relancez ce fichier.
-  echo.
-  pause
-  exit /b 1
-)
+rem Node.js installé par installer.cmd dans .\runtime, sinon celui du poste.
+set "NODE=%~dp0runtime\node.exe"
+if not exist "%NODE%" set "NODE=node"
 
-if not exist "node_modules\nodemailer" (
-  if exist ".env" (
-    echo   Installation du module d'envoi de courriel...
-    call npm install --no-audit --no-fund
+where %NODE% >nul 2>nul
+if errorlevel 1 (
+  if not exist "%~dp0runtime\node.exe" (
+    echo   Node.js n'est pas installe sur ce poste.
     echo.
+    echo   Double-cliquez sur installer.cmd : il s'occupe de tout,
+    echo   sans droits administrateur.
+    echo.
+    pause
+    exit /b 1
   )
 )
 
 if not exist ".env" (
   echo   [!] Aucun fichier .env : l'envoi automatique sera inactif.
-  echo       L'application fonctionnera, mais chaque message devra etre
-  echo       envoye depuis votre logiciel de courriel.
-  echo       Voir docs\installation-windows-gmail.md
+  echo       Lancez installer.cmd pour ecrire la configuration.
   echo.
 )
 
@@ -41,7 +43,7 @@ echo   Pour arreter : fermez la fenetre, ou Ctrl+C.
 echo.
 
 set OPEN_BROWSER=1
-call npm start
+"%NODE%" server\index.js
 
 echo.
 echo   Le serveur s'est arrete.

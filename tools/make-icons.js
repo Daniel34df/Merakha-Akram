@@ -27,8 +27,37 @@ const TARGETS = [
   { file: 'icon-512.png', size: 512, scale: 1 },
   { file: 'icon-maskable-192.png', size: 192, scale: 0.78 },
   { file: 'icon-maskable-512.png', size: 512, scale: 0.78 },
-  { file: 'apple-touch-icon.png', size: 180, scale: 1 }
+  { file: 'apple-touch-icon.png', size: 180, scale: 1 },
+  // Source du favicon.ico : Windows s'en sert pour le raccourci du Bureau.
+  { file: 'icon-256.png', size: 256, scale: 1 }
 ];
+
+/* Un fichier .ico peut contenir un PNG tel quel depuis Windows Vista : en-tête
+   de six octets, une entrée de seize, puis les octets du PNG. C'est tout ce
+   qu'il faut pour l'icône du raccourci, et cela évite une dépendance. */
+function icoDepuisPng(png) {
+  // La taille se lit dans l'en-tête IHDR du PNG : pas de valeur à tenir à jour.
+  const largeur = png.readUInt32BE(16);
+  const hauteur = png.readUInt32BE(20);
+
+  const entete = Buffer.alloc(6);
+  entete.writeUInt16LE(0, 0); // réservé
+  entete.writeUInt16LE(1, 2); // type : icône
+  entete.writeUInt16LE(1, 4); // une seule image
+
+  const entree = Buffer.alloc(16);
+  // Un octet par dimension : 256 s'y note 0, seule taille qui déborde.
+  entree[0] = largeur >= 256 ? 0 : largeur;
+  entree[1] = hauteur >= 256 ? 0 : hauteur;
+  entree[2] = 0; // palette : aucune
+  entree[3] = 0; // réservé
+  entree.writeUInt16LE(1, 4); // plans
+  entree.writeUInt16LE(32, 6); // bits par pixel
+  entree.writeUInt32LE(png.length, 8);
+  entree.writeUInt32LE(entete.length + entree.length, 12);
+
+  return Buffer.concat([entete, entree, png]);
+}
 
 function loadPlaywright() {
   try {
@@ -91,6 +120,10 @@ async function main() {
   } finally {
     await browser.close();
   }
+  const png = await fs.readFile(path.join(ICONS, 'icon-256.png'));
+  await fs.writeFile(path.join(ICONS, 'favicon.ico'), icoDepuisPng(png));
+  console.log('  favicon.ico  256×256 (raccourci Windows)');
+
   console.log('Icônes régénérées depuis ' + path.relative(ROOT, SOURCE) + '.');
 }
 
