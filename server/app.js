@@ -1549,6 +1549,8 @@ async function handleApi(req, res, ctx, pathname) {
     let record = {
       id: crypto.randomUUID(),
       contactId: body.contactId || null,
+      // Urgence déclarée à la réception : elle raccourcit le délai de relance.
+      urgent: !!body.urgent,
       name: name,
       email: to,
       subject: subject,

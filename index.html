@@ -209,6 +209,18 @@
         <span class="hint">Entrée pour valider · ↑↓ pour parcourir les suggestions</span>
       </div>
 
+      <div class="guichet-options">
+        <label class="check-row">
+          <input type="checkbox" id="courrierUrgent">
+          Courrier urgent — relance sous deux jours
+        </label>
+        <label class="check-row">
+          <input type="checkbox" id="modeSerie">
+          Saisie en série — enchaîner sans quitter le champ
+        </label>
+      </div>
+      <div id="serieBilan" hidden></div>
+
       <details class="pile" id="pileBox">
         <summary>Traiter une pile de courrier <span class="copies-state" id="pileState"></span></summary>
         <p class="hint">
@@ -604,6 +616,16 @@
 </div>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
+
+<!-- Recherche globale : Ctrl+K depuis n'importe quel onglet. -->
+<div class="palette" id="palette" hidden>
+  <div class="palette-boite" role="dialog" aria-modal="true" aria-label="Recherche globale">
+    <input type="text" id="paletteInput" autocomplete="off" spellcheck="false"
+           placeholder="Nom, numéro de boîte, code de retrait…">
+    <div id="paletteResultats"></div>
+    <p class="hint palette-aide">↑ ↓ pour choisir · Entrée pour ouvrir · Échap pour fermer</p>
+  </div>
+</div>
 
 <div class="feuille-casier" id="feuilleCasier" hidden></div>
 

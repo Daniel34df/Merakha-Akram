@@ -13,7 +13,14 @@ const JOUR = 24 * 60 * 60 * 1000;
 const util = require('../assets/js/util.js');
 
 /** Délai avant relance : celui du type de courrier s'il en a un, sinon le délai général. */
+/* Un courrier marqué urgent — convocation de préfecture, recommandé avec date
+   limite — ne peut pas attendre le délai ordinaire. Il l'emporte sur le délai du
+   type comme sur le délai général : c'est le point du dispositif où la lenteur
+   coûte le plus cher à la personne. */
+const DELAI_URGENT = 2;
+
 function delaiPour(entree, delaiGeneral) {
+  if (entree && entree.urgent) return DELAI_URGENT;
   const propre = util.typeCourrier(entree.type).relanceJours;
   return propre === null || propre === undefined ? delaiGeneral : propre;
 }
@@ -345,6 +352,7 @@ module.exports = {
   enAttente: enAttente,
   aRelancer: aRelancer,
   aSignaler: aSignaler,
+  DELAI_URGENT: DELAI_URGENT,
   delaiPour: delaiPour,
   construireRecap: construireRecap,
   statistiques: statistiques,

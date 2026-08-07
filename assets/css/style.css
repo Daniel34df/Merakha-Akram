@@ -797,6 +797,99 @@ select.filter-input{
 .retrait-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .retrait-row .code-input{width:160px;margin-bottom:0;}
 
+/* ---------- courrier urgent ---------- */
+/* Filet rouille en bordure de ligne : repérable en balayant la liste, sans
+   crier sur toute la largeur. */
+tr.urgent td:first-child{box-shadow:inset 3px 0 0 var(--rust);}
+tr.urgent{background:var(--danger-wash);}
+.urgent-tag{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--paper);
+  background:var(--rust);
+  padding:1px 6px;
+  margin-left:8px;
+}
+.guichet-options{display:flex;gap:20px;flex-wrap:wrap;margin:14px 0 4px;}
+.guichet-options .check-row{margin:0;}
+
+/* ---------- saisie en série ---------- */
+.serie-bilan{
+  border:1px solid var(--line);
+  border-left:4px solid var(--forest);
+  background:var(--paper-dark);
+  padding:12px 16px;
+  margin-top:14px;
+}
+.serie-tete{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;}
+.serie-liste{margin:0;padding-left:22px;font-size:13.5px;max-height:200px;overflow-y:auto;}
+.serie-liste li{padding:2px 0;}
+.serie-detail{font-family:var(--mono);font-size:11px;color:var(--slate);}
+
+/* ---------- recherche globale ---------- */
+.palette{
+  position:fixed;
+  inset:0;
+  z-index:60;
+  background:rgba(22,35,63,0.4);
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:12vh 20px 20px;
+}
+.palette[hidden]{display:none;}
+.palette-boite{
+  width:100%;
+  max-width:640px;
+  background:var(--card);
+  border:1px solid var(--navy);
+  box-shadow:0 12px 40px var(--shadow);
+  animation:paletteIn 0.16s ease;
+}
+@keyframes paletteIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:none;}}
+#paletteInput{
+  width:100%;
+  margin:0;
+  border:none;
+  border-bottom:1px solid var(--line);
+  font-size:18px;
+  padding:16px 18px;
+  background:var(--card);
+}
+#paletteInput:focus{outline:none;border-bottom-color:var(--brass);}
+#paletteResultats{max-height:52vh;overflow-y:auto;}
+.palette-ligne{
+  display:grid;
+  grid-template-columns:130px 1fr;
+  grid-template-areas:'genre titre' 'genre detail';
+  gap:0 14px;
+  width:100%;
+  text-align:left;
+  background:none;
+  border:none;
+  border-bottom:1px solid var(--line);
+  padding:10px 18px;
+  cursor:pointer;
+  font-family:var(--serif);
+  color:var(--navy);
+}
+.palette-ligne:hover, .palette-ligne.actif{background:var(--paper-dark);}
+.palette-genre{
+  grid-area:genre;
+  align-self:center;
+  font-family:var(--mono);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--slate);
+}
+.palette-titre{grid-area:titre;font-size:15px;}
+.palette-detail{grid-area:detail;font-size:12.5px;color:var(--slate);}
+.palette-aide{margin:0;padding:10px 18px;border-top:1px solid var(--line);font-size:11.5px;}
+
 /* ---------- retrait par un tiers ---------- */
 .fiche-porteur{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
 .fiche-porteur input[type=text]{margin-bottom:0;}

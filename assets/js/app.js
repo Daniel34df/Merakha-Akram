@@ -43,7 +43,9 @@
     gabarits: {},
     // Onglet Domiciliation : année du rapport, données servies par le serveur.
     rapportAnnee: new Date().getFullYear(),
-    domiciliation: null
+    domiciliation: null,
+    // Saisie en série : ce qui a été traité depuis l'activation du mode.
+    serie: []
   };
 
   /* ═════════════ retours visuels ═════════════ */
@@ -681,6 +683,9 @@
           : 'aucune'
       )
     ];
+    if (record.urgent) {
+      lignes.push(ligneFiche('Urgence', 'Courrier signalé urgent à la réception'));
+    }
     if (record.flaggedAt) {
       lignes.push(ligneFiche('Signalé', 'Courrier du dossier à traiter — ' + (record.flagReason || 'non retiré')));
     }
@@ -1120,6 +1125,7 @@
     // Le type est passé à la composition : c'est lui qui choisit le gabarit.
     const message = notify.compose(contact, S.settings, Object.assign({ type: type }, copies));
     message.type = type;
+    message.urgent = opts.urgent !== undefined ? !!opts.urgent : !!$('courrierUrgent').checked;
     if (opts.pour) {
       message.body += '\n\n(Ce courrier est adressé à ' + opts.pour + ', dont vous assurez le relais.)';
     }
@@ -1154,6 +1160,24 @@
     if (!opts.silencieux) stamp(auto ? 'Envoyé' : 'Préparé', contact.name);
     nameInput.value = '';
     hideSuggestions();
+
+    /* Saisie en série : le facteur pose vingt lettres d'un coup. On enchaîne
+       sans quitter le champ, et le bilan s'allonge sous les yeux plutôt que de
+       remplacer l'écran à chaque envoi. */
+    if (!opts.silencieux && $('modeSerie').checked) {
+      view.serie.unshift({
+        nom: contact.name,
+        auto: auto,
+        urgent: !!message.urgent,
+        type: util.typeCourrier(type).label
+      });
+      renderSerie();
+      $('searchResults').innerHTML = '';
+      $('courrierUrgent').checked = false;
+      if (btn) btn.disabled = false;
+      nameInput.focus();
+      return;
+    }
     // En traitement de pile, on ne remplace pas l'écran à chaque envoi.
     if (opts.silencieux) {
       if (btn) btn.disabled = false;
@@ -1217,6 +1241,203 @@
     nameInput.focus();
   }
 
+  /* ═════════════ saisie en série ═════════════ */
+
+  function renderSerie() {
+    const boite = $('serieBilan');
+    if (view.serie.length === 0) {
+      boite.hidden = true;
+      boite.innerHTML = '';
+      return;
+    }
+    boite.hidden = false;
+    boite.innerHTML =
+      '<div class="serie-bilan"><div class="serie-tete">' +
+      '<strong>' + view.serie.length + ' courrier(s) traité(s)</strong>' +
+      '<button type="button" class="link-btn" id="serieViderBtn">Remettre à zéro</button>' +
+      '</div><ol class="serie-liste">' +
+      view.serie
+        .map(function (e) {
+          return (
+            '<li>' +
+            esc(e.nom) +
+            ' <span class="serie-detail">' + esc(e.type) +
+            (e.urgent ? ' · urgent' : '') +
+            ' · ' + (e.auto ? 'envoyé' : 'préparé') + '</span></li>'
+          );
+        })
+        .join('') +
+      '</ol></div>';
+    $('serieViderBtn').addEventListener('click', function () {
+      view.serie = [];
+      renderSerie();
+      nameInput.focus();
+    });
+  }
+
+  $('modeSerie').addEventListener('change', function (e) {
+    if (!e.target.checked) {
+      view.serie = [];
+      renderSerie();
+    } else {
+      toast('Saisie en série : le champ reste actif après chaque envoi.', 'ok');
+      nameInput.focus();
+    }
+  });
+
+  /* ═════════════ recherche globale ═════════════ */
+
+  /* Une seule barre pour tout le registre, appelée de n'importe quel onglet.
+     Au guichet, savoir dans quel onglet chercher est une charge mentale de
+     plus ; ici on tape ce qu'on a sous les yeux — un nom, une boîte, un code. */
+
+  const palette = { ouverte: false, resultats: [], choix: 0 };
+
+  function ouvrirPalette() {
+    palette.ouverte = true;
+    $('palette').hidden = false;
+    $('paletteInput').value = '';
+    $('paletteResultats').innerHTML =
+      '<p class="hint" style="padding:12px 14px;">Tapez un nom, un numéro de boîte ou un code de retrait.</p>';
+    palette.resultats = [];
+    palette.choix = 0;
+    $('paletteInput').focus();
+  }
+
+  function fermerPalette() {
+    palette.ouverte = false;
+    $('palette').hidden = true;
+  }
+
+  /** Cherche partout à la fois, et dit d'où vient chaque réponse. */
+  function chercherPartout(requete) {
+    const q = requete.trim();
+    if (!q) return [];
+    const out = [];
+
+    // Un code à quatre chiffres est sans ambiguïté : il passe en tête.
+    if (/^\d{4}$/.test(q)) {
+      S.history.forEach(function (h) {
+        if (h.pickupCode === q && enAttente(h)) {
+          out.push({
+            genre: 'code',
+            titre: h.name,
+            detail: 'Code ' + q + ' — ' + util.typeCourrier(h.type).label + ' en attente',
+            action: function () {
+              showPanel('remise');
+              $('pickupCode').value = q;
+              chercherParCode();
+            }
+          });
+        }
+      });
+    }
+
+    S.contacts.forEach(function (c) {
+      if (!util.matchesQuery(c, q, 'tout')) return;
+      const enAttentePour = S.history.filter(function (h) {
+        return enAttente(h) && (h.contactId === c.id || util.normalize(h.email) === util.normalize(c.email));
+      }).length;
+      out.push({
+        genre: 'destinataire',
+        titre: c.name,
+        detail:
+          (c.box ? 'boîte ' + c.box + ' · ' : '') +
+          c.email +
+          (enAttentePour ? ' · ' + enAttentePour + ' en attente' : ''),
+        action: function () {
+          ouvrirFiche(c.id);
+        }
+      });
+    });
+
+    S.history.forEach(function (h) {
+      if (!enAttente(h)) return;
+      if (!util.matchesQuery({ name: h.name, email: h.email, box: '' }, q, 'nom')) return;
+      out.push({
+        genre: 'courrier',
+        titre: h.name,
+        detail:
+          util.typeCourrier(h.type).label +
+          ' reçu le ' + util.formatJour(h.date.slice(0, 10)) +
+          (h.pickupCode ? ' · code ' + h.pickupCode : ''),
+        action: function () {
+          showPanel('remise');
+          view.attenteFilter = h.name;
+          $('attenteFilter').value = h.name;
+          renderPending();
+        }
+      });
+    });
+
+    // Trente lignes suffisent : au-delà, c'est la recherche qu'il faut préciser.
+    return out.slice(0, 30);
+  }
+
+  const GENRE_PALETTE = {
+    code: 'Code de retrait',
+    destinataire: 'Destinataire',
+    courrier: 'Courrier en attente'
+  };
+
+  function renderPalette() {
+    const boite = $('paletteResultats');
+    if (palette.resultats.length === 0) {
+      boite.innerHTML = '<p class="hint" style="padding:12px 14px;">Aucun résultat.</p>';
+      return;
+    }
+    boite.innerHTML = palette.resultats
+      .map(function (r, i) {
+        return (
+          '<button type="button" class="palette-ligne' + (i === palette.choix ? ' actif' : '') + '" data-i="' + i + '">' +
+          '<span class="palette-genre">' + esc(GENRE_PALETTE[r.genre]) + '</span>' +
+          '<span class="palette-titre">' + esc(r.titre) + '</span>' +
+          '<span class="palette-detail">' + esc(r.detail) + '</span>' +
+          '</button>'
+        );
+      })
+      .join('');
+    boite.querySelectorAll('button[data-i]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        lancerPalette(Number(b.dataset.i));
+      });
+    });
+  }
+
+  function lancerPalette(i) {
+    const r = palette.resultats[i];
+    if (!r) return;
+    fermerPalette();
+    r.action();
+  }
+
+  $('paletteInput').addEventListener('input', function (e) {
+    palette.resultats = chercherPartout(e.target.value);
+    palette.choix = 0;
+    renderPalette();
+  });
+
+  $('paletteInput').addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (palette.resultats.length === 0) return;
+      palette.choix =
+        (palette.choix + (e.key === 'ArrowDown' ? 1 : -1) + palette.resultats.length) % palette.resultats.length;
+      renderPalette();
+      const actif = $('paletteResultats').querySelector('.actif');
+      if (actif && actif.scrollIntoView) actif.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      lancerPalette(palette.choix);
+    }
+  });
+
+  $('palette').addEventListener('click', function (e) {
+    if (e.target === $('palette')) fermerPalette();
+  });
+
   /* ═════════════ courriers en attente ═════════════ */
 
   function renderPending() {
@@ -1244,8 +1465,10 @@
       return;
     }
 
-    // Du plus ancien au plus récent : c'est celui qui attend le plus qui presse.
+    /* Les urgents en tête, puis du plus ancien au plus récent : un courrier
+       urgent reçu ce matin passe avant une publicité qui traîne depuis un mois. */
     const anciens = visibles.slice().sort(function (a, b) {
+      if (!!a.urgent !== !!b.urgent) return a.urgent ? -1 : 1;
       return new Date(a.date) - new Date(b.date);
     });
     const jourMax = joursDepuis(anciens[0].date);
@@ -1263,13 +1486,14 @@
           const jours = joursDepuis(h.date);
           return (
             '<tr' +
-            (jours >= 7 ? ' class="vieux"' : '') +
+            (h.urgent ? ' class="urgent"' : jours >= 7 ? ' class="vieux"' : '') +
             '><td class="attente-cell">' +
             (jours === 0 ? 'aujourd’hui' : jours + ' j') +
             '</td><td class="box-cell">' +
             ((contact && contact.box) || '—') +
             '</td><td>' +
             esc(h.name) +
+            (h.urgent ? '<span class="urgent-tag">urgent</span>' : '') +
             '</td><td class="box-cell">' +
             esc(h.pickupCode || '—') +
             '</td><td class="actions">' +
@@ -3608,7 +3832,20 @@
   store.onChange(renderAll);
 
   document.addEventListener('keydown', function (e) {
-    // Échap ferme les suggestions ; « / » ramène au guichet et met le curseur dans la recherche.
+    /* Ctrl+K (⌘K sur Mac) ouvre la recherche globale depuis n'importe où, y
+       compris depuis un champ de saisie : c'est tout l'intérêt. */
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      if (palette.ouverte) fermerPalette();
+      else ouvrirPalette();
+      return;
+    }
+    if (e.key === 'Escape' && palette.ouverte) {
+      e.preventDefault();
+      fermerPalette();
+      return;
+    }
+    // « / » ramène au guichet et met le curseur dans la recherche.
     if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
       e.preventDefault();
       showPanel('guichet');

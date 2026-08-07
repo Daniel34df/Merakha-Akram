@@ -1026,3 +1026,32 @@ test('un dossier peut figurer à la fois en renouvellement et en risque de radia
     assert.equal(res.body.sansPassage.length, 1);
   });
 });
+
+/* ---------- courrier urgent ---------- */
+
+test('un courrier urgent est relancé sous deux jours', function () {
+  const urgent = courrier(3, { urgent: true });
+  const ordinaire = courrier(3);
+  ordinaire.id = 'ordinaire';
+
+  const dus = reminders.aRelancer([urgent, ordinaire], { delaiJours: 15, now: maintenant });
+  assert.deepEqual(dus.map(function (d) { return d.id; }), ['c3'], 'seul l’urgent est dû');
+  assert.equal(reminders.delaiPour(urgent, 15), reminders.DELAI_URGENT);
+});
+
+test('l’urgence l’emporte sur le délai propre au type', function () {
+  // Un colis a déjà un délai court (5 jours) ; urgent, il tombe à deux.
+  const colisUrgent = courrier(3, { type: 'colis', urgent: true });
+  assert.equal(reminders.delaiPour(colisUrgent, 15), reminders.DELAI_URGENT);
+  assert.equal(reminders.delaiPour(courrier(3, { type: 'colis' }), 15), 5);
+});
+
+test('l’urgence déclarée à la réception est enregistrée', function () {
+  return withServer(async function (t) {
+    const normal = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    assert.equal(normal.body.record.urgent, false);
+
+    const presse = await t.call('POST', '/api/notify', { name: 'Bo', email: 'bo@ex.com', urgent: true });
+    assert.equal(presse.body.record.urgent, true);
+  });
+});

@@ -908,6 +908,7 @@
         email: contact.email,
         subject: message.subject,
         type: message.type || 'lettre',
+        urgent: !!message.urgent,
         cc: message.cc || '',
         bcc: message.bcc || '',
         date: new Date().toISOString(),
@@ -927,6 +928,7 @@
         subject: message.subject,
         body: message.body,
         type: message.type || 'lettre',
+        urgent: !!message.urgent,
         from: message.from || '',
         cc: message.cc || '',
         bcc: message.bcc || ''
