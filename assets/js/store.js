@@ -618,6 +618,19 @@
     return api('/backup', { method: 'POST' });
   }
 
+  async function listerSauvegardes() {
+    return api('/backup/list');
+  }
+
+  async function restaurerSauvegarde(fichier) {
+    const resultat = await api('/backup/restore', {
+      method: 'POST',
+      body: JSON.stringify({ fichier: fichier })
+    });
+    await loadServerState();
+    return resultat;
+  }
+
   async function changePassword(current, next) {
     return api('/auth/password', { method: 'PUT', body: JSON.stringify({ current: current, next: next }) });
   }
@@ -974,6 +987,8 @@
     closeMail: closeMail,
     relancer: relancer,
     serverBackup: serverBackup,
+    listerSauvegardes: listerSauvegardes,
+    restaurerSauvegarde: restaurerSauvegarde,
     loadStats: loadStats,
     loadDomiciliation: loadDomiciliation,
     enregistrerPassage: enregistrerPassage,

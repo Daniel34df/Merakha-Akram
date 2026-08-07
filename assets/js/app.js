@@ -3058,6 +3058,7 @@
     $('setFrom').value = S.settings.from || '';
     $('setCc').value = S.settings.cc || '';
     $('setBcc').value = S.settings.bcc || '';
+    $('conservationMois').value = String(S.settings.conservationMois || 0);
     view.gabaritGeneral = { subject: S.settings.subject || '', body: S.settings.body || '' };
     view.gabarits = JSON.parse(JSON.stringify(S.settings.templates || {}));
     chargerGabaritActif();
@@ -3617,6 +3618,98 @@
     };
     download('registre-' + stampSuffix() + '.json', JSON.stringify(copie, null, 2), 'application/json');
     setMsg('backupMsg', 'ok', 'Sauvegarde du registre de ce poste téléchargée.');
+  });
+
+  /* Restauration depuis l'écran. Sans elle, les sauvegardes ne servent qu'à
+     qui sait fouiller le disque du serveur — c'est-à-dire à personne, le jour
+     où le registre est abîmé. */
+  async function renderSauvegardes() {
+    const boite = $('sauvegardesListe');
+    try {
+      const data = await store.listerSauvegardes();
+      if (!data.sauvegardes.length) {
+        boite.innerHTML = '<div class="empty">Aucune copie sur le serveur pour l’instant.</div>';
+        return;
+      }
+      boite.innerHTML =
+        '<div class="table-scroll"><table><thead><tr><th>Date</th><th>Destinataires</th>' +
+        '<th>Courriers</th><th></th></tr></thead><tbody>' +
+        data.sauvegardes
+          .map(function (sv) {
+            if (sv.illisible) {
+              return (
+                '<tr><td class="attente-cell">' + esc(util.formatJour(sv.jour)) +
+                '</td><td colspan="3"><em>fichier illisible</em></td></tr>'
+              );
+            }
+            return (
+              '<tr><td class="attente-cell">' + esc(util.formatJour(sv.jour)) +
+              '</td><td>' + sv.destinataires +
+              '</td><td>' + sv.courriers +
+              '</td><td class="actions"><button class="link-btn danger" data-restaurer="' +
+              esc(sv.fichier) + '">Restaurer</button></td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>';
+
+      boite.querySelectorAll('button[data-restaurer]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          restaurerSauvegarde(b.dataset.restaurer);
+        });
+      });
+    } catch (err) {
+      boite.innerHTML = '<div class="empty">Liste indisponible : ' + esc(err.message) + '</div>';
+    }
+  }
+
+  async function restaurerSauvegarde(fichier) {
+    const ok = await confirmDialog(
+      'Restaurer cette copie',
+      'Le registre et l’historique actuels seront remplacés par ceux de cette sauvegarde. ' +
+        'Une copie de l’état présent est écrite avant l’opération, et les comptes ne sont pas touchés.',
+      'Restaurer'
+    );
+    if (!ok) return;
+    try {
+      const r = await store.restaurerSauvegarde(fichier);
+      setMsg(
+        'backupMsg',
+        'ok',
+        'Registre restauré depuis <strong>' + esc(r.fichier) + '</strong> : ' +
+          r.avant.destinataires + ' → ' + r.apres.destinataires + ' destinataire(s), ' +
+          r.avant.courriers + ' → ' + r.apres.courriers + ' courrier(s). ' +
+          'L’état précédent est conservé sous ' + esc(r.filet) + '.'
+      );
+      renderAll();
+      renderSauvegardes();
+    } catch (err) {
+      setMsg('backupMsg', 'error', esc(err.message));
+    }
+  }
+
+  $('listerSauvegardesBtn').addEventListener('click', function () {
+    if (S.mode !== 'serveur') {
+      setMsg('backupMsg', 'error', 'La restauration demande le registre partagé.');
+      return;
+    }
+    renderSauvegardes();
+  });
+
+  $('conservationBtn').addEventListener('click', async function () {
+    const mois = Number($('conservationMois').value);
+    try {
+      await store.saveSettings({ conservationMois: mois });
+      setMsg(
+        'conservationMsg',
+        'ok',
+        mois === 0
+          ? 'Conservation illimitée : rien ne sera effacé automatiquement.'
+          : 'Les courriers terminés depuis plus de ' + mois + ' mois seront effacés au prochain passage.'
+      );
+    } catch (err) {
+      setMsg('conservationMsg', 'error', esc(err.message));
+    }
   });
 
   $('serverBackupBtn').addEventListener('click', async function () {

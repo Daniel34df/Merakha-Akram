@@ -19,7 +19,11 @@ const DEFAULT_SETTINGS = {
   bcc: '',
   /* Gabarits propres à un type de courrier ({ colis: {subject, body}, … }).
      Vide par défaut : tous les types emploient le modèle général ci-dessus. */
-  templates: {}
+  templates: {},
+  /* Durée de conservation des courriers terminés, en mois. 0 = illimitée.
+     Un registre qui garde tout indéfiniment expose bien plus qu'il ne devrait
+     le jour d'une fuite ; c'est aussi une obligation. */
+  conservationMois: 0
 };
 
 function emptyDb() {
@@ -161,8 +165,125 @@ async function sauvegarder(db, options) {
   return { fichier: cible, conserves: Math.min(fichiers.length, garder), supprimes: aSupprimer.length };
 }
 
+/* Sauvegardes disponibles, la plus récente d'abord. Sans cette liste, une
+   restauration exige d'aller fouiller le disque du serveur — ce que personne
+   au guichet ne fera le jour où le registre est abîmé. */
+async function listerSauvegardes(db, options) {
+  const opts = options || {};
+  const dossier = opts.dossier || path.join(path.dirname(db.file), 'sauvegardes');
+  let fichiers;
+  try {
+    fichiers = await fs.readdir(dossier);
+  } catch (e) {
+    return [];
+  }
+  const out = [];
+  for (const nom of fichiers) {
+    if (!/^registre-\d{4}-\d{2}-\d{2}\.json$/.test(nom)) continue;
+    const chemin = path.join(dossier, nom);
+    try {
+      const stat = await fs.stat(chemin);
+      const contenu = JSON.parse(await fs.readFile(chemin, 'utf8'));
+      out.push({
+        fichier: nom,
+        jour: nom.slice(9, 19),
+        octets: stat.size,
+        // L'aperçu évite de restaurer à l'aveugle une copie presque vide.
+        destinataires: Array.isArray(contenu.contacts) ? contenu.contacts.length : 0,
+        courriers: Array.isArray(contenu.history) ? contenu.history.length : 0
+      });
+    } catch (e) {
+      out.push({ fichier: nom, jour: nom.slice(9, 19), illisible: true });
+    }
+  }
+  return out.sort(function (a, b) {
+    return a.jour < b.jour ? 1 : -1;
+  });
+}
+
+/* Restauration. On sauvegarde d'abord l'état courant sous un nom distinct :
+   restaurer est une opération qu'on peut regretter, et l'annuler doit rester
+   possible. Les comptes et les sessions ne sont jamais écrasés — une copie du
+   registre n'a pas à faire perdre l'accès à l'application. */
+async function restaurer(db, fichier, options) {
+  const opts = options || {};
+  const dossier = opts.dossier || path.join(path.dirname(db.file), 'sauvegardes');
+  if (!/^registre-\d{4}-\d{2}-\d{2}\.json$/.test(String(fichier || ''))) {
+    throw Object.assign(new Error('Nom de sauvegarde invalide'), { status: 400 });
+  }
+  const chemin = path.join(dossier, fichier);
+
+  let copie;
+  try {
+    copie = JSON.parse(await fs.readFile(chemin, 'utf8'));
+  } catch (e) {
+    throw Object.assign(new Error('Sauvegarde introuvable ou illisible'), { status: 404 });
+  }
+  if (!Array.isArray(copie.contacts) || !Array.isArray(copie.history)) {
+    throw Object.assign(new Error('Ce fichier ne ressemble pas à un registre'), { status: 400 });
+  }
+
+  const avant = {
+    destinataires: (db.data.contacts || []).length,
+    courriers: (db.data.history || []).length
+  };
+  const filet = path.join(dossier, 'avant-restauration-' + Date.now() + '.json');
+  await fs.mkdir(dossier, { recursive: true });
+  await fs.writeFile(filet, JSON.stringify(db.data, null, 2), { encoding: 'utf8', mode: 0o600 });
+
+  await db.write(function (data) {
+    data.contacts = copie.contacts;
+    data.history = copie.history;
+    if (copie.settings) data.settings = Object.assign({}, DEFAULT_SETTINGS, copie.settings);
+  });
+
+  return {
+    fichier: fichier,
+    filet: path.basename(filet),
+    avant: avant,
+    apres: { destinataires: db.data.contacts.length, courriers: db.data.history.length }
+  };
+}
+
+/* Durée de conservation. Les données de courrier n'ont pas à s'accumuler sans
+   fin : au-delà du délai fixé, les courriers clos ou retirés sont effacés. Ceux
+   qui attendent encore ne sont jamais touchés, quel que soit leur âge — un
+   courrier non remis reste un courrier non remis. */
+function courriersAPurger(history, options) {
+  const opts = options || {};
+  const mois = Number(opts.mois) || 0;
+  if (mois <= 0) return [];
+  const limite = (opts.now === undefined ? Date.now() : opts.now) - mois * 30.4375 * 24 * 3600 * 1000;
+  return (history || []).filter(function (h) {
+    const termine = !!h.pickedUpAt || !!h.closedAt;
+    if (!termine) return false;
+    const fin = new Date(h.pickedUpAt || h.closedAt).getTime();
+    return !isNaN(fin) && fin < limite;
+  });
+}
+
+async function purger(db, options) {
+  const aPurger = courriersAPurger(db.data.history, options);
+  if (aPurger.length === 0) return { supprimes: 0 };
+  const ids = new Set(
+    aPurger.map(function (h) {
+      return h.id;
+    })
+  );
+  await db.write(function (data) {
+    data.history = data.history.filter(function (h) {
+      return !ids.has(h.id);
+    });
+  });
+  return { supprimes: ids.size };
+}
+
 module.exports = {
   Db: Db,
+  listerSauvegardes: listerSauvegardes,
+  restaurer: restaurer,
+  courriersAPurger: courriersAPurger,
+  purger: purger,
   DEFAULT_SETTINGS: DEFAULT_SETTINGS,
   emptyDb: emptyDb,
   sauvegarder: sauvegarder,

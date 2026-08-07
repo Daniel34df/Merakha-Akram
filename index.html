@@ -565,8 +565,28 @@
       <div class="row-actions">
         <button class="btn" id="downloadBackupBtn">Télécharger une sauvegarde</button>
         <button class="btn ghost" id="serverBackupBtn">Copie sur le serveur</button>
+        <button class="btn ghost" id="listerSauvegardesBtn">Restaurer une copie</button>
       </div>
       <div id="backupMsg"></div>
+      <div id="sauvegardesListe"></div>
+
+      <h3 class="sous-titre">Durée de conservation</h3>
+      <p class="hint" style="margin-bottom:10px;">
+        Au-delà de cette durée, les courriers <strong>déjà retirés ou classés</strong> sont effacés
+        du registre. Ceux qui attendent encore ne sont jamais touchés, quel que soit leur âge.
+        Garder tout indéfiniment expose bien plus qu'il ne faudrait le jour d'une fuite.
+      </p>
+      <div class="retrait-row">
+        <select id="conservationMois" class="filter-input">
+          <option value="0">Illimitée</option>
+          <option value="12">12 mois</option>
+          <option value="24">24 mois</option>
+          <option value="36">36 mois</option>
+          <option value="60">5 ans</option>
+        </select>
+        <button class="btn ghost small" id="conservationBtn">Enregistrer la durée</button>
+      </div>
+      <div id="conservationMsg"></div>
     </div>
 
     <div class="card" id="accountsCard" hidden>

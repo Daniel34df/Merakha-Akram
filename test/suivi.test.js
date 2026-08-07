@@ -7,6 +7,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 
 const { Db, sauvegarder } = require('../server/db.js');
+const db = require('../server/db.js');
 const { createMailer } = require('../server/mailer.js');
 const { createVault } = require('../server/secrets.js');
 const { createServer } = require('../server/app.js');
@@ -1053,5 +1054,136 @@ test('l’urgence déclarée à la réception est enregistrée', function () {
 
     const presse = await t.call('POST', '/api/notify', { name: 'Bo', email: 'bo@ex.com', urgent: true });
     assert.equal(presse.body.record.urgent, true);
+  });
+});
+
+/* ---------- restauration d'une sauvegarde ---------- */
+
+test('les sauvegardes se listent avec un aperçu de leur contenu', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/contacts', { name: 'Ana', email: 'ana@ex.com' });
+    await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    await t.call('POST', '/api/backup');
+
+    const liste = await t.call('GET', '/api/backup/list');
+    assert.equal(liste.status, 200);
+    assert.equal(liste.body.sauvegardes.length, 1);
+    assert.equal(liste.body.sauvegardes[0].destinataires, 1);
+    assert.equal(liste.body.sauvegardes[0].courriers, 1);
+    assert.match(liste.body.sauvegardes[0].fichier, /^registre-\d{4}-\d{2}-\d{2}\.json$/);
+  });
+});
+
+test('restaurer ramène le registre à l’état de la copie', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/contacts', { name: 'Ana', email: 'ana@ex.com' });
+    const sauvegarde = (await t.call('POST', '/api/backup')).body.fichier;
+
+    // On abîme le registre après la copie.
+    await t.call('POST', '/api/contacts', { name: 'Erreur', email: 'erreur@ex.com' });
+    await t.call('DELETE', '/api/history');
+    assert.equal(t.db.data.contacts.length, 2);
+
+    const r = await t.call('POST', '/api/backup/restore', { fichier: sauvegarde });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.avant.destinataires, 2);
+    assert.equal(r.body.apres.destinataires, 1);
+    assert.equal(t.db.data.contacts.length, 1);
+    assert.equal(t.db.data.contacts[0].name, 'Ana');
+
+    const journal = await t.call('GET', '/api/journal');
+    assert.ok(
+      journal.body.entrees.some(function (e) {
+        return e.action === 'registre restauré';
+      })
+    );
+  });
+});
+
+test('la restauration ne fait pas perdre l’accès à l’application', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', {
+      name: 'Marie', email: 'marie@bureau.org', password: 'mot-de-passe-long'
+    });
+    const sauvegarde = (await t.call('POST', '/api/backup')).body.fichier;
+    await t.call('POST', '/api/backup/restore', { fichier: sauvegarde });
+
+    // Comptes et sessions survivent : une copie du registre n'est pas une purge.
+    assert.equal(t.db.data.users.length, 1);
+    assert.equal((await t.call('GET', '/api/contacts')).status, 200, 'la session tient toujours');
+  });
+});
+
+test('un nom de sauvegarde inventé ou hors du dossier est refusé', function () {
+  return withServer(async function (t) {
+    assert.equal((await t.call('POST', '/api/backup/restore', { fichier: '../../etc/passwd' })).status, 400);
+    assert.equal((await t.call('POST', '/api/backup/restore', { fichier: 'registre-2020-01-01.json' })).status, 404);
+    assert.equal((await t.call('POST', '/api/backup/restore', {})).status, 400);
+  });
+});
+
+/* ---------- durée de conservation ---------- */
+
+test('la purge n’efface que les courriers terminés et anciens', function () {
+  const now = Date.now();
+  // Retiré il y a 780 jours : au-delà des 24 mois (≈730 j) de conservation.
+  const vieuxRetire = courrier(800, { pickedUpAt: new Date(now - 780 * JOUR).toISOString() });
+  vieuxRetire.id = 'vieux-retire';
+  const vieuxClos = courrier(900, { closedAt: new Date(now - 800 * JOUR).toISOString() });
+  vieuxClos.id = 'vieux-clos';
+  const vieuxEnAttente = courrier(900);
+  vieuxEnAttente.id = 'vieux-attente';
+  // Retiré il y a 700 jours : encore dans la fenêtre, il reste.
+  const bordure = courrier(760, { pickedUpAt: new Date(now - 700 * JOUR).toISOString() });
+  bordure.id = 'bordure';
+  const recentRetire = courrier(30, { pickedUpAt: new Date(now - 20 * JOUR).toISOString() });
+  recentRetire.id = 'recent';
+
+  const aPurger = db.courriersAPurger([vieuxRetire, vieuxClos, vieuxEnAttente, bordure, recentRetire], {
+    mois: 24,
+    now: now
+  });
+  assert.deepEqual(
+    aPurger.map(function (h) { return h.id; }).sort(),
+    ['vieux-clos', 'vieux-retire'],
+    'un courrier jamais retiré reste, quel que soit son âge'
+  );
+});
+
+test('une durée nulle ne purge rien', function () {
+  const vieux = courrier(3000, { pickedUpAt: new Date(Date.now() - 3000 * JOUR).toISOString() });
+  assert.deepEqual(db.courriersAPurger([vieux], { mois: 0 }), []);
+  assert.deepEqual(db.courriersAPurger([vieux], {}), []);
+});
+
+test('la durée de conservation s’enregistre et se borne', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', { subject: 'S', body: 'B', conservationMois: 24 });
+    assert.equal(t.db.data.settings.conservationMois, 24);
+
+    // Enregistrer sans la mentionner ne l'efface pas.
+    await t.call('PUT', '/api/settings', { subject: 'S2', body: 'B2' });
+    assert.equal(t.db.data.settings.conservationMois, 24);
+
+    await t.call('PUT', '/api/settings', { subject: 'S', body: 'B', conservationMois: 9999 });
+    assert.equal(t.db.data.settings.conservationMois, 120, 'borné à dix ans');
+
+    await t.call('PUT', '/api/settings', { subject: 'S', body: 'B', conservationMois: -5 });
+    assert.equal(t.db.data.settings.conservationMois, 0);
+  });
+});
+
+test('purger applique la durée au registre', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    await t.call('POST', '/api/history/' + envoi.body.record.id + '/pickup');
+    // On vieillit artificiellement le retrait.
+    await t.db.write(function (data) {
+      data.history[0].pickedUpAt = new Date(Date.now() - 900 * JOUR).toISOString();
+    });
+
+    const bilan = await db.purger(t.db, { mois: 12 });
+    assert.equal(bilan.supprimes, 1);
+    assert.equal(t.db.data.history.length, 0);
   });
 });

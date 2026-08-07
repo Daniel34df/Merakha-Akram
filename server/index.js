@@ -7,7 +7,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const https = require('node:https');
 const { spawn } = require('node:child_process');
-const { Db } = require('./db.js');
+const { Db, purger } = require('./db.js');
 const { createMailer } = require('./mailer.js');
 const { createVault } = require('./secrets.js');
 const { createGoogleOAuth } = require('./google.js');
@@ -166,8 +166,23 @@ async function main() {
     console.log('[récap] envoyé à ' + destinataire);
   };
 
+  /* Purge des courriers terminés au-delà de la durée de conservation. Passe
+     avec la boucle de relance : une fois par tour suffit largement, et cela
+     évite un second minuteur. */
+  const purgerAncien = async function () {
+    const mois = Number(db.data.settings.conservationMois || 0);
+    if (mois <= 0) return;
+    const bilan = await purger(db, { mois: mois });
+    if (bilan.supprimes > 0) {
+      console.log('[conservation] ' + bilan.supprimes + ' courrier(s) au-delà de ' + mois + ' mois effacé(s)');
+    }
+  };
+
   const arreterRelances = reminders.startReminderLoop(ctx, {
-    recapitulatif: envoyerRecap,
+    recapitulatif: async function () {
+      await envoyerRecap();
+      await purgerAncien();
+    },
     delaiJours: relanceJours,
     escaladeJours: escaladeJours,
     envoyer: function (entree) {

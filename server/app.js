@@ -9,7 +9,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const util = require('../assets/js/util.js');
-const { DEFAULT_SETTINGS, sauvegarder, consigner } = require('./db.js');
+const { DEFAULT_SETTINGS, sauvegarder, consigner, listerSauvegardes, restaurer, purger } = require('./db.js');
 const auth = require('./auth.js');
 const { createUserMailer } = require('./mailer.js');
 const reminders = require('./reminders.js');
@@ -1420,6 +1420,22 @@ async function handleApi(req, res, ctx, pathname) {
            général pour ce type. */
         templates: util.nettoyerGabarits(
           body.templates !== undefined ? body.templates : db.data.settings.templates
+        ),
+        /* Durée de conservation des courriers terminés, en mois. 0 = illimitée.
+           Bornée à dix ans : au-delà, ce n'est plus une durée de conservation,
+           c'est un oubli de la fixer. */
+        conservationMois: Math.max(
+          0,
+          Math.min(
+            120,
+            Math.round(
+              Number(
+                body.conservationMois !== undefined
+                  ? body.conservationMois
+                  : db.data.settings.conservationMois || 0
+              ) || 0
+            )
+          )
         )
       });
       await db.write(function (data) {
@@ -1475,6 +1491,26 @@ async function handleApi(req, res, ctx, pathname) {
       fichier: path.basename(resultat.fichier),
       conserves: resultat.conserves
     });
+  }
+
+  /* Sauvegardes disponibles, avec un aperçu de leur contenu : on ne restaure
+     pas à l'aveugle un fichier dont on ignore s'il est plein ou presque vide. */
+  if (pathname === '/api/backup/list' && method === 'GET') {
+    return sendJson(res, 200, { sauvegardes: await listerSauvegardes(db) });
+  }
+
+  if (pathname === '/api/backup/restore' && method === 'POST') {
+    const corps = await readBody(req);
+    const resultat = await restaurer(db, String((corps && corps.fichier) || ''));
+    await consigner(db, {
+      qui: currentUser && currentUser.name,
+      action: 'registre restauré',
+      cible: resultat.fichier,
+      details:
+        resultat.avant.destinataires + ' → ' + resultat.apres.destinataires + ' destinataire(s), ' +
+        resultat.avant.courriers + ' → ' + resultat.apres.courriers + ' courrier(s)'
+    });
+    return sendJson(res, 200, resultat);
   }
 
   /* --- envoi --- */

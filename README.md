@@ -439,6 +439,33 @@ chaque situation reste à l'équipe.
 
 ---
 
+## Restaurer une sauvegarde
+
+Les copies datées écrites sur le serveur se relisent depuis l'écran :
+*Réglages → Sauvegarde du registre → Restaurer une copie*. Chaque ligne annonce
+sa date et ce qu'elle contient — nombre de destinataires et de courriers —
+parce qu'on ne restaure pas à l'aveugle un fichier dont on ignore s'il est plein
+ou presque vide.
+
+Avant d'écraser quoi que ce soit, l'état présent est copié sous
+`avant-restauration-…json` : restaurer est une opération qu'on peut regretter,
+et l'annuler doit rester possible. **Les comptes et les sessions ne sont jamais
+touchés** — remettre le registre d'hier ne doit pas faire perdre l'accès à
+l'application.
+
+## Durée de conservation
+
+*Réglages → Durée de conservation.* Au-delà du délai choisi, les courriers
+**déjà retirés ou classés** sont effacés du registre. Ceux qui attendent encore
+ne sont jamais touchés, quel que soit leur âge : un courrier non remis reste un
+courrier non remis.
+
+Illimitée par défaut, pour ne rien effacer sans décision explicite. Un registre
+qui garde tout indéfiniment expose bien plus qu'il ne devrait le jour d'une
+fuite, et la durée de conservation est aussi une obligation.
+
+---
+
 ## Comptes du bureau
 
 Le **premier compte créé** est celui du responsable : lui seul peut retirer un
