@@ -9,9 +9,10 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const util = require('../assets/js/util.js');
-const { DEFAULT_SETTINGS } = require('./db.js');
+const { DEFAULT_SETTINGS, sauvegarder } = require('./db.js');
 const auth = require('./auth.js');
 const { createUserMailer } = require('./mailer.js');
+const reminders = require('./reminders.js');
 
 const VERSION = '1.0.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -238,6 +239,70 @@ async function sendVerificationCode(ctx, pending, code) {
       'Si vous n’êtes pas à l’origine de cette demande, ignorez ce message : ' +
       'aucun compte ne sera créé sans ce code.'
   });
+}
+
+/* Relance : le même message, précédé d'un rappel. L'envoi passe par la boîte de
+   la personne connectée si elle en a une, sinon par le compte du serveur — la
+   boucle automatique, elle, n'a personne de connecté et utilise le serveur. */
+async function envoyerRelance(ctx, entree, currentUser) {
+  const settings = ctx.db.data.settings;
+  const vars = {
+    nom: entree.name,
+    courriel: entree.email,
+    date: new Date().toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
+    bureau: settings.officeName
+  };
+  const jours = Math.floor(reminders.joursEcoules(entree.date, Date.now()));
+  const subject = 'Rappel — ' + util.renderTemplate(settings.subject, vars);
+  const text =
+    util.renderTemplate(settings.body, vars) +
+    '\n\n— Rappel : ce courrier vous attend depuis ' +
+    jours +
+    ' jour' +
+    (jours > 1 ? 's' : '') +
+    '.';
+
+  let sender = ctx.mailer;
+  let senderLabel = 'serveur';
+  if (currentUser && currentUser.mailbox) {
+    const secret = ctx.vault.open(currentUser.mailboxSecret);
+    if (secret !== null) {
+      sender = createUserMailer(currentUser.mailbox, secret, {
+        dryRun: ctx.mailer.mode === 'essai',
+        clientId: ctx.google.clientId,
+        clientSecret: ctx.google.clientSecret
+      });
+      senderLabel = currentUser.mailbox.address;
+    }
+  }
+  if (!sender.enabled && sender === ctx.mailer) {
+    throw Object.assign(new Error(ctx.mailer.reason || 'Envoi automatique indisponible'), { status: 503 });
+  }
+
+  await sender.send({
+    to: entree.email,
+    cc: entree.cc || '',
+    bcc: entree.bcc || '',
+    subject: subject,
+    text: text
+  });
+
+  await ctx.db.write(function (data) {
+    const cible = data.history.find(function (h) {
+      return h.id === entree.id;
+    });
+    if (!cible) return;
+    cible.reminderCount = (cible.reminderCount || 0) + 1;
+    cible.remindedAt = new Date().toISOString();
+  });
+
+  return {
+    sent: true,
+    sentBy: senderLabel,
+    record: ctx.db.data.history.find(function (h) {
+      return h.id === entree.id;
+    })
+  };
 }
 
 /** Renvoie true si la route a été traitée ici. */
@@ -477,6 +542,90 @@ async function handleAuth(req, res, ctx, pathname) {
     return true;
   }
 
+  /* --- gestion des comptes --- */
+
+  if (pathname === '/api/auth/password' && method === 'PUT') {
+    const user = auth.userFromRequest(db, req);
+    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    const body = await readBody(req);
+
+    if (!auth.verifyPassword(String(body.current || ''), user.password)) {
+      throw Object.assign(new Error('Mot de passe actuel incorrect'), { status: 401 });
+    }
+    const faible = auth.checkPasswordStrength(String(body.next || ''));
+    if (faible) throw Object.assign(new Error(faible), { status: 400 });
+
+    const token = auth.parseCookies(req.headers.cookie)[auth.SESSION_COOKIE];
+    await db.write(function (data) {
+      const cible = data.users.find(function (u) {
+        return u.id === user.id;
+      });
+      cible.password = auth.hashPassword(String(body.next));
+      // Changer de mot de passe doit fermer les autres sessions : c'est
+      // précisément ce qu'on fait quand on soupçonne un accès indésirable.
+      data.sessions = data.sessions.filter(function (s) {
+        return s.userId !== user.id || s.token === token;
+      });
+    });
+    sendJson(res, 200, { ok: true });
+    return true;
+  }
+
+  if (pathname === '/api/auth/users' && method === 'GET') {
+    const user = auth.userFromRequest(db, req);
+    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    const responsable = (db.data.users || [])[0];
+    sendJson(res, 200, {
+      // Le premier compte créé est celui du bureau : lui seul peut retirer un accès.
+      responsableId: responsable ? responsable.id : null,
+      users: (db.data.users || []).map(function (u) {
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          createdAt: u.createdAt,
+          mailbox: u.mailbox ? u.mailbox.address : null,
+          sessions: (db.data.sessions || []).filter(function (s) {
+            return s.userId === u.id;
+          }).length
+        };
+      })
+    });
+    return true;
+  }
+
+  const userMatch = pathname.match(/^\/api\/auth\/users\/([^/]+)$/);
+  if (userMatch && method === 'DELETE') {
+    const user = auth.userFromRequest(db, req);
+    if (!user) throw Object.assign(new Error('Connexion requise'), { status: 401 });
+    const responsable = (db.data.users || [])[0];
+    if (!responsable || responsable.id !== user.id) {
+      throw Object.assign(new Error('Seul le compte responsable peut retirer un accès'), { status: 403 });
+    }
+    const id = decodeURIComponent(userMatch[1]);
+    if (id === user.id) {
+      throw Object.assign(
+        new Error('Le compte responsable ne peut pas se retirer lui-même : il n’y aurait plus personne pour gérer les accès'),
+        { status: 400 }
+      );
+    }
+    if (!db.data.users.some(function (u) {
+        return u.id === id;
+      })) {
+      throw Object.assign(new Error('Compte introuvable'), { status: 404 });
+    }
+    await db.write(function (data) {
+      data.users = data.users.filter(function (u) {
+        return u.id !== id;
+      });
+      data.sessions = data.sessions.filter(function (s) {
+        return s.userId !== id;
+      });
+    });
+    sendJson(res, 200, { deleted: id });
+    return true;
+  }
+
   /* --- boîte d'envoi personnelle --- */
 
   if (pathname === '/api/auth/mailbox' && method === 'DELETE') {
@@ -624,7 +773,8 @@ async function handleApi(req, res, ctx, pathname) {
     return sendJson(res, 200, {
       contacts: db.data.contacts,
       history: db.data.history,
-      settings: db.data.settings
+      settings: db.data.settings,
+      suivi: reminders.resume(db.data.history)
     });
   }
 
@@ -701,7 +851,9 @@ async function handleApi(req, res, ctx, pathname) {
         bcc: String(body.bcc || '').trim(),
         date: body.date || new Date().toISOString(),
         method: body.method === 'auto' ? 'auto' : 'manuel',
-        status: ['envoyé', 'préparé', 'échec'].includes(body.status) ? body.status : 'préparé'
+        status: ['envoyé', 'préparé', 'échec'].includes(body.status) ? body.status : 'préparé',
+        pickedUpAt: null,
+        reminderCount: 0
       };
       if (!record.name || !record.email) {
         throw Object.assign(new Error('Nom et courriel requis'), { status: 400 });
@@ -716,6 +868,38 @@ async function handleApi(req, res, ctx, pathname) {
         data.history = [];
       });
       return sendJson(res, 200, { cleared: true });
+    }
+  }
+
+  /* --- suivi des courriers --- */
+
+  const suiviMatch = pathname.match(/^\/api\/history\/([^/]+)\/(pickup|remind)$/);
+  if (suiviMatch) {
+    const id = decodeURIComponent(suiviMatch[1]);
+    const entree = (db.data.history || []).find(function (h) {
+      return h.id === id;
+    });
+    if (!entree) throw Object.assign(new Error('Courrier introuvable'), { status: 404 });
+
+    if (suiviMatch[2] === 'pickup' && (method === 'POST' || method === 'DELETE')) {
+      const retire = method === 'POST';
+      await db.write(function (data) {
+        const cible = data.history.find(function (h) {
+          return h.id === id;
+        });
+        cible.pickedUpAt = retire ? new Date().toISOString() : null;
+        cible.pickedUpBy = retire && currentUser ? currentUser.name : null;
+      });
+      return sendJson(res, 200, {
+        record: db.data.history.find(function (h) {
+          return h.id === id;
+        })
+      });
+    }
+
+    if (suiviMatch[2] === 'remind' && method === 'POST') {
+      const envoye = await envoyerRelance(ctx, entree, currentUser);
+      return sendJson(res, 200, envoye);
     }
   }
 
@@ -756,6 +940,43 @@ async function handleApi(req, res, ctx, pathname) {
       });
       return sendJson(res, 200, settings);
     }
+  }
+
+  /* --- sauvegarde --- */
+
+  if (pathname === '/api/backup' && method === 'GET') {
+    // Le registre complet, sans les secrets : une sauvegarde n'a pas à
+    // transporter des mots de passe hachés ni des jetons chiffrés.
+    const copie = {
+      exportedAt: new Date().toISOString(),
+      version: VERSION,
+      contacts: db.data.contacts,
+      history: db.data.history,
+      settings: db.data.settings,
+      comptes: (db.data.users || []).map(function (u) {
+        return { name: u.name, email: u.email, createdAt: u.createdAt };
+      })
+    };
+    const corps = JSON.stringify(copie, null, 2);
+    res.writeHead(
+      200,
+      withSecurityHeaders({
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': Buffer.byteLength(corps),
+        'Content-Disposition':
+          'attachment; filename="registre-' + new Date().toISOString().slice(0, 10) + '.json"',
+        'Cache-Control': 'no-store'
+      })
+    );
+    return res.end(corps);
+  }
+
+  if (pathname === '/api/backup' && method === 'POST') {
+    const resultat = await sauvegarder(db);
+    return sendJson(res, 200, {
+      fichier: path.basename(resultat.fichier),
+      conserves: resultat.conserves
+    });
   }
 
   /* --- envoi --- */
@@ -827,7 +1048,10 @@ async function handleApi(req, res, ctx, pathname) {
       method: 'auto',
       status: 'envoyé',
       sentBy: senderLabel,
-      operator: currentUser ? currentUser.name : null
+      operator: currentUser ? currentUser.name : null,
+      // Suivi : le courrier reste dû tant que personne ne l'a marqué retiré.
+      pickedUpAt: null,
+      reminderCount: 0
     };
 
     try {
@@ -904,4 +1128,4 @@ function createServer(options) {
   });
 }
 
-module.exports = { createServer: createServer, VERSION: VERSION };
+module.exports = { createServer: createServer, VERSION: VERSION, envoyerRelance: envoyerRelance };

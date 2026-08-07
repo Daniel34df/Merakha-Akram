@@ -28,6 +28,8 @@
     gateFormChosen: false,
     // Recherche au guichet : 'nom' ou 'boite'.
     searchMode: 'nom',
+    historyState: 'tous',
+    pile: [],
     // Inscription en attente du code de confirmation.
     pendingEmail: null,
     // Adresse confirmée, en cours d'association comme boîte d'envoi.
@@ -524,7 +526,8 @@
     });
   }
 
-  async function sendNotification(contact, btn) {
+  async function sendNotification(contact, btn, options) {
+    const opts = options || {};
     const copies = currentCopies();
     if (!copies) {
       toast('Corrigez les adresses en copie avant d’envoyer.', 'error');
@@ -559,9 +562,14 @@
       });
     }
 
-    stamp(auto ? 'Envoyé' : 'Préparé', contact.name);
+    if (!opts.silencieux) stamp(auto ? 'Envoyé' : 'Préparé', contact.name);
     nameInput.value = '';
     hideSuggestions();
+    // En traitement de pile, on ne remplace pas l'écran à chaque envoi.
+    if (opts.silencieux) {
+      if (btn) btn.disabled = false;
+      return;
+    }
 
     const full = notify.plainText(contact, message);
     $('searchResults').innerHTML =
@@ -619,6 +627,200 @@
     if (btn) btn.disabled = false;
     nameInput.focus();
   }
+
+  /* ═════════════ courriers en attente ═════════════ */
+
+  function renderPending() {
+    const box = $('pendingCard');
+    const attente = S.history.filter(enAttente);
+    if (attente.length === 0) {
+      box.innerHTML = '';
+      return;
+    }
+    const anciens = attente
+      .slice()
+      .sort(function (a, b) {
+        return new Date(a.date) - new Date(b.date);
+      })
+      .slice(0, 8);
+    const jourMax = joursDepuis(anciens[0].date);
+
+    box.innerHTML =
+      '<div class="card"><div class="card-head"><h2>Courriers en attente (' +
+      attente.length +
+      ')</h2><div class="toolbar"><span class="hint">' +
+      (jourMax >= 7 ? 'Le plus ancien attend depuis ' + jourMax + ' jours.' : 'Rien de très ancien.') +
+      '</span></div></div>' +
+      '<div class="table-scroll"><table><thead><tr><th>Attente</th><th>N° boîte</th><th>Nom</th><th></th></tr></thead><tbody>' +
+      anciens
+        .map(function (h) {
+          const contact = S.contacts.find(function (c) {
+            return c.id === h.contactId;
+          });
+          const jours = joursDepuis(h.date);
+          return (
+            '<tr' +
+            (jours >= 7 ? ' class="vieux"' : '') +
+            '><td class="attente-cell">' +
+            (jours === 0 ? 'aujourd’hui' : jours + ' j') +
+            '</td><td class="box-cell">' +
+            ((contact && contact.box) || '—') +
+            '</td><td>' +
+            esc(h.name) +
+            '</td><td class="actions">' +
+            '<button class="link-btn" data-pickup="' +
+            esc(h.id) +
+            '">Marquer récupéré</button>' +
+            (store.canSendAutomatically()
+              ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
+              : '') +
+            '</td></tr>'
+          );
+        })
+        .join('') +
+      '</tbody></table></div>' +
+      (attente.length > anciens.length
+        ? '<p class="hint" style="margin-top:12px;">Les ' +
+          (attente.length - anciens.length) +
+          ' autres sont dans l’onglet Historique, filtre « En attente ».</p>'
+        : '') +
+      '</div>';
+    brancherSuivi(box);
+  }
+
+  /* ═════════════ pile de courrier ═════════════ */
+
+  function renderPileState() {
+    const lignes = $('pileInput')
+      .value.split(/[\n;]+/)
+      .map(function (l) {
+        return l.trim();
+      })
+      .filter(Boolean);
+    $('pileState').textContent = lignes.length ? '· ' + lignes.length + ' ligne(s)' : '';
+    return lignes;
+  }
+
+  $('pileInput').addEventListener('input', function () {
+    renderPileState();
+    view.pile = [];
+    $('pileSendBtn').disabled = true;
+    $('pileResult').innerHTML = '';
+  });
+
+  $('pileResolveBtn').addEventListener('click', function () {
+    const lignes = renderPileState();
+    if (lignes.length === 0) {
+      setMsg('pileResult', 'error', 'Écrivez au moins un nom ou un numéro de boîte.');
+      return;
+    }
+
+    const trouves = [];
+    const ambigus = [];
+    const inconnus = [];
+    lignes.forEach(function (ligne) {
+      // Chaque ligne est cherchée d'abord comme numéro, puis comme nom : au
+      // guichet on saisit indifféremment l'un ou l'autre.
+      let candidats = S.contacts.filter(function (c) {
+        return util.matchesQuery(c, ligne, 'boite');
+      });
+      if (candidats.length === 0) {
+        candidats = S.contacts.filter(function (c) {
+          return util.matchesQuery(c, ligne, 'nom');
+        });
+      }
+      if (candidats.length === 1) {
+        if (!trouves.some(function (t) {
+            return t.contact.id === candidats[0].id;
+          })) {
+          trouves.push({ ligne: ligne, contact: candidats[0] });
+        }
+      } else if (candidats.length > 1) {
+        ambigus.push({ ligne: ligne, nombre: candidats.length });
+      } else {
+        inconnus.push(ligne);
+      }
+    });
+
+    view.pile = trouves;
+    $('pileSendBtn').disabled = trouves.length === 0;
+
+    let html = '';
+    if (trouves.length) {
+      html +=
+        '<div class="msg ok"><strong>' +
+        trouves.length +
+        ' destinataire(s) prêt(s)</strong><ul>' +
+        trouves
+          .map(function (t) {
+            return (
+              '<li>' +
+              (t.contact.box ? '<em class="box-tag">' + esc(t.contact.box) + '</em> ' : '') +
+              esc(t.contact.name) +
+              ' — ' +
+              esc(t.contact.email) +
+              '</li>'
+            );
+          })
+          .join('') +
+        '</ul></div>';
+    }
+    if (ambigus.length) {
+      html +=
+        '<div class="msg"><strong>À préciser</strong><ul>' +
+        ambigus
+          .map(function (a) {
+            return '<li>« ' + esc(a.ligne) +' » correspond à ' + a.nombre + ' destinataires</li>';
+          })
+          .join('') +
+        '</ul></div>';
+    }
+    if (inconnus.length) {
+      html +=
+        '<div class="msg error"><strong>Introuvables</strong><ul>' +
+        inconnus
+          .map(function (i) {
+            return '<li>' + esc(i) + '</li>';
+          })
+          .join('') +
+        '</ul></div>';
+    }
+    $('pileResult').innerHTML = html;
+  });
+
+  $('pileSendBtn').addEventListener('click', async function () {
+    if (view.pile.length === 0) return;
+    const ok = await confirmDialog(
+      'Notifier la pile',
+      'Envoyer une notification à ' + view.pile.length + ' destinataire(s) ?',
+      'Tout notifier'
+    );
+    if (!ok) return;
+
+    const btn = $('pileSendBtn');
+    btn.disabled = true;
+    let envoyes = 0;
+    let echecs = 0;
+    for (const entree of view.pile) {
+      btn.textContent = 'Envoi ' + (envoyes + echecs + 1) + '/' + view.pile.length + '…';
+      try {
+        await sendNotification(entree.contact, null, { silencieux: true });
+        envoyes++;
+      } catch (err) {
+        echecs++;
+      }
+    }
+    btn.textContent = 'Tout notifier';
+    stamp(envoyes + ' envoyé' + (envoyes > 1 ? 's' : ''), 'Pile traitée');
+    setMsg(
+      'pileResult',
+      echecs ? 'error' : 'ok',
+      envoyes + ' notification(s) envoyée(s)' + (echecs ? ', ' + echecs + ' en échec' : '') + '.'
+    );
+    $('pileInput').value = '';
+    view.pile = [];
+    renderPileState();
+  });
 
   /* ═════════════ registre ═════════════ */
 
@@ -906,13 +1108,28 @@
     renderHistory();
   });
 
+  function enAttente(h) {
+    return !h.pickedUpAt && h.status !== 'échec';
+  }
+
+  function joursDepuis(iso) {
+    return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  }
+
   function visibleHistory() {
     return S.history.filter(function (h) {
       if (view.historyDate && !util.isSameDay(h.date, view.historyDate)) return false;
-      if (view.historyFilter.trim() && !util.matchesQuery(h, view.historyFilter)) return false;
+      if (view.historyFilter.trim() && !util.matchesQuery(h, view.historyFilter, 'tout')) return false;
+      if (view.historyState === 'attente' && !enAttente(h)) return false;
+      if (view.historyState === 'recupere' && !h.pickedUpAt) return false;
       return true;
     });
   }
+
+  $('historyState').addEventListener('change', function (e) {
+    view.historyState = e.target.value;
+    renderHistory();
+  });
 
   const STATUS_PILL = {
     'envoyé': ['', 'Envoyé', 'Parti du serveur par SMTP.'],
@@ -936,26 +1153,39 @@
     }
 
     box.innerHTML =
-      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th>Copies</th><th>Date</th><th>Voie</th><th></th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th>Date</th><th>Attente</th><th>Suivi</th><th></th></tr></thead><tbody>' +
       list
         .map(function (h) {
           const pill = STATUS_PILL[h.status] || STATUS_PILL['envoyé'];
           const copies = [];
           if (h.cc) copies.push('Cc : ' + h.cc);
           if (h.bcc) copies.push('Cci : ' + h.bcc);
+          const attente = enAttente(h);
+          const jours = joursDepuis(h.date);
+          const relances = h.reminderCount || 0;
+
           return (
-            '<tr><td>' +
-            esc(h.name) +
-            '</td><td>' +
-            esc(h.email) +
-            '</td><td class="copies-cell"' +
+            '<tr' +
+            (attente && jours >= 7 ? ' class="vieux"' : '') +
+            '><td' +
             (copies.length ? ' title="' + esc(copies.join(' · ')) + '"' : '') +
             '>' +
-            (copies.length ? esc(copies.join(' · ')) : '—') +
+            esc(h.name) +
+            (relances ? '<span class="relance-tag">' + relances + ' relance' + (relances > 1 ? 's' : '') + '</span>' : '') +
+            '</td><td>' +
+            esc(h.email) +
             '</td><td>' +
             esc(util.formatDateTime(h.date)) +
-            '</td><td>' +
-            esc(h.method === 'auto' ? 'Automatique' : 'Logiciel de courriel') +
+            '</td><td class="attente-cell">' +
+            (attente ? (jours === 0 ? 'aujourd’hui' : jours + ' j') : '—') +
+            '</td><td class="actions">' +
+            (attente
+              ? '<button class="link-btn" data-pickup="' + esc(h.id) + '">Marquer récupéré</button>' +
+                (S.mode === 'serveur' && store.canSendAutomatically()
+                  ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
+                  : '')
+              : '<span class="status-pill">Récupéré</span>' +
+                '<button class="link-btn" data-unpickup="' + esc(h.id) + '">Annuler</button>') +
             '</td><td class="actions"><span class="status-pill ' +
             pill[0] +
             '" title="' +
@@ -967,6 +1197,7 @@
         })
         .join('') +
       '</tbody></table></div>';
+    brancherSuivi(box);
   }
 
   function lignesHistorique(pourExcel) {
@@ -1001,6 +1232,34 @@
     { key: 'expediteur', label: 'Expéditeur', width: 30 },
     { key: 'operateur', label: 'Opérateur', width: 22 }
   ];
+
+  function brancherSuivi(racine) {
+    racine.querySelectorAll('[data-pickup], [data-unpickup]').forEach(function (btn) {
+      const id = btn.dataset.pickup || btn.dataset.unpickup;
+      btn.addEventListener('click', async function () {
+        try {
+          await store.setPickedUp(id, !!btn.dataset.pickup);
+          toast(btn.dataset.pickup ? 'Courrier marqué récupéré.' : 'Retour en attente.');
+        } catch (err) {
+          toast('Impossible : ' + err.message, 'error');
+        }
+      });
+    });
+    racine.querySelectorAll('[data-remind]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        btn.textContent = 'Envoi…';
+        try {
+          const r = await store.relancer(btn.dataset.remind);
+          toast('Relance envoyée depuis ' + r.sentBy + '.', 'ok');
+        } catch (err) {
+          toast('Relance impossible : ' + err.message, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Relancer';
+        }
+      });
+    });
+  }
 
   $('exportHistoryBtn').addEventListener('click', function () {
     if (S.history.length === 0) {
@@ -1494,6 +1753,121 @@
     });
   });
 
+  /* ═════════════ sauvegarde ═════════════ */
+
+  $('downloadBackupBtn').addEventListener('click', function () {
+    if (S.mode === 'serveur') {
+      // Le serveur produit le fichier : c'est lui qui détient le registre.
+      root.location.href = '/api/backup';
+      setMsg('backupMsg', 'ok', 'Sauvegarde téléchargée. Rangez-la ailleurs que sur ce poste.');
+      return;
+    }
+    const copie = {
+      exportedAt: new Date().toISOString(),
+      contacts: S.contacts,
+      history: S.history,
+      settings: S.settings
+    };
+    download('registre-' + stampSuffix() + '.json', JSON.stringify(copie, null, 2), 'application/json');
+    setMsg('backupMsg', 'ok', 'Sauvegarde du registre de ce poste téléchargée.');
+  });
+
+  $('serverBackupBtn').addEventListener('click', async function () {
+    if (S.mode !== 'serveur') {
+      setMsg('backupMsg', 'error', 'Sans serveur, seule la sauvegarde téléchargée est possible.');
+      return;
+    }
+    try {
+      const r = await store.serverBackup();
+      setMsg('backupMsg', 'ok', 'Copie écrite sur le serveur : ' + esc(r.fichier) + ' (' + r.conserves + ' conservée(s)).');
+    } catch (err) {
+      setMsg('backupMsg', 'error', esc(err.message));
+    }
+  });
+
+  /* ═════════════ comptes ═════════════ */
+
+  async function renderAccounts() {
+    const carte = $('accountsCard');
+    carte.hidden = !S.auth.user;
+    if (!S.auth.user) return;
+
+    try {
+      const data = await store.listUsers();
+      const responsable = data.responsableId === S.auth.user.id;
+      $('usersList').innerHTML =
+        '<h3 class="sous-titre">Comptes du bureau (' + data.users.length + ')</h3>' +
+        '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th>Boîte reliée</th><th></th></tr></thead><tbody>' +
+        data.users
+          .map(function (u) {
+            const soi = u.id === S.auth.user.id;
+            return (
+              '<tr><td>' +
+              esc(u.name) +
+              (u.id === data.responsableId ? '<span class="relance-tag">responsable</span>' : '') +
+              '</td><td>' +
+              esc(u.email) +
+              '</td><td class="box-cell">' +
+              (u.mailbox ? esc(u.mailbox) : '—') +
+              '</td><td class="actions">' +
+              (responsable && !soi
+                ? '<button class="link-btn danger" data-rmuser="' + esc(u.id) + '">Retirer l’accès</button>'
+                : soi
+                  ? '<span class="hint">vous</span>'
+                  : '') +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>' +
+        (responsable
+          ? ''
+          : '<p class="hint" style="margin-top:10px;">Seul le compte responsable — le premier créé — peut retirer un accès.</p>');
+
+      $('usersList')
+        .querySelectorAll('[data-rmuser]')
+        .forEach(function (btn) {
+          btn.addEventListener('click', async function () {
+            const cible = data.users.find(function (u) {
+              return u.id === btn.dataset.rmuser;
+            });
+            const ok = await confirmDialog(
+              'Retirer l’accès',
+              'Retirer l’accès de ' + cible.name + ' (' + cible.email + ') ? Ses sessions seront fermées immédiatement. Le registre et l’historique ne changent pas.',
+              'Retirer'
+            );
+            if (!ok) return;
+            try {
+              await store.removeUser(cible.id);
+              toast('Accès retiré.');
+              renderAccounts();
+            } catch (err) {
+              setMsg('accountsMsg', 'error', esc(err.message));
+            }
+          });
+        });
+    } catch (err) {
+      $('usersList').innerHTML = '';
+    }
+  }
+
+  $('changePasswordBtn').addEventListener('click', async function () {
+    const actuel = $('pwdCurrent').value;
+    const suivant = $('pwdNext').value;
+    if (!actuel || !suivant) {
+      setMsg('accountsMsg', 'error', 'Renseignez le mot de passe actuel et le nouveau.');
+      return;
+    }
+    try {
+      await store.changePassword(actuel, suivant);
+      $('pwdCurrent').value = '';
+      $('pwdNext').value = '';
+      setMsg('accountsMsg', 'ok', 'Mot de passe changé. Les autres sessions ont été fermées.');
+    } catch (err) {
+      setMsg('accountsMsg', 'error', esc(err.message));
+    }
+  });
+
   /* ═════════════ application installable ═════════════ */
 
   const install = { prompt: null, installed: false };
@@ -1587,6 +1961,8 @@
     renderHistory();
     renderStatus();
     renderMailbox();
+    renderPending();
+    renderAccounts();
   }
 
   store.onChange(renderAll);

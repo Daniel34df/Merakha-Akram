@@ -726,3 +726,69 @@ footer.note{
   body{background:#fff;}
   .card{border-color:#999;page-break-inside:avoid;}
 }
+
+/* ---------- suivi des courriers ---------- */
+.attente-cell{
+  font-family:var(--mono);
+  font-size:12.5px;
+  color:var(--slate);
+  white-space:nowrap;
+}
+tbody tr.vieux .attente-cell{color:var(--rust);font-weight:600;}
+tbody tr.vieux td:first-child{box-shadow:inset 3px 0 0 var(--rust);}
+.relance-tag{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--brass);
+  border:1px solid var(--brass);
+  padding:1px 6px;
+  margin-left:8px;
+  vertical-align:1px;
+}
+
+/* ---------- pile de courrier ---------- */
+.pile{
+  margin-top:18px;
+  border-top:1px solid var(--line);
+  padding-top:14px;
+}
+.pile summary{
+  font-family:var(--mono);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--slate);
+  cursor:pointer;
+  list-style:none;
+}
+.pile summary::-webkit-details-marker{display:none;}
+.pile summary::before{content:'▸ ';}
+.pile[open] summary::before{content:'▾ ';}
+.pile summary:hover{color:var(--navy);}
+.pile textarea{margin-top:12px;}
+.pile .msg ul{margin:8px 0 0;padding-left:20px;}
+.pile .msg li{margin-bottom:3px;}
+
+.sous-titre{
+  font-family:var(--typewriter);
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  margin:20px 0 12px;
+}
+#passwordBox summary{
+  font-family:var(--typewriter);
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  cursor:pointer;
+  margin-bottom:12px;
+}
+select.filter-input{
+  font-family:var(--serif);
+  color:var(--navy);
+  border:1px solid var(--line);
+}

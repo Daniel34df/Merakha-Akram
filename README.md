@@ -212,7 +212,20 @@ défaut, les colonnes dans l'ordre nom, courriel, boîte, avec la virgule ou le
 point-virgule comme séparateur. Les lignes fautives sont
 signalées une par une, les doublons ignorés, et le reste est importé.
 
-**Historique** — toutes les notifications, filtrables par texte et par date,
+**Suivi des courriers** — chaque notification reste **en attente** tant que
+personne n'a marqué la lettre comme retirée. Le guichet affiche les plus anciens
+en tête, en rouge au-delà d'une semaine ; l'historique se filtre sur *En
+attente* ou *Récupérés*.
+
+Le bouton **Relancer** renvoie le message, avec la mention du nombre de jours
+d'attente. `REMINDER_DAYS=7` dans `.env` fait relancer le serveur tout seul, au
+plus trois fois par courrier et pas plus d'une fois par semaine.
+
+**Pile de courrier** — au guichet, *Traiter une pile de courrier* accepte une
+liste de noms ou de numéros de boîte, un par ligne. L'application les retrouve,
+signale les introuvables et les ambigus, puis notifie tout le monde en un clic.
+
+**Historique** — toutes les notifications, filtrables par texte, date et état,
 exportables en CSV. Chaque entrée indique la voie utilisée : *Automatique*
 (parti du serveur) ou *Logiciel de courriel* (préparé pour l'employé·e).
 
@@ -239,6 +252,34 @@ Deux limites à connaître sur le **De** :
 
 Le **Cci** est invisible pour les destinataires, mais reste affiché au guichet
 et dans l'historique : c'est la trace interne de l'envoi.
+
+---
+
+## Sauvegarde
+
+Le registre tient dans un seul fichier. L'onglet *Réglages* propose :
+
+- **Télécharger une sauvegarde** — un fichier JSON à ranger ailleurs que sur le
+  poste. Il contient le registre, l'historique et les réglages, mais **aucun
+  secret** : ni mot de passe, ni jeton de boîte reliée ;
+- **Copie sur le serveur** — une copie datée dans `data/sauvegardes/`, à raison
+  d'une par jour, les quatorze dernières étant conservées.
+
+Pour restaurer : arrêtez le serveur, remplacez `data/db.json` par la copie
+choisie, redémarrez. La manœuvre est volontairement manuelle — un bouton
+« restaurer » écrase le travail en cours d'un clic malheureux.
+
+---
+
+## Comptes du bureau
+
+Le **premier compte créé** est celui du responsable : lui seul peut retirer un
+accès. Chacun peut changer son mot de passe depuis *Réglages → Comptes* ; le
+changement ferme toutes les autres sessions ouvertes, ce qui est précisément ce
+qu'on veut quand on soupçonne un accès indésirable.
+
+Retirer un accès ferme immédiatement les sessions de la personne. Le registre et
+l'historique ne sont pas touchés.
 
 ---
 
@@ -342,12 +383,13 @@ server/mailer.js      envoi SMTP (nodemailer, optionnel) et mode essai
 server/auth.js        mots de passe scrypt, sessions, limitation des tentatives
 server/secrets.js     chiffrement des identifiants au repos (AES-256-GCM)
 server/google.js      autorisation Gmail (OAuth 2.0)
+server/reminders.js   courriers en attente et relances automatiques
 test/                 tests (node:test), sans dépendance
 .github/workflows/    intégration continue : npm test sur Node 20.12 et 22
 ```
 
 ```bash
-npm test     # 87 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
+npm test     # 102 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

@@ -9,7 +9,8 @@ const { Db } = require('./db.js');
 const { createMailer } = require('./mailer.js');
 const { createVault } = require('./secrets.js');
 const { createGoogleOAuth } = require('./google.js');
-const { createServer, VERSION } = require('./app.js');
+const { createServer, VERSION, envoyerRelance } = require('./app.js');
+const reminders = require('./reminders.js');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -61,6 +62,9 @@ async function main() {
   const verifyRaw = String(process.env.VERIFY_EMAIL || '').toLowerCase();
   const verifyEmail = verifyRaw === '' ? mailer.enabled : verifyRaw === 'true';
 
+  // Relances automatiques : REMINDER_DAYS=0 (ou absent) les désactive.
+  const relanceJours = Number(process.env.REMINDER_DAYS || 0);
+
   const server = createServer({
     db: db,
     mailer: mailer,
@@ -68,6 +72,7 @@ async function main() {
     google: google,
     signupOpen: signupOpen,
     verifyEmail: verifyEmail,
+    reminderDays: relanceJours,
     rootDir: ROOT
   });
 
@@ -95,13 +100,28 @@ async function main() {
           ? 'code de confirmation envoyé par courriel'
           : 'sans vérification d’adresse' + (mailer.enabled ? ' (VERIFY_EMAIL=false)' : ' — aucun envoi possible'))
     );
+    console.log(
+      '  relances    ' +
+        (relanceJours > 0
+          ? 'automatiques après ' + relanceJours + ' jour(s)'
+          : 'manuelles seulement (REMINDER_DAYS pour les automatiser)')
+    );
     console.log('  boîte perso ' + (google.enabled ? 'connexion Google disponible' : 'Google non configuré — SMTP personnel seulement'));
     if (String(process.env.OPEN_BROWSER || '') === '1') {
       openBrowser('http://localhost:' + port);
     }
   });
 
+  const ctx = { db: db, mailer: mailer, vault: vault, google: google };
+  const arreterRelances = reminders.startReminderLoop(ctx, {
+    delaiJours: relanceJours,
+    envoyer: function (entree) {
+      return envoyerRelance(ctx, entree, null);
+    }
+  });
+
   const shutdown = function () {
+    arreterRelances();
     console.log('\nArrêt du serveur…');
     server.close(function () {
       process.exit(0);

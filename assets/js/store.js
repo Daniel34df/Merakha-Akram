@@ -39,6 +39,7 @@
     settings: Object.assign({}, DEFAULT_SETTINGS),
     lastError: null,
     registryPreference: 'partage',
+    suivi: { enAttente: 0, plusAncienJours: 0, recuperes: 0 },
     // Comptes : n'existent qu'en mode serveur. accountsExist bascule dès la
     // création du premier compte, et c'est lui qui rend la connexion obligatoire.
     auth: {
@@ -223,8 +224,64 @@
     state.contacts = data.contacts || [];
     state.history = data.history || [];
     state.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || {});
+    state.suivi = data.suivi || state.suivi;
     emit();
     return state;
+  }
+
+  /* ---------- suivi des courriers ---------- */
+
+  function remplacerEntree(record) {
+    const i = state.history.findIndex(function (h) {
+      return h.id === record.id;
+    });
+    if (i !== -1) state.history[i] = record;
+    emit();
+    return record;
+  }
+
+  /** Marque un courrier retiré (ou revient en arrière). */
+  async function setPickedUp(id, retire) {
+    if (state.mode === 'serveur') {
+      const result = await api('/history/' + encodeURIComponent(id) + '/pickup', {
+        method: retire ? 'POST' : 'DELETE'
+      });
+      return remplacerEntree(result.record);
+    }
+    const entree = state.history.find(function (h) {
+      return h.id === id;
+    });
+    if (!entree) return null;
+    entree.pickedUpAt = retire ? new Date().toISOString() : null;
+    persistLocal();
+    emit();
+    return entree;
+  }
+
+  /** Relance : seul le serveur sait renvoyer un courriel. */
+  async function relancer(id) {
+    if (state.mode !== 'serveur') throw new Error('La relance demande le registre partagé');
+    const result = await api('/history/' + encodeURIComponent(id) + '/remind', { method: 'POST' });
+    remplacerEntree(result.record);
+    return result;
+  }
+
+  /* ---------- sauvegarde et comptes ---------- */
+
+  async function serverBackup() {
+    return api('/backup', { method: 'POST' });
+  }
+
+  async function changePassword(current, next) {
+    return api('/auth/password', { method: 'PUT', body: JSON.stringify({ current: current, next: next }) });
+  }
+
+  async function listUsers() {
+    return api('/auth/users');
+  }
+
+  async function removeUser(id) {
+    return api('/auth/users/' + encodeURIComponent(id), { method: 'DELETE' });
   }
 
   /* Préférence de registre : elle vit dans le navigateur, pas sur le serveur —
@@ -370,7 +427,10 @@
   /* ---------- historique ---------- */
 
   async function addHistory(entry) {
-    const record = Object.assign({ id: util.uuid(), date: new Date().toISOString() }, entry);
+    const record = Object.assign(
+      { id: util.uuid(), date: new Date().toISOString(), pickedUpAt: null, reminderCount: 0 },
+      entry
+    );
     state.history.unshift(record);
     if (state.mode === 'serveur') {
       try {
@@ -458,6 +518,12 @@
     logout: logout,
     connectSmtpMailbox: connectSmtpMailbox,
     disconnectMailbox: disconnectMailbox,
+    setPickedUp: setPickedUp,
+    relancer: relancer,
+    serverBackup: serverBackup,
+    changePassword: changePassword,
+    listUsers: listUsers,
+    removeUser: removeUser,
     addContact: addContact,
     addContacts: addContacts,
     updateContact: updateContact,

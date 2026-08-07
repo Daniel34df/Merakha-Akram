@@ -161,6 +161,20 @@
         <span class="hint">Entrée pour valider · ↑↓ pour parcourir les suggestions</span>
       </div>
 
+      <details class="pile" id="pileBox">
+        <summary>Traiter une pile de courrier <span class="copies-state" id="pileState"></span></summary>
+        <p class="hint">
+          Un destinataire par ligne — nom ou numéro de boîte, au choix.
+          L'application les retrouve tous, puis vous notifiez d'un seul clic.
+        </p>
+        <textarea id="pileInput" rows="5" placeholder="B-12&#10;Marie Tremblay&#10;A-3"></textarea>
+        <div class="row-actions">
+          <button class="btn ghost" id="pileResolveBtn">Vérifier la liste</button>
+          <button class="btn" id="pileSendBtn" disabled>Tout notifier</button>
+        </div>
+        <div id="pileResult"></div>
+      </details>
+
       <details class="copies" id="copiesBox">
         <summary>Copies pour cet envoi <span class="copies-state" id="copiesState"></span></summary>
         <div class="copies-grid">
@@ -182,6 +196,7 @@
     </div>
 
     <div id="searchResults"></div>
+    <div id="pendingCard"></div>
   </section>
 
   <!-- ═══════════════ REGISTRE ═══════════════ -->
@@ -230,6 +245,11 @@
         <div class="toolbar">
           <input type="text" id="historyFilter" class="filter-input" placeholder="Filtrer…" autocomplete="off">
           <input type="date" id="historyDate" class="filter-input">
+          <select id="historyState" class="filter-input">
+            <option value="attente">En attente</option>
+            <option value="recupere">Récupérés</option>
+            <option value="tous" selected>Tous</option>
+          </select>
           <button class="btn ghost small" id="exportHistoryXlsxBtn">Exporter Excel</button>
           <button class="btn ghost small" id="exportHistoryBtn">CSV</button>
           <button class="btn ghost small danger" id="clearHistoryBtn">Vider</button>
@@ -351,6 +371,37 @@
         </details>
       </div>
       <div id="mailboxMsg"></div>
+    </div>
+
+    <div class="card" id="backupCard">
+      <h2>Sauvegarde du registre</h2>
+      <p class="hint" style="margin-bottom:14px;">
+        Tout le registre tient dans un seul fichier. Une copie datée est conservée
+        automatiquement sur le serveur ; téléchargez-en une de temps en temps et
+        rangez-la ailleurs que sur ce poste.
+      </p>
+      <div class="row-actions">
+        <button class="btn" id="downloadBackupBtn">Télécharger une sauvegarde</button>
+        <button class="btn ghost" id="serverBackupBtn">Copie sur le serveur</button>
+      </div>
+      <div id="backupMsg"></div>
+    </div>
+
+    <div class="card" id="accountsCard" hidden>
+      <h2>Comptes</h2>
+
+      <details id="passwordBox">
+        <summary>Changer mon mot de passe</summary>
+        <label for="pwdCurrent">Mot de passe actuel</label>
+        <input type="password" id="pwdCurrent" autocomplete="current-password">
+        <label for="pwdNext">Nouveau mot de passe</label>
+        <input type="password" id="pwdNext" autocomplete="new-password">
+        <p class="hint">Au moins 10 caractères. Les autres sessions ouvertes seront fermées.</p>
+        <button class="btn" id="changePasswordBtn">Changer</button>
+      </details>
+
+      <div id="usersList"></div>
+      <div id="accountsMsg"></div>
     </div>
 
     <div class="card">

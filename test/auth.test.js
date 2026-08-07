@@ -217,7 +217,10 @@ test('/api/state ne divulgue ni comptes ni sessions', function () {
   return withServer(async function (t) {
     await t.call('POST', '/api/auth/signup', COMPTE);
     const state = await t.call('GET', '/api/state');
-    assert.deepEqual(Object.keys(state.body).sort(), ['contacts', 'history', 'settings']);
+    assert.deepEqual(Object.keys(state.body).sort(), ['contacts', 'history', 'settings', 'suivi']);
+    assert.equal(state.body.users, undefined);
+    assert.equal(state.body.sessions, undefined);
+    assert.equal(state.body.pending, undefined);
   });
 });
 

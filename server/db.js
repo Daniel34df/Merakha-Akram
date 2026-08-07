@@ -108,4 +108,38 @@ class Db {
   }
 }
 
-module.exports = { Db: Db, DEFAULT_SETTINGS: DEFAULT_SETTINGS, emptyDb: emptyDb };
+/* Sauvegarde datée du registre, avec rotation.
+
+   Le registre tient dans un seul fichier : une erreur de manipulation ou un
+   disque défaillant l'emporte en entier. Une copie par jour, gardée quelques
+   semaines, coûte quelques kilo-octets et évite de tout perdre. */
+async function sauvegarder(db, options) {
+  const opts = options || {};
+  const dossier = opts.dossier || path.join(path.dirname(db.file), 'sauvegardes');
+  const garder = opts.garder === undefined ? 14 : Number(opts.garder);
+  const jour = (opts.now ? new Date(opts.now) : new Date()).toISOString().slice(0, 10);
+  const cible = path.join(dossier, 'registre-' + jour + '.json');
+
+  await fs.mkdir(dossier, { recursive: true });
+  // Une seule copie par jour : la journée en cours est simplement réécrite.
+  await fs.writeFile(cible, JSON.stringify(db.data, null, 2), { encoding: 'utf8', mode: 0o600 });
+
+  const fichiers = (await fs.readdir(dossier))
+    .filter(function (nom) {
+      return /^registre-\d{4}-\d{2}-\d{2}\.json$/.test(nom);
+    })
+    .sort();
+  const aSupprimer = fichiers.slice(0, Math.max(0, fichiers.length - garder));
+  for (const nom of aSupprimer) {
+    await fs.unlink(path.join(dossier, nom)).catch(function () {});
+  }
+
+  return { fichier: cible, conserves: Math.min(fichiers.length, garder), supprimes: aSupprimer.length };
+}
+
+module.exports = {
+  Db: Db,
+  DEFAULT_SETTINGS: DEFAULT_SETTINGS,
+  emptyDb: emptyDb,
+  sauvegarder: sauvegarder
+};
