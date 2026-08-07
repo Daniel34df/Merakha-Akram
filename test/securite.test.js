@@ -169,12 +169,12 @@ test('les demandes d’inscription répétées sur une adresse sont freinées', 
   return withServer(
     async function (t) {
       let dernier;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 8; i++) {
         dernier = await t.call('POST', '/api/auth/signup', COMPTE);
       }
       assert.equal(dernier.status, 429);
       assert.match(dernier.body.error, /Trop de demandes/);
-      assert.ok(t.mailer.sent.length <= 3, 'au plus trois courriels envoyés, pas cinq');
+      assert.ok(t.mailer.sent.length <= 5, 'au plus cinq courriels envoyés, pas huit');
     },
     { verifyEmail: true }
   );

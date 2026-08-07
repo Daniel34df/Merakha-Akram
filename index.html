@@ -145,7 +145,11 @@
   <section class="panel active" id="panel-guichet" aria-label="Guichet">
     <div class="card">
       <h2>Nouveau courrier reçu</h2>
-      <label for="nameInput">Nom inscrit sur la lettre</label>
+      <div class="search-modes" role="radiogroup" aria-label="Rechercher par">
+        <button type="button" class="active" data-mode="nom" role="radio" aria-checked="true">Par nom</button>
+        <button type="button" data-mode="boite" role="radio" aria-checked="false">Par n° de boîte</button>
+      </div>
+      <label for="nameInput" id="searchLabel">Nom inscrit sur la lettre</label>
       <div class="search-field">
         <input type="text" id="nameInput" placeholder="ex. Marie Tremblay" autocomplete="off"
                role="combobox" aria-expanded="false" aria-controls="suggestions" aria-autocomplete="list">
@@ -186,6 +190,10 @@
       <h2>Ajouter un destinataire</h2>
       <form class="add-form" id="addForm" novalidate>
         <div>
+          <label for="newBox">N° de boîte</label>
+          <input type="text" id="newBox" placeholder="B-12" autocomplete="off">
+        </div>
+        <div>
           <label for="newName">Nom complet</label>
           <input type="text" id="newName" placeholder="Marie Tremblay" autocomplete="off">
         </div>
@@ -203,8 +211,9 @@
         <h2>Destinataires enregistrés (<span id="countContacts">0</span>)</h2>
         <div class="toolbar">
           <input type="text" id="contactFilter" class="filter-input" placeholder="Filtrer…" autocomplete="off">
-          <button class="btn ghost small" id="importBtn">Importer CSV</button>
-          <button class="btn ghost small" id="exportContactsBtn">Exporter CSV</button>
+          <button class="btn ghost small" id="importBtn">Importer</button>
+          <button class="btn ghost small" id="exportContactsXlsxBtn">Exporter Excel</button>
+          <button class="btn ghost small" id="exportContactsBtn">CSV</button>
           <input type="file" id="importFile" accept=".csv,text/csv" hidden>
         </div>
       </div>
@@ -221,7 +230,8 @@
         <div class="toolbar">
           <input type="text" id="historyFilter" class="filter-input" placeholder="Filtrer…" autocomplete="off">
           <input type="date" id="historyDate" class="filter-input">
-          <button class="btn ghost small" id="exportHistoryBtn">Exporter CSV</button>
+          <button class="btn ghost small" id="exportHistoryXlsxBtn">Exporter Excel</button>
+          <button class="btn ghost small" id="exportHistoryBtn">CSV</button>
           <button class="btn ghost small danger" id="clearHistoryBtn">Vider</button>
         </div>
       </div>
@@ -267,6 +277,29 @@
       <div id="settingsMsg"></div>
       <label style="margin-top:18px;">Aperçu</label>
       <pre class="preview" id="settingsPreview"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Où le registre est conservé</h2>
+      <div class="registry-choice" id="registryChoice">
+        <label class="choice">
+          <input type="radio" name="registre" value="partage" id="registrePartage">
+          <span>
+            <b>Registre partagé</b>
+            Conservé sur le serveur : tous les postes voient le même registre, et
+            l'envoi automatique est possible.
+          </span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="registre" value="local" id="registreLocal">
+          <span>
+            <b>Ce poste seulement</b>
+            Conservé dans ce navigateur. Rien ne quitte le poste, mais les autres
+            postes ne voient pas ce registre.
+          </span>
+        </label>
+      </div>
+      <div id="registryMsg"></div>
     </div>
 
     <div class="card" id="mailboxCard" hidden>
@@ -349,6 +382,7 @@
 </dialog>
 
 <script src="assets/js/util.js"></script>
+<script src="assets/js/xlsx.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/notify.js"></script>
 <script src="assets/js/app.js"></script>

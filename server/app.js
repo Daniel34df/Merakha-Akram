@@ -118,9 +118,11 @@ function readBody(req) {
 function cleanContact(input) {
   const name = String((input && input.name) || '').trim();
   const email = String((input && input.email) || '').trim();
+  // Le numéro de boîte est libre et facultatif : « B-12 », « 142 », « Casier 7 ».
+  const box = String((input && input.box) || '').trim().slice(0, 40);
   if (!name) throw Object.assign(new Error('Nom manquant'), { status: 400 });
   if (!util.isValidEmail(email)) throw Object.assign(new Error('Courriel invalide'), { status: 400 });
-  return { name: name, email: email };
+  return { name: name, email: email, box: box };
 }
 
 function findDuplicate(contacts, email, exceptId) {
@@ -301,15 +303,23 @@ async function handleAuth(req, res, ctx, pathname) {
           { status: 429 }
         );
       }
-      ctx.signupThrottle.fail(util.normalize(email));
 
       const code = auth.generateCode();
       const pending = auth.newPendingSignup({ name: name, email: email, password: auth.hashPassword(password) }, code);
       try {
         await sendVerificationCode(ctx, pending, code);
       } catch (err) {
-        throw Object.assign(new Error('Envoi du code impossible : ' + err.message), { status: 502 });
+        // Un envoi qui échoue ne consomme pas le quota : l'adresse n'a rien reçu.
+        console.error('[inscription] envoi du code impossible :', err.message);
+        throw Object.assign(
+          new Error(
+            'Le code n’a pas pu être envoyé : ' + err.message +
+              '. Vérifiez la configuration SMTP du serveur (voir docs/installation-windows-gmail.md).'
+          ),
+          { status: 502 }
+        );
       }
+      ctx.signupThrottle.fail(util.normalize(email));
       await db.write(function (data) {
         // Une nouvelle demande remplace la précédente pour la même adresse.
         data.pending = data.pending.filter(function (p) {
@@ -628,7 +638,13 @@ async function handleApi(req, res, ctx, pathname) {
       if (clash) {
         throw Object.assign(new Error('Ce courriel est déjà au registre sous « ' + clash.name + ' »'), { status: 409 });
       }
-      const contact = { id: crypto.randomUUID(), name: input.name, email: input.email, createdAt: new Date().toISOString() };
+      const contact = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        email: input.email,
+        box: input.box,
+        createdAt: new Date().toISOString()
+      };
       await db.write(function (data) {
         data.contacts.push(contact);
       });
@@ -847,9 +863,9 @@ function createServer(options) {
     vault: options.vault || require('./secrets.js').createVault({ secret: crypto.randomBytes(32).toString('base64') }),
     google: options.google || require('./google.js').createGoogleOAuth({}),
     throttle: options.throttle || auth.createThrottle(),
-    // Trois demandes d'inscription par adresse et par heure : de quoi corriger
-    // une faute de frappe, pas de quoi noyer une boîte.
-    signupThrottle: options.signupThrottle || auth.createThrottle({ max: 3, windowMs: 60 * 60 * 1000 }),
+    // Cinq demandes d'inscription par adresse et par heure : de quoi corriger
+    // une faute de frappe ou renvoyer un code, pas de quoi noyer une boîte.
+    signupThrottle: options.signupThrottle || auth.createThrottle({ max: 5, windowMs: 60 * 60 * 1000 }),
     signupOpen: options.signupOpen !== false,
     // Par défaut, on vérifie l'adresse dès que le serveur sait envoyer un courriel.
     verifyEmail: options.verifyEmail !== undefined ? options.verifyEmail : !!(options.mailer && options.mailer.enabled)

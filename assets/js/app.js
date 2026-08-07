@@ -26,6 +26,8 @@
     // Premier démarrage : l'écran d'installation a été écarté volontairement.
     skipAccount: false,
     gateFormChosen: false,
+    // Recherche au guichet : 'nom' ou 'boite'.
+    searchMode: 'nom',
     // Inscription en attente du code de confirmation.
     pendingEmail: null,
     // Adresse confirmée, en cours d'association comme boîte d'envoi.
@@ -96,6 +98,23 @@
       URL.revokeObjectURL(url);
     }, 1000);
   }
+
+  /** Téléchargement d'un fichier binaire (classeur Excel). */
+  function downloadBytes(filename, bytes, mime) {
+    const blob = new Blob([bytes], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
   function stampSuffix() {
     const pad = function (n) {
@@ -253,7 +272,7 @@
     const matches = util
       .sortByName(
         S.contacts.filter(function (c) {
-          return util.matchesQuery(c, q);
+          return util.matchesQuery(c, q, view.searchMode);
         })
       )
       .slice(0, 6);
@@ -270,6 +289,7 @@
           '"' +
           (i === view.highlight ? ' class="highlight" aria-selected="true"' : '') +
           '>' +
+          (c.box ? '<em class="box-tag">' + esc(c.box) + '</em> ' : '') +
           esc(c.name) +
           '<span>' +
           esc(c.email) +
@@ -375,6 +395,24 @@
     toast('Copies remises aux valeurs des réglages.');
   });
 
+  document.querySelectorAll('.search-modes button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      view.searchMode = btn.dataset.mode;
+      document.querySelectorAll('.search-modes button').forEach(function (b) {
+        const actif = b === btn;
+        b.classList.toggle('active', actif);
+        b.setAttribute('aria-checked', actif ? 'true' : 'false');
+      });
+      const parNom = view.searchMode === 'nom';
+      $('searchLabel').textContent = parNom ? 'Nom inscrit sur la lettre' : 'Numéro de boîte';
+      nameInput.placeholder = parNom ? 'ex. Marie Tremblay' : 'ex. B-12';
+      nameInput.value = '';
+      $('searchResults').innerHTML = '';
+      hideSuggestions();
+      nameInput.focus();
+    });
+  });
+
   $('validerBtn').addEventListener('click', doSearch);
   $('clearSearchBtn').addEventListener('click', function () {
     nameInput.value = '';
@@ -395,7 +433,7 @@
     }
     const matches = util.sortByName(
       S.contacts.filter(function (c) {
-        return util.matchesQuery(c, raw);
+        return util.matchesQuery(c, raw, view.searchMode);
       })
     );
 
@@ -412,6 +450,7 @@
         .map(function (c) {
           return (
             '<div class="result-row"><div class="who">' +
+            (c.box ? '<em class="box-tag">' + esc(c.box) + '</em> ' : '') +
             esc(c.name) +
             '<span>' +
             esc(c.email) +
@@ -437,7 +476,9 @@
   function renderUnknown(raw) {
     $('searchResults').innerHTML =
       '<div class="card">' +
-      '<div class="msg error">Aucun destinataire trouvé pour « ' +
+      '<div class="msg error">Aucun destinataire trouvé ' +
+      (view.searchMode === 'boite' ? 'pour la boîte ' : 'pour ') +
+      '« ' +
       esc(raw) +
       ' » dans le registre.</div>' +
       '<label for="quickEmail">Ajouter « ' +
@@ -587,6 +628,7 @@
     const emailField = $('newEmail');
     const name = nameField.value.trim();
     const email = emailField.value.trim();
+    const box = $('newBox').value.trim();
 
     nameField.classList.toggle('invalid', !name);
     emailField.classList.toggle('invalid', !util.isValidEmail(email));
@@ -600,9 +642,10 @@
       return;
     }
     try {
-      await store.addContact({ name: name, email: email });
+      await store.addContact({ name: name, email: email, box: box });
       nameField.value = '';
       emailField.value = '';
+      $('newBox').value = '';
       nameField.focus();
       setMsg(
         'addMsg',
@@ -625,7 +668,7 @@
     const q = view.contactFilter.trim();
     const list = q
       ? S.contacts.filter(function (c) {
-          return util.matchesQuery(c, q);
+          return util.matchesQuery(c, q, 'tout');
         })
       : S.contacts;
     return util.sortByName(list);
@@ -647,7 +690,7 @@
     }
 
     box.innerHTML =
-      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th></th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table><thead><tr><th>N° boîte</th><th>Nom</th><th>Courriel</th><th></th></tr></thead><tbody>' +
       list
         .map(function (c) {
           if (c.id === view.editingId) {
@@ -655,6 +698,9 @@
               '<tr data-row="' +
               esc(c.id) +
               '">' +
+              '<td><input type="text" class="edit-box" value="' +
+              esc(c.box || '') +
+              '"></td>' +
               '<td><input type="text" class="edit-name" value="' +
               esc(c.name) +
               '"></td>' +
@@ -670,7 +716,9 @@
           }
           return (
             '<tr>' +
-            '<td>' +
+            '<td class="box-cell">' +
+            (c.box ? esc(c.box) : '—') +
+            '</td><td>' +
             esc(c.name) +
             '</td><td>' +
             esc(c.email) +
@@ -709,6 +757,7 @@
         const row = box.querySelector('tr[data-row="' + CSS.escape(btn.dataset.save) + '"]');
         const name = row.querySelector('.edit-name').value.trim();
         const email = row.querySelector('.edit-email').value.trim();
+        const box = row.querySelector('.edit-box').value.trim();
         if (!name || !util.isValidEmail(email)) {
           toast('Nom ou courriel invalide.', 'error');
           return;
@@ -719,7 +768,7 @@
           return;
         }
         try {
-          await store.updateContact(btn.dataset.save, { name: name, email: email });
+          await store.updateContact(btn.dataset.save, { name: name, email: email, box: box });
           view.editingId = null;
           renderContacts();
           toast('Destinataire mis à jour.', 'ok');
@@ -763,13 +812,36 @@
 
   /* ---------- import / export ---------- */
 
+  function lignesRegistre() {
+    return util.sortByName(S.contacts).map(function (c) {
+      return { boite: c.box || '', nom: c.name, courriel: c.email };
+    });
+  }
+
   $('exportContactsBtn').addEventListener('click', function () {
     if (S.contacts.length === 0) {
       toast('Le registre est vide.', 'error');
       return;
     }
-    const csv = util.toCsv(util.sortByName(S.contacts), ['name', 'email']).replace('name,email', 'nom,courriel');
-    download('destinataires-' + stampSuffix() + '.csv', csv);
+    download('destinataires-' + stampSuffix() + '.csv', util.toCsv(lignesRegistre(), ['boite', 'nom', 'courriel']));
+  });
+
+  $('exportContactsXlsxBtn').addEventListener('click', function () {
+    if (S.contacts.length === 0) {
+      toast('Le registre est vide.', 'error');
+      return;
+    }
+    const classeur = root.BC.xlsx.build({
+      sheetName: 'Destinataires',
+      columns: [
+        { key: 'boite', label: 'N° de boîte', width: 14 },
+        { key: 'nom', label: 'Nom', width: 30 },
+        { key: 'courriel', label: 'Courriel', width: 38 }
+      ],
+      rows: lignesRegistre()
+    });
+    downloadBytes('destinataires-' + stampSuffix() + '.xlsx', classeur, MIME_XLSX);
+    toast('Classeur Excel exporté.', 'ok');
   });
 
   $('importBtn').addEventListener('click', function () {
@@ -897,26 +969,66 @@
       '</tbody></table></div>';
   }
 
+  function lignesHistorique(pourExcel) {
+    return visibleHistory().map(function (h) {
+      const contact = S.contacts.find(function (c) {
+        return c.id === h.contactId;
+      });
+      return {
+        date: pourExcel ? new Date(h.date) : util.formatDateTime(h.date),
+        boite: (contact && contact.box) || '',
+        nom: h.name,
+        courriel: h.email,
+        cc: h.cc || '',
+        cci: h.bcc || '',
+        voie: h.method === 'auto' ? 'automatique' : 'logiciel de courriel',
+        statut: h.status || 'envoyé',
+        expediteur: h.sentBy || '',
+        operateur: h.operator || ''
+      };
+    });
+  }
+
+  const COLONNES_HISTORIQUE = [
+    { key: 'date', label: 'Date', width: 20, type: 'date' },
+    { key: 'boite', label: 'N° de boîte', width: 13 },
+    { key: 'nom', label: 'Nom', width: 28 },
+    { key: 'courriel', label: 'Courriel', width: 34 },
+    { key: 'cc', label: 'Cc', width: 26 },
+    { key: 'cci', label: 'Cci', width: 26 },
+    { key: 'voie', label: 'Voie d’envoi', width: 22 },
+    { key: 'statut', label: 'Statut', width: 12 },
+    { key: 'expediteur', label: 'Expéditeur', width: 30 },
+    { key: 'operateur', label: 'Opérateur', width: 22 }
+  ];
+
   $('exportHistoryBtn').addEventListener('click', function () {
     if (S.history.length === 0) {
       toast('L’historique est vide.', 'error');
       return;
     }
-    const rows = visibleHistory().map(function (h) {
-      return {
-        nom: h.name,
-        courriel: h.email,
-        cc: h.cc || '',
-        cci: h.bcc || '',
-        date: util.formatDateTime(h.date),
-        voie: h.method === 'auto' ? 'automatique' : 'logiciel de courriel',
-        statut: h.status || 'envoyé'
-      };
-    });
     download(
       'historique-' + stampSuffix() + '.csv',
-      util.toCsv(rows, ['nom', 'courriel', 'cc', 'cci', 'date', 'voie', 'statut'])
+      util.toCsv(
+        lignesHistorique(false),
+        COLONNES_HISTORIQUE.map(function (c) {
+          return c.key;
+        })
+      )
     );
+  });
+
+  $('exportHistoryXlsxBtn').addEventListener('click', function () {
+    if (S.history.length === 0) {
+      toast('L’historique est vide.', 'error');
+      return;
+    }
+    downloadBytes(
+      'historique-' + stampSuffix() + '.xlsx',
+      root.BC.xlsx.build({ sheetName: 'Historique', columns: COLONNES_HISTORIQUE, rows: lignesHistorique(true) }),
+      MIME_XLSX
+    );
+    toast('Classeur Excel exporté.', 'ok');
   });
 
   $('clearHistoryBtn').addEventListener('click', async function () {
@@ -1339,6 +1451,49 @@
     history.replaceState(null, '', '#reglages');
   }
 
+  /* ═════════════ où le registre est conservé ═════════════ */
+
+  function renderRegistryChoice() {
+    const pref = S.registryPreference || 'partage';
+    $('registrePartage').checked = pref === 'partage';
+    $('registreLocal').checked = pref === 'local';
+
+    let note = '';
+    if (pref === 'partage' && S.mode !== 'serveur') {
+      note =
+        '<div class="msg">Registre partagé demandé, mais aucun serveur ne répond : ' +
+        'l’application fonctionne sur ce poste. Démarrez le serveur, puis rechargez la page.</div>';
+    } else if (pref === 'local' && S.mode === 'local') {
+      note = '<div class="msg">Ce poste conserve son propre registre. Les autres postes ne le voient pas.</div>';
+    }
+    $('registryMsg').innerHTML = note;
+  }
+
+  document.querySelectorAll('#registryChoice input[name=registre]').forEach(function (radio) {
+    radio.addEventListener('change', async function () {
+      if (!radio.checked) return;
+      const cible = radio.value;
+      const ok = await confirmDialog(
+        'Changer de registre',
+        cible === 'local'
+          ? 'Ce poste utilisera son propre registre, séparé du registre partagé. Les données du serveur ne sont pas effacées : elles cessent simplement d’être affichées ici.'
+          : 'Ce poste rejoindra le registre partagé du serveur. Le registre local reste enregistré dans ce navigateur, sans être affiché.',
+        'Changer'
+      );
+      if (!ok) {
+        renderRegistryChoice();
+        return;
+      }
+      store.setRegistryPreference(cible);
+      // Le mode se décide au démarrage : un rechargement est le moyen le plus
+      // sûr de repartir sur le bon support, sans état à moitié migré.
+      toast('Changement pris en compte — rechargement…');
+      setTimeout(function () {
+        root.location.reload();
+      }, 900);
+    });
+  });
+
   /* ═════════════ application installable ═════════════ */
 
   const install = { prompt: null, installed: false };
@@ -1426,6 +1581,7 @@
 
   function renderAll() {
     renderGate();
+    renderRegistryChoice();
     renderMode();
     renderContacts();
     renderHistory();

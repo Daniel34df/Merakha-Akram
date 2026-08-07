@@ -146,11 +146,30 @@
     return normalize(a && a.email) === normalize(b && b.email);
   }
 
-  /** Recherche par nom ou courriel : tous les mots de la requête doivent être présents. */
-  function matchesQuery(contact, query) {
+  /** Numéro de boîte comparable : « b-012 », « B 12 » et « B12 » se rejoignent. */
+  function normalizeBox(box) {
+    return normalize(box).replace(/[\s._-]/g, '');
+  }
+
+  /**
+   * Vrai si le destinataire correspond à la recherche.
+   * mode : 'nom' (nom et courriel), 'boite' (numéro de boîte), 'tout' (les deux).
+   * Tous les mots de la requête doivent être présents.
+   */
+  function matchesQuery(contact, query, mode) {
     const terms = normalize(query).split(' ').filter(Boolean);
     if (terms.length === 0) return false;
-    const haystack = normalize(contact.name) + ' ' + normalize(contact.email);
+
+    if (mode === 'boite') {
+      // Un numéro se cherche d'un bloc : « b12 » ne doit pas répondre à « b1 »
+      // par accident sur un autre champ, mais un début de numéro reste utile.
+      const cible = normalizeBox(contact.box);
+      if (!cible) return false;
+      return normalizeBox(query) !== '' && cible.includes(normalizeBox(query));
+    }
+
+    let haystack = normalize(contact.name) + ' ' + normalize(contact.email);
+    if (mode !== 'nom') haystack += ' ' + normalize(contact.box);
     return terms.every(function (t) {
       return haystack.includes(t);
     });
@@ -164,21 +183,39 @@
 
   /* ---------- CSV ---------- */
 
-  function csvEscape(value) {
+  function csvEscape(value, separator) {
     const s = value === null || value === undefined ? '' : String(value);
-    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    const sep = separator || ';';
+    return s.indexOf(sep) !== -1 || /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
 
-  function toCsv(rows, columns) {
-    const head = columns.map(csvEscape).join(',');
-    const body = rows.map(function (row) {
-      return columns
-        .map(function (col) {
-          return csvEscape(row[col]);
+  /* Excel choisit son séparateur d'après la langue du système : virgule en
+     anglais, point-virgule en français. Un fichier séparé par des virgules
+     s'ouvre donc en une seule colonne sur un Windows français. On écrit avec des
+     points-virgules et on l'annonce par une ligne « sep= », qu'Excel comprend et
+     que les autres outils ignorent ou lisent correctement. */
+  function toCsv(rows, columns, options) {
+    const opts = options || {};
+    const sep = opts.separator || ';';
+    const ligne = function (valeurs) {
+      return valeurs
+        .map(function (v) {
+          return csvEscape(v, sep);
         })
-        .join(',');
+        .join(sep);
+    };
+    const lignes = [ligne(columns)];
+    rows.forEach(function (row) {
+      lignes.push(
+        ligne(
+          columns.map(function (col) {
+            return row[col];
+          })
+        )
+      );
     });
-    return [head].concat(body).join('\r\n');
+    const entete = opts.declareSeparator === false ? '' : 'sep=' + sep + '\r\n';
+    return entete + lignes.join('\r\n');
   }
 
   /** Analyseur CSV minimal mais correct : guillemets, doublement, retours de ligne inclus. */
@@ -235,7 +272,8 @@
    * Renvoie { contacts, errors } — jamais d'exception.
    */
   function parseContactsCsv(text) {
-    const rows = parseCsv(text);
+    // « sep=; » est une indication pour Excel, pas une ligne de données.
+    const rows = parseCsv(String(text || '').replace(/^\uFEFF?sep=.\r?\n/i, ''));
     const contacts = [];
     const errors = [];
     if (rows.length === 0) return { contacts: contacts, errors: ['Fichier vide.'] };
@@ -249,9 +287,14 @@
     const emailIdx = header.findIndex(function (h) {
       return ['courriel', 'email', 'e-mail', 'mail', 'adresse'].includes(h);
     });
+    const boxIdx = header.findIndex(function (h) {
+      return ['boite', 'boîte', 'numero de boite', 'numero', 'no boite', 'n boite', 'casier', 'box'].includes(h);
+    });
     const hasHeader = nameIdx !== -1 && emailIdx !== -1;
     const ni = hasHeader ? nameIdx : 0;
     const ei = hasHeader ? emailIdx : 1;
+    // Sans en-tête, une troisième colonne est lue comme le numéro de boîte.
+    const bi = hasHeader ? boxIdx : 2;
 
     rows.slice(hasHeader ? 1 : 0).forEach(function (cells, i) {
       const line = i + (hasHeader ? 2 : 1);
@@ -266,7 +309,8 @@
         errors.push('Ligne ' + line + ' : courriel invalide (« ' + email + ' »).');
         return;
       }
-      contacts.push({ name: name, email: email });
+      const box = bi !== -1 ? (cells[bi] || '').trim() : '';
+      contacts.push({ name: name, email: email, box: box });
     });
 
     return { contacts: contacts, errors: errors };
@@ -309,6 +353,7 @@
     renderTemplate: renderTemplate,
     sameContact: sameContact,
     matchesQuery: matchesQuery,
+    normalizeBox: normalizeBox,
     sortByName: sortByName,
     toCsv: toCsv,
     parseCsv: parseCsv,

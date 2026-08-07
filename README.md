@@ -130,6 +130,21 @@ service communication, seul habilité à en autoriser l'usage.
 
 ---
 
+## Registre partagé ou registre de poste
+
+L'onglet *Réglages* propose le choix, par poste :
+
+- **Registre partagé** — conservé sur le serveur, vu par tous les postes, avec
+  envoi automatique possible ;
+- **Ce poste seulement** — conservé dans ce navigateur ; rien ne quitte le
+  poste, mais les autres postes ne voient pas ce registre.
+
+Le choix est propre au navigateur, pas au serveur : deux postes peuvent faire
+des choix différents. Changer d'option recharge la page — les données de l'autre
+support ne sont pas effacées, elles cessent seulement d'être affichées.
+
+---
+
 ## Comptes et boîte d'envoi personnelle
 
 À l'inscription, un **code de confirmation à six chiffres** est envoyé à
@@ -175,12 +190,26 @@ inconnu, on peut l'ajouter au registre et le notifier dans la foulée.
 Raccourcis : `Entrée` valide, `↑` `↓` parcourent les suggestions, `/` ramène au
 champ de recherche.
 
-**Registre** — ajout, modification et suppression des destinataires, filtre,
-import et export CSV. Un courriel déjà présent est refusé, avec le nom sous
+**Guichet, deux façons de chercher** — un sélecteur au-dessus du champ bascule
+entre **Par nom** et **Par n° de boîte**. En mode boîte, seul le numéro répond :
+« B 12 », « b-12 » et « B12 » trouvent la même boîte.
+
+**Registre** — ajout, modification et suppression des destinataires (avec leur
+numéro de boîte), filtre, import et export. Un courriel déjà présent est refusé, avec le nom sous
 lequel il est enregistré.
 
-Le CSV d'import accepte un en-tête (`nom,courriel` ou `name,email`) ou, à
-défaut, deux colonnes dans l'ordre nom puis courriel. Les lignes fautives sont
+**Exports** — le bouton **Exporter Excel** produit un vrai classeur `.xlsx` :
+colonnes nommées et dimensionnées, en-tête figé, filtres actifs, dates
+reconnues comme des dates. C'est le format à préférer.
+
+Le bouton **CSV** reste disponible pour les échanges avec d'autres logiciels. Il
+est écrit avec des points-virgules et une ligne `sep=;` : sans cela, un Excel
+français ouvre le fichier **en une seule colonne**, puisqu'il attend le
+point-virgule et non la virgule.
+
+Le CSV d'import accepte un en-tête (`nom,courriel,boite` ou `name,email`) ou, à
+défaut, les colonnes dans l'ordre nom, courriel, boîte, avec la virgule ou le
+point-virgule comme séparateur. Les lignes fautives sont
 signalées une par une, les doublons ignorés, et le reste est importé.
 
 **Historique** — toutes les notifications, filtrables par texte et par date,
@@ -303,6 +332,7 @@ assets/css/style.css  feuille de style
 assets/css/fonts.css  déclarations des polices embarquées
 assets/fonts/         polices (woff2, sous-ensembles latin) — 216 Ko
 assets/js/util.js     fonctions partagées navigateur + serveur (recherche, CSV, gabarits)
+assets/js/xlsx.js     écriture de classeurs Excel, sans dépendance
 assets/js/store.js    persistance : serveur → localStorage → mémoire
 assets/js/notify.js   composition du message, mailto, presse-papiers
 assets/js/app.js      interface (onglets, registre, historique, réglages)
@@ -317,7 +347,7 @@ test/                 tests (node:test), sans dépendance
 ```
 
 ```bash
-npm test     # 75 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
+npm test     # 87 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

@@ -158,8 +158,31 @@ nav button.active{
 }
 
 .panel{display:none;}
-.panel.active{display:block;animation:fadeIn 0.18s ease;}
-@keyframes fadeIn{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;}}
+.panel.active{display:block;animation:panelIn 0.3s cubic-bezier(.2,.7,.3,1);}
+@keyframes panelIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+
+/* Les cartes d'un onglet entrent l'une après l'autre : le regard suit la page
+   au lieu de la recevoir d'un bloc. */
+.panel.active > .card{animation:cardIn 0.34s cubic-bezier(.2,.7,.3,1) backwards;}
+.panel.active > .card:nth-child(2){animation-delay:0.05s;}
+.panel.active > .card:nth-child(3){animation-delay:0.1s;}
+.panel.active > .card:nth-child(4){animation-delay:0.15s;}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+
+/* Lignes de tableau et résultats : même arrivée, très courte. */
+tbody tr{animation:rowIn 0.24s ease backwards;}
+tbody tr:nth-child(1){animation-delay:0.02s;}
+tbody tr:nth-child(2){animation-delay:0.04s;}
+tbody tr:nth-child(3){animation-delay:0.06s;}
+tbody tr:nth-child(4){animation-delay:0.08s;}
+tbody tr:nth-child(n+5){animation-delay:0.1s;}
+@keyframes rowIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+.result-row{animation:rowIn 0.28s ease backwards;}
+.suggestions{animation:sugIn 0.16s ease;}
+@keyframes sugIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+.msg{animation:msgIn 0.25s ease;}
+@keyframes msgIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:none;}}
 
 /* ---------- cartes ---------- */
 .card{
@@ -256,6 +279,38 @@ input.invalid{border-color:var(--rust);background:var(--danger-wash);}
 .row-actions.end{justify-content:flex-end;}
 
 /* ---------- guichet ---------- */
+.search-modes{display:flex;gap:2px;margin-bottom:16px;max-width:360px;}
+.search-modes button{
+  flex:1;
+  font-family:var(--mono);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  padding:9px 10px;
+  background:var(--paper-dark);
+  border:1px solid var(--line);
+  color:var(--slate);
+  cursor:pointer;
+  transition:background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.search-modes button:hover{color:var(--navy);}
+.search-modes button.active{background:var(--navy);color:var(--paper);border-color:var(--navy);}
+
+/* Numéro de boîte : une étiquette compacte, lisible d'un coup d'œil. */
+.box-tag{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:11px;
+  font-style:normal;
+  letter-spacing:0.5px;
+  padding:2px 7px;
+  margin-right:6px;
+  border:1px solid var(--brass);
+  color:var(--brass);
+  vertical-align:1px;
+}
+td.box-cell{font-family:var(--mono);font-size:12.5px;color:var(--slate);white-space:nowrap;}
+
 .search-field{position:relative;}
 .suggestions{
   position:absolute;
@@ -379,6 +434,37 @@ input[type=password]{
   letter-spacing:0.5px;
   color:var(--slate);
 }
+
+/* ---------- choix du registre ---------- */
+.registry-choice{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+.registry-choice .choice{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  border:1px solid var(--line);
+  background:var(--paper);
+  padding:14px 16px;
+  cursor:pointer;
+  text-transform:none;
+  letter-spacing:0;
+  font-family:var(--serif);
+  font-size:14px;
+  color:var(--navy);
+  margin-bottom:0;
+  transition:border-color 0.15s ease, background-color 0.15s ease;
+}
+.registry-choice .choice:hover{border-color:var(--brass);}
+.registry-choice input{margin-top:3px;accent-color:var(--navy);flex:0 0 auto;}
+.registry-choice b{
+  display:block;
+  font-family:var(--typewriter);
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  margin-bottom:4px;
+}
+.registry-choice span{line-height:1.5;}
+.registry-choice .choice:has(input:checked){border-color:var(--navy);background:var(--paper-dark);}
 
 /* ---------- boîte d'envoi personnelle ---------- */
 .mailbox-option{
@@ -624,8 +710,13 @@ footer.note{
   .toasts{left:14px;right:14px;max-width:none;}
 }
 
+/* Réglage système « réduire les animations » : on n'anime plus rien. */
 @media (prefers-reduced-motion:reduce){
-  .panel.active, .stamp-overlay.show .stamp, .toast{animation:none;}
+  *, *::before, *::after{
+    animation-duration:0.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:0.001ms !important;
+  }
   .stamp{transform:rotate(-12deg);opacity:1;}
 }
 

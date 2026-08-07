@@ -16,6 +16,8 @@
   const CONTACTS_KEY = 'courrier-contacts';
   const HISTORY_KEY = 'courrier-history';
   const SETTINGS_KEY = 'courrier-settings';
+  // Choix de l'employé·e : 'partage' (serveur) ou 'local' (ce poste seulement).
+  const REGISTRY_PREF_KEY = 'courrier-registre';
 
   const DEFAULT_SETTINGS = {
     subject: 'Un courrier vous attend',
@@ -36,6 +38,7 @@
     history: [],
     settings: Object.assign({}, DEFAULT_SETTINGS),
     lastError: null,
+    registryPreference: 'partage',
     // Comptes : n'existent qu'en mode serveur. accountsExist bascule dès la
     // création du premier compte, et c'est lui qui rend la connexion obligatoire.
     auth: {
@@ -224,8 +227,31 @@
     return state;
   }
 
+  /* Préférence de registre : elle vit dans le navigateur, pas sur le serveur —
+     c'est un choix de poste, et il doit pouvoir se faire même hors ligne. */
+  function registryPreference() {
+    try {
+      return root.localStorage.getItem(REGISTRY_PREF_KEY) || 'partage';
+    } catch (e) {
+      return 'partage';
+    }
+  }
+
+  function setRegistryPreference(value) {
+    try {
+      root.localStorage.setItem(REGISTRY_PREF_KEY, value === 'local' ? 'local' : 'partage');
+    } catch (e) {
+      state.lastError = 'Préférence non conservée : ' + e.message;
+    }
+    state.registryPreference = registryPreference();
+    emit();
+    return state.registryPreference;
+  }
+
   async function init() {
-    const health = await detectServer();
+    state.registryPreference = registryPreference();
+    // « Ce poste seulement » : on ne cherche même pas le serveur.
+    const health = state.registryPreference === 'local' ? null : await detectServer();
 
     if (health) {
       state.mode = 'serveur';
@@ -275,7 +301,12 @@
   /* ---------- destinataires ---------- */
 
   async function addContact(input) {
-    const contact = { id: util.uuid(), name: input.name.trim(), email: input.email.trim() };
+    const contact = {
+      id: util.uuid(),
+      name: input.name.trim(),
+      email: input.email.trim(),
+      box: (input.box || '').trim()
+    };
     if (state.mode === 'serveur') {
       const saved = await api('/contacts', { method: 'POST', body: JSON.stringify(contact) });
       state.contacts.push(saved);
@@ -302,7 +333,8 @@
     if (idx === -1) return null;
     const updated = Object.assign({}, state.contacts[idx], {
       name: patch.name.trim(),
-      email: patch.email.trim()
+      email: patch.email.trim(),
+      box: (patch.box || '').trim()
     });
     if (state.mode === 'serveur') {
       state.contacts[idx] = await api('/contacts/' + encodeURIComponent(id), {
@@ -417,6 +449,8 @@
     },
     init: init,
     canSendAutomatically: canSendAutomatically,
+    registryPreference: registryPreference,
+    setRegistryPreference: setRegistryPreference,
     signup: signup,
     verifySignup: verifySignup,
     resendCode: resendCode,

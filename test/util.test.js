@@ -82,21 +82,22 @@ test('renderTemplate remplace les variables connues et laisse les autres', funct
 
 test('toCsv échappe guillemets, virgules et sauts de ligne', function () {
   const csv = util.toCsv([{ nom: 'Dupont, Jean', note: 'dit "Jeannot"' }], ['nom', 'note']);
-  assert.equal(csv, 'nom,note\r\n"Dupont, Jean","dit ""Jeannot"""');
+  assert.equal(csv, 'sep=;\r\nnom;note\r\n"Dupont, Jean";"dit ""Jeannot"""');
+  assert.equal(util.toCsv([{ a: 'x' }], ['a'], { declareSeparator: false }), 'a\r\nx');
 });
 
 test('parseContactsCsv lit un fichier avec en-tête', function () {
   const res = util.parseContactsCsv('nom,courriel\r\nMarie Tremblay,marie@exemple.com\r\nJean Roy,jean@exemple.com\r\n');
   assert.equal(res.errors.length, 0);
   assert.deepEqual(res.contacts, [
-    { name: 'Marie Tremblay', email: 'marie@exemple.com' },
-    { name: 'Jean Roy', email: 'jean@exemple.com' }
+    { name: 'Marie Tremblay', email: 'marie@exemple.com', box: '' },
+    { name: 'Jean Roy', email: 'jean@exemple.com', box: '' }
   ]);
 });
 
 test('parseContactsCsv accepte un fichier sans en-tête et signale les lignes fautives', function () {
   const res = util.parseContactsCsv('Marie Tremblay,marie@exemple.com\nJean Roy,pas-une-adresse\n,orphelin@exemple.com');
-  assert.deepEqual(res.contacts, [{ name: 'Marie Tremblay', email: 'marie@exemple.com' }]);
+  assert.deepEqual(res.contacts, [{ name: 'Marie Tremblay', email: 'marie@exemple.com', box: '' }]);
   assert.equal(res.errors.length, 2);
   assert.match(res.errors[0], /Ligne 2/);
   assert.match(res.errors[1], /Ligne 3/);
@@ -117,4 +118,42 @@ test('isSameDay compare une date ISO à une date de calendrier locale', function
   assert.ok(util.isSameDay(iso, '2026-05-03'));
   assert.ok(!util.isSameDay(iso, '2026-05-04'));
   assert.ok(!util.isSameDay('pas une date', '2026-05-03'));
+});
+
+test('matchesQuery en mode boîte ne répond que sur le numéro', function () {
+  const c = { name: 'Élodie Tremblay', email: 'elo@exemple.com', box: 'B-12' };
+  assert.ok(util.matchesQuery(c, 'b12', 'boite'));
+  assert.ok(util.matchesQuery(c, 'B 12', 'boite'), 'espaces et tirets ignorés');
+  assert.ok(util.matchesQuery(c, 'b-1', 'boite'), 'un début de numéro suffit');
+  assert.ok(!util.matchesQuery(c, 'elodie', 'boite'), 'le nom ne répond pas en mode boîte');
+  assert.ok(!util.matchesQuery({ name: 'Sans boîte', email: 'x@y.com' }, 'b12', 'boite'));
+});
+
+test('matchesQuery en mode nom ignore le numéro de boîte', function () {
+  const c = { name: 'Élodie Tremblay', email: 'elo@exemple.com', box: 'B-12' };
+  assert.ok(util.matchesQuery(c, 'elodie', 'nom'));
+  assert.ok(!util.matchesQuery(c, 'b12', 'nom'));
+  assert.ok(util.matchesQuery(c, 'b-12', 'tout'), 'le mode « tout » couvre les deux');
+});
+
+test('le CSV s’ouvre en colonnes dans un Excel français', function () {
+  const csv = util.toCsv([{ nom: 'Dupont, Jean', courriel: 'j@ex.com' }], ['nom', 'courriel']);
+  assert.ok(csv.startsWith('sep=;\r\n'), 'le séparateur est annoncé à Excel');
+  assert.ok(csv.includes('nom;courriel'), 'colonnes séparées par des points-virgules');
+  assert.ok(csv.includes('"Dupont, Jean"'), 'une virgule dans une valeur reste protégée');
+});
+
+test('un CSV exporté se réimporte tel quel', function () {
+  const csv = util.toCsv(
+    [{ boite: 'B-12', nom: 'Élodie Tremblay', courriel: 'elo@exemple.com' }],
+    ['boite', 'nom', 'courriel']
+  );
+  const relu = util.parseContactsCsv(csv);
+  assert.equal(relu.errors.length, 0);
+  assert.deepEqual(relu.contacts, [{ name: 'Élodie Tremblay', email: 'elo@exemple.com', box: 'B-12' }]);
+});
+
+test('parseContactsCsv accepte aussi les fichiers séparés par des virgules', function () {
+  const relu = util.parseContactsCsv('nom,courriel\r\nMarie Tremblay,marie@exemple.com');
+  assert.deepEqual(relu.contacts, [{ name: 'Marie Tremblay', email: 'marie@exemple.com', box: '' }]);
 });
