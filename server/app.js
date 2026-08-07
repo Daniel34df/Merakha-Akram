@@ -89,6 +89,31 @@ function sessionExpiree() {
 /* Retrait par un tiers : le nom de la personne qui se présente quand ce n'est
    pas le destinataire. À ne pas confondre avec `pickedUpBy`, qui est l'agent du
    guichet. Vide = le destinataire est venu lui-même, le cas courant. */
+/* Gabarits par langue : { ar: { subject, body, templates: { colis: {…} } } }.
+   On ne garde que les langues connues et les textes complets — un sujet sans
+   corps donnerait un courriel vide, ce qui est pire que le message français. */
+function nettoyerLangues(langues) {
+  const out = {};
+  if (!langues || typeof langues !== 'object') return out;
+  util.LANGUES.forEach(function (l) {
+    if (l.id === 'fr') return; // le français est le modèle général
+    const entree = langues[l.id];
+    if (!entree) return;
+    const subject = String(entree.subject || '').trim();
+    const body = String(entree.body || '').trim();
+    const templates = util.nettoyerGabarits(entree.templates);
+    if (!subject && !body && Object.keys(templates).length === 0) return;
+    const propre = {};
+    if (subject && body) {
+      propre.subject = subject;
+      propre.body = body;
+    }
+    if (Object.keys(templates).length) propre.templates = templates;
+    if (Object.keys(propre).length) out[l.id] = propre;
+  });
+  return out;
+}
+
 function lirePorteur(corps) {
   const nom = String((corps && corps.porteur) || '').trim();
   if (!nom) return null;
@@ -178,6 +203,8 @@ function cleanContact(input) {
     absentUntil: absentUntil,
     departed: !!(input && input.departed),
     substituteId: String((input && input.substituteId) || '').trim() || null,
+    // Langue de notification. 'fr' par défaut : un destinataire existant n'en a pas.
+    langue: util.langue(input && input.langue).id,
     domicilie: domicilie,
     domicilieDepuis: domicilie ? domicilieDepuis : '',
     domicilieJusqua: domicilie ? domicilieJusqua : '',
@@ -367,7 +394,10 @@ async function envoyerRelance(ctx, entree, currentUser) {
   vars.article_min = type.article.toLowerCase();
   vars.code = entree.pickupCode || '';
 
-  const gabarit = util.gabaritPour(settings, type.id);
+  const destinataire = (ctx.db.data.contacts || []).find(function (c) {
+    return c.id === entree.contactId || util.normalize(c.email) === util.normalize(entree.email);
+  });
+  const gabarit = util.gabaritPour(settings, type.id, destinataire && destinataire.langue);
   const subject = 'Rappel — ' + util.renderTemplate(gabarit.subject, vars);
   const text =
     util.renderTemplate(gabarit.body, vars) +
@@ -1421,6 +1451,11 @@ async function handleApi(req, res, ctx, pathname) {
         templates: util.nettoyerGabarits(
           body.templates !== undefined ? body.templates : db.data.settings.templates
         ),
+        /* Gabarits par langue. Même règle que par type : incomplet = ignoré,
+           absent de la requête = conservé tel quel. */
+        langues: nettoyerLangues(
+          body.langues !== undefined ? body.langues : db.data.settings.langues
+        ),
         /* Durée de conservation des courriers terminés, en mois. 0 = illimitée.
            Bornée à dix ans : au-delà, ce n'est plus une durée de conservation,
            c'est un oubli de la fixer. */
@@ -1560,7 +1595,13 @@ async function handleApi(req, res, ctx, pathname) {
 
     // Le gabarit du type l'emporte sur le modèle général ; ce que la requête
     // fournit explicitement l'emporte sur les deux.
-    const gabarit = util.gabaritPour(settings, type.id);
+    /* La langue vient du destinataire, pas de la requête : c'est une propriété
+       de la personne, pas de l'envoi. */
+    const contactVise = (db.data.contacts || []).find(function (c) {
+      return c.id === body.contactId || util.normalize(c.email) === util.normalize(to);
+    });
+    const langueVisee = util.langue(body.langue || (contactVise && contactVise.langue)).id;
+    const gabarit = util.gabaritPour(settings, type.id, langueVisee);
     const subject = body.subject ? String(body.subject) : util.renderTemplate(gabarit.subject, vars);
     const corpsBase = body.body ? String(body.body) : util.renderTemplate(gabarit.body, vars);
     // Le code voyage avec le message, quel que soit le gabarit choisi.

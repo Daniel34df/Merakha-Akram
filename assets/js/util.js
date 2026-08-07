@@ -136,6 +136,34 @@
     { id: 'administratif', label: 'Administratif', article: 'Un courrier administratif', relanceJours: 10 }
   ];
 
+  /* Langues proposées pour la notification. Une notification qu'on ne peut pas
+     lire ne notifie rien : dans un bureau qui domicilie, une partie du public ne
+     lit pas le français. La liste reste courte et se complète dans ce fichier —
+     le gabarit de chaque langue est écrit par le bureau, pas traduit ici. */
+  const LANGUES = [
+    { id: 'fr', label: 'Français' },
+    { id: 'en', label: 'English' },
+    { id: 'ar', label: 'العربية' },
+    { id: 'es', label: 'Español' },
+    { id: 'uk', label: 'Українська' },
+    { id: 'ru', label: 'Русский' },
+    { id: 'ro', label: 'Română' },
+    { id: 'pt', label: 'Português' }
+  ];
+
+  function langue(id) {
+    return (
+      LANGUES.find(function (l) {
+        return l.id === id;
+      }) || LANGUES[0]
+    );
+  }
+
+  /** Vrai pour une langue écrite de droite à gauche : l'aperçu doit le refléter. */
+  function estRtl(id) {
+    return id === 'ar' || id === 'fa' || id === 'he' || id === 'ur';
+  }
+
   function typeCourrier(id) {
     return (
       TYPES_COURRIER.find(function (t) {
@@ -261,14 +289,32 @@
 
      Un gabarit partiel (sujet sans corps) est ignoré plutôt qu'appliqué à
      moitié : mieux vaut le message général qu'un courriel sans texte. */
-  function gabaritPour(settings, typeId) {
+  function gabaritPour(settings, typeId, langueId) {
     const general = { subject: (settings && settings.subject) || '', body: (settings && settings.body) || '' };
-    const propre = settings && settings.templates && settings.templates[typeId];
-    if (!propre) return general;
-    const subject = String(propre.subject || '').trim();
-    const body = String(propre.body || '').trim();
-    if (!subject || !body) return general;
-    return { subject: subject, body: body, propre: true };
+    const complet = function (t) {
+      if (!t) return null;
+      const subject = String(t.subject || '').trim();
+      const body = String(t.body || '').trim();
+      return subject && body ? { subject: subject, body: body, propre: true } : null;
+    };
+
+    /* Ordre de préférence, du plus précis au plus général :
+         1. le gabarit de la langue pour ce type  (« colis » en arabe)
+         2. le gabarit de la langue              (message courant en arabe)
+         3. le gabarit du type                   (« colis » en français)
+         4. le modèle général
+       Une langue sans texte propre retombe donc sur le français plutôt que de
+       ne rien envoyer. */
+    const parLangue = langueId && langueId !== 'fr' && settings && settings.langues
+      ? settings.langues[langueId]
+      : null;
+    if (parLangue) {
+      const pourType = complet(parLangue.templates && parLangue.templates[typeId]);
+      if (pourType) return pourType;
+      const general2 = complet(parLangue);
+      if (general2) return general2;
+    }
+    return complet(settings && settings.templates && settings.templates[typeId]) || general;
   }
 
   /** Ne garde que les gabarits complets, sur des types connus. */
@@ -502,6 +548,9 @@
     normalizeBox: normalizeBox,
     TYPES_COURRIER: TYPES_COURRIER,
     typeCourrier: typeCourrier,
+    LANGUES: LANGUES,
+    langue: langue,
+    estRtl: estRtl,
     distance: distance,
     suggestionsProches: suggestionsProches,
     presence: presence,
