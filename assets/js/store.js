@@ -28,7 +28,9 @@
     officeName: 'Bureau du Courrier',
     from: '',
     cc: '',
-    bcc: ''
+    bcc: '',
+    // Gabarits propres à un type de courrier ; vide = tout suit le modèle général.
+    templates: {}
   };
 
   const state = {

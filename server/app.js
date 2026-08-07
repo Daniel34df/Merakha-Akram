@@ -324,11 +324,13 @@ async function envoyerRelance(ctx, entree, currentUser) {
   const type = util.typeCourrier(entree.type);
   vars.type = type.label;
   vars.article = type.article;
+  vars.article_min = type.article.toLowerCase();
   vars.code = entree.pickupCode || '';
 
-  const subject = 'Rappel — ' + util.renderTemplate(settings.subject, vars);
+  const gabarit = util.gabaritPour(settings, type.id);
+  const subject = 'Rappel — ' + util.renderTemplate(gabarit.subject, vars);
   const text =
-    util.renderTemplate(settings.body, vars) +
+    util.renderTemplate(gabarit.body, vars) +
     '\n\n— Rappel : ' +
     type.article.toLowerCase() +
     ' vous attend depuis ' +
@@ -1289,7 +1291,13 @@ async function handleApi(req, res, ctx, pathname) {
         officeName: String(body.officeName || DEFAULT_SETTINGS.officeName).trim(),
         from: from,
         cc: util.formatAddressList(cc.entries),
-        bcc: util.formatAddressList(bcc.entries)
+        bcc: util.formatAddressList(bcc.entries),
+        /* Un gabarit incomplet est écarté silencieusement plutôt que refusé :
+           vider les deux champs est la façon naturelle de revenir au modèle
+           général pour ce type. */
+        templates: util.nettoyerGabarits(
+          body.templates !== undefined ? body.templates : db.data.settings.templates
+        )
       });
       await db.write(function (data) {
         data.settings = settings;
@@ -1388,10 +1396,14 @@ async function handleApi(req, res, ctx, pathname) {
     const code = genererCodeRetrait(db.data.history);
     vars.type = type.label;
     vars.article = type.article;
+    vars.article_min = type.article.toLowerCase();
     vars.code = code;
 
-    const subject = body.subject ? String(body.subject) : util.renderTemplate(settings.subject, vars);
-    const corpsBase = body.body ? String(body.body) : util.renderTemplate(settings.body, vars);
+    // Le gabarit du type l'emporte sur le modèle général ; ce que la requête
+    // fournit explicitement l'emporte sur les deux.
+    const gabarit = util.gabaritPour(settings, type.id);
+    const subject = body.subject ? String(body.subject) : util.renderTemplate(gabarit.subject, vars);
+    const corpsBase = body.body ? String(body.body) : util.renderTemplate(gabarit.body, vars);
     // Le code voyage avec le message, quel que soit le gabarit choisi.
     const text = corpsBase + '\n\nCode de retrait : ' + code + '\nPrésentez-le au guichet.';
 

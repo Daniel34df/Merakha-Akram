@@ -16,7 +16,10 @@ const DEFAULT_SETTINGS = {
   officeName: 'Bureau du Courrier',
   from: '',
   cc: '',
-  bcc: ''
+  bcc: '',
+  /* Gabarits propres à un type de courrier ({ colis: {subject, body}, … }).
+     Vide par défaut : tous les types emploient le modèle général ci-dessus. */
+  templates: {}
 };
 
 function emptyDb() {

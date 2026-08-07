@@ -12,20 +12,35 @@
    */
   function compose(contact, settings, overrides) {
     const o = overrides || {};
+    const type = util.typeCourrier(o.type);
     const vars = {
       nom: contact.name,
       courriel: contact.email,
       date: new Date().toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
-      bureau: settings.officeName || 'Bureau du Courrier'
+      bureau: settings.officeName || 'Bureau du Courrier',
+      // Le type voyage avec le message : c'est ce qui permet d'écrire
+      // « {article} vous attend » sans rédiger quatre variantes à la main.
+      type: type.label,
+      // « Un colis » ouvre une phrase ; « un colis » se glisse au milieu.
+      article: type.article,
+      article_min: type.article.toLowerCase(),
+      code: o.code || ''
     };
+    /* Le gabarit propre au type l'emporte, sauf si l'appelant impose un texte
+       (l'aperçu des réglages montre exactement ce qui est en train d'être
+       écrit, pas ce qui serait choisi). */
+    const gabarit =
+      o.subject !== undefined || o.body !== undefined
+        ? { subject: o.subject !== undefined ? o.subject : settings.subject, body: o.body !== undefined ? o.body : settings.body }
+        : util.gabaritPour(settings, type.id);
     const pick = function (key) {
       return util.formatAddressList(
         util.parseAddressList(o[key] !== undefined ? o[key] : settings[key] || '').entries
       );
     };
     return {
-      subject: util.renderTemplate(settings.subject, vars),
-      body: util.renderTemplate(settings.body, vars),
+      subject: util.renderTemplate(gabarit.subject, vars),
+      body: util.renderTemplate(gabarit.body, vars),
       from: pick('from'),
       cc: pick('cc'),
       bcc: pick('bcc')

@@ -157,3 +157,49 @@ test('parseContactsCsv accepte aussi les fichiers séparés par des virgules', f
   const relu = util.parseContactsCsv('nom,courriel\r\nMarie Tremblay,marie@exemple.com');
   assert.deepEqual(relu.contacts, [{ name: 'Marie Tremblay', email: 'marie@exemple.com', box: '' }]);
 });
+
+/* ---------- gabarits par type de courrier ---------- */
+
+test('gabaritPour retombe sur le modèle général tant qu’il n’y a rien de propre', function () {
+  const general = { subject: 'Un courrier', body: 'Bonjour {nom}.' };
+  assert.deepEqual(util.gabaritPour(general, 'colis'), { subject: 'Un courrier', body: 'Bonjour {nom}.' });
+  assert.deepEqual(util.gabaritPour({}, 'colis'), { subject: '', body: '' });
+
+  // Un registre écrit avant cette option n'a pas de champ « templates ».
+  assert.equal(util.gabaritPour(general, 'lettre').subject, 'Un courrier');
+});
+
+test('gabaritPour applique le modèle propre au type', function () {
+  const settings = {
+    subject: 'Un courrier',
+    body: 'Bonjour {nom}.',
+    templates: { colis: { subject: 'Un colis vous attend', body: 'Bonjour {nom}, un colis encombre le casier.' } }
+  };
+  const colis = util.gabaritPour(settings, 'colis');
+  assert.equal(colis.subject, 'Un colis vous attend');
+  assert.equal(colis.propre, true);
+  // Les autres types ne sont pas touchés.
+  assert.equal(util.gabaritPour(settings, 'recommande').subject, 'Un courrier');
+});
+
+test('un gabarit à moitié rempli est ignoré plutôt qu’appliqué', function () {
+  const settings = {
+    subject: 'Général',
+    body: 'Corps général',
+    templates: { colis: { subject: 'Sujet seul', body: '   ' } }
+  };
+  assert.equal(util.gabaritPour(settings, 'colis').subject, 'Général', 'mieux vaut le général qu’un corps vide');
+});
+
+test('nettoyerGabarits ne garde que les modèles complets sur des types connus', function () {
+  const propre = util.nettoyerGabarits({
+    colis: { subject: 'S', body: 'B' },
+    recommande: { subject: '', body: 'B' },
+    inconnu: { subject: 'S', body: 'B' },
+    lettre: null
+  });
+  assert.deepEqual(Object.keys(propre), ['colis']);
+  assert.deepEqual(propre.colis, { subject: 'S', body: 'B' });
+  assert.deepEqual(util.nettoyerGabarits(undefined), {});
+  assert.deepEqual(util.nettoyerGabarits('n’importe quoi'), {});
+});

@@ -711,3 +711,93 @@ test('un taux ne se calcule pas sur un échantillon vide', function () {
   assert.equal(st.semaine.taux, null);
   assert.equal(st.delaiMoyenJours, null);
 });
+
+/* ---------- gabarits par type de courrier ---------- */
+
+test('un colis reçoit son propre message, une lettre garde le général', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'Un courrier vous attend',
+      body: 'Bonjour {nom}, passez à la réception.',
+      templates: {
+        colis: {
+          subject: 'Un colis vous attend',
+          body: 'Bonjour {nom}, un colis encombre le casier — merci de passer vite.'
+        }
+      }
+    });
+
+    await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com', type: 'colis' });
+    assert.equal(t.mailer.sent[0].subject, 'Un colis vous attend');
+    assert.match(t.mailer.sent[0].text, /un colis encombre le casier/);
+
+    await t.call('POST', '/api/notify', { name: 'Bo', email: 'bo@ex.com', type: 'lettre' });
+    assert.equal(t.mailer.sent[1].subject, 'Un courrier vous attend');
+    assert.match(t.mailer.sent[1].text, /passez à la réception/);
+  });
+});
+
+test('les variables {type}, {article} et {code} sont remplacées', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: '{type} en attente',
+      body: '{article} vous attend. Code : {code}.'
+    });
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com', type: 'recommande' });
+
+    assert.equal(t.mailer.sent[0].subject, 'Recommandé en attente');
+    assert.match(
+      t.mailer.sent[0].text,
+      new RegExp('Un courrier recommandé vous attend\\. Code : ' + envoi.body.record.pickupCode + '\\.')
+    );
+  });
+});
+
+test('la relance emploie aussi le gabarit du type', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'Général',
+      body: 'Corps général.',
+      templates: { colis: { subject: 'Colis', body: 'Votre colis attend toujours.' } }
+    });
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com', type: 'colis' });
+    t.mailer.sent.length = 0;
+
+    await t.call('POST', '/api/history/' + envoi.body.record.id + '/remind');
+    assert.equal(t.mailer.sent[0].subject, 'Rappel — Colis');
+    assert.match(t.mailer.sent[0].text, /Votre colis attend toujours/);
+  });
+});
+
+test('un gabarit incomplet ou d’un type inconnu n’est pas conservé', function () {
+  return withServer(async function (t) {
+    const res = await t.call('PUT', '/api/settings', {
+      subject: 'S',
+      body: 'B',
+      templates: {
+        colis: { subject: 'Colis', body: 'Corps colis' },
+        recommande: { subject: 'Sujet seul', body: '' },
+        inconnu: { subject: 'X', body: 'Y' }
+      }
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(Object.keys(t.db.data.settings.templates), ['colis']);
+  });
+});
+
+test('enregistrer des réglages sans parler des gabarits ne les efface pas', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'S',
+      body: 'B',
+      templates: { colis: { subject: 'Colis', body: 'Corps colis' } }
+    });
+    // Un client ancien, qui ignore les gabarits, ne doit pas les emporter.
+    await t.call('PUT', '/api/settings', { subject: 'S2', body: 'B2' });
+    assert.deepEqual(Object.keys(t.db.data.settings.templates), ['colis']);
+
+    // Un objet vide, lui, est un effacement explicite.
+    await t.call('PUT', '/api/settings', { subject: 'S3', body: 'B3', templates: {} });
+    assert.deepEqual(t.db.data.settings.templates, {});
+  });
+});

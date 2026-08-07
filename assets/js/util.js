@@ -252,6 +252,39 @@
     });
   }
 
+  /* Gabarit à employer pour un type de courrier donné.
+
+     Un recommandé n'appelle pas la même phrase qu'un prospectus : chaque type
+     peut avoir son propre message. Un type sans gabarit propre — le cas normal
+     — retombe sur le modèle général, si bien qu'un registre créé avant cette
+     option continue de fonctionner sans rien changer.
+
+     Un gabarit partiel (sujet sans corps) est ignoré plutôt qu'appliqué à
+     moitié : mieux vaut le message général qu'un courriel sans texte. */
+  function gabaritPour(settings, typeId) {
+    const general = { subject: (settings && settings.subject) || '', body: (settings && settings.body) || '' };
+    const propre = settings && settings.templates && settings.templates[typeId];
+    if (!propre) return general;
+    const subject = String(propre.subject || '').trim();
+    const body = String(propre.body || '').trim();
+    if (!subject || !body) return general;
+    return { subject: subject, body: body, propre: true };
+  }
+
+  /** Ne garde que les gabarits complets, sur des types connus. */
+  function nettoyerGabarits(templates) {
+    const out = {};
+    if (!templates || typeof templates !== 'object') return out;
+    TYPES_COURRIER.forEach(function (t) {
+      const entree = templates[t.id];
+      if (!entree) return;
+      const subject = String(entree.subject || '').trim();
+      const body = String(entree.body || '').trim();
+      if (subject && body) out[t.id] = { subject: subject, body: body };
+    });
+    return out;
+  }
+
   /** Deux destinataires sont « les mêmes » si le courriel coïncide (insensible à la casse). */
   function sameContact(a, b) {
     return normalize(a && a.email) === normalize(b && b.email);
@@ -462,6 +495,8 @@
     isGoogleAddress: isGoogleAddress,
     uuid: uuid,
     renderTemplate: renderTemplate,
+    gabaritPour: gabaritPour,
+    nettoyerGabarits: nettoyerGabarits,
     sameContact: sameContact,
     matchesQuery: matchesQuery,
     normalizeBox: normalizeBox,

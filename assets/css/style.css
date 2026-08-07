@@ -797,6 +797,28 @@ select.filter-input{
 .retrait-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .retrait-row .code-input{width:160px;margin-bottom:0;}
 
+/* ---------- gabarits par type de courrier ---------- */
+.gabarit-onglets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.gabarit-onglets button{
+  font-family:var(--mono);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  padding:7px 12px;
+  border:1px solid var(--line);
+  background:var(--paper-dark);
+  color:var(--slate);
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.gabarit-onglets button:hover{border-color:var(--navy);color:var(--navy);}
+.gabarit-onglets button.active{background:var(--navy);color:var(--paper);border-color:var(--navy);}
+/* Pastille laiton : ce type a son propre texte, il ne suit plus le général. */
+.point-propre{width:6px;height:6px;border-radius:50%;background:var(--brass);display:inline-block;}
+#setSubject::placeholder, #setBody::placeholder{color:var(--slate);opacity:0.65;font-style:italic;}
+
 /* ---------- fiche de vérification avant remise ---------- */
 /* Le bord laiton et l'apparition franche disent : « regardez ceci avant de
    valider ». C'est le seul écran qui s'interpose entre le code et la remise. */

@@ -392,13 +392,26 @@
         </div>
       </div>
 
+      <h3 class="sous-titre" style="margin-top:24px;">Modèle du message</h3>
+      <p class="hint" style="margin-bottom:10px;">
+        Le modèle général sert à tout le courrier. Chaque type peut recevoir son propre
+        texte : un recommandé n'appelle pas la même phrase qu'un prospectus.
+      </p>
+      <div class="gabarit-onglets" id="gabaritOnglets" role="tablist"></div>
+      <p class="hint" id="gabaritEtat" style="margin:-4px 0 14px;"></p>
+
       <label for="setSubject">Sujet</label>
       <input type="text" id="setSubject">
       <label for="setBody">Corps du message</label>
       <textarea id="setBody" rows="8"></textarea>
       <p class="hint">
-        Variables disponibles : <code>{nom}</code>, <code>{courriel}</code>, <code>{date}</code>, <code>{bureau}</code>.
+        Variables : <code>{nom}</code>, <code>{courriel}</code>, <code>{date}</code>, <code>{bureau}</code>,
+        <code>{type}</code> (« Colis »), <code>{article}</code> (« Un colis », en début de phrase),
+        <code>{article_min}</code> (« un colis », au milieu), <code>{code}</code> (code de retrait).
       </p>
+      <div class="row-actions" id="gabaritActions" hidden>
+        <button class="btn ghost small" id="gabaritEffacerBtn">Revenir au modèle général pour ce type</button>
+      </div>
       <div class="row-actions">
         <button class="btn" id="saveSettingsBtn">Enregistrer</button>
         <button class="btn ghost" id="resetSettingsBtn">Rétablir le modèle par défaut</button>

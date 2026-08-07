@@ -35,7 +35,11 @@
     // Inscription en attente du code de confirmation.
     pendingEmail: null,
     // Adresse confirmée, en cours d'association comme boîte d'envoi.
-    associateEmail: null
+    associateEmail: null,
+    // Réglages : onglet de gabarit affiché et brouillons non enregistrés.
+    gabaritActif: 'general',
+    gabaritGeneral: { subject: '', body: '' },
+    gabarits: {}
   };
 
   /* ═════════════ retours visuels ═════════════ */
@@ -987,8 +991,10 @@
       toast('Corrigez les adresses en copie avant d’envoyer.', 'error');
       return;
     }
-    const message = notify.compose(contact, S.settings, copies);
-    message.type = opts.type || view.typeCourrier;
+    const type = opts.type || view.typeCourrier;
+    // Le type est passé à la composition : c'est lui qui choisit le gabarit.
+    const message = notify.compose(contact, S.settings, Object.assign({ type: type }, copies));
+    message.type = type;
     if (opts.pour) {
       message.body += '\n\n(Ce courrier est adressé à ' + opts.pour + ', dont vous assurez le relais.)';
     }
@@ -2312,26 +2318,110 @@
 
   /* ═════════════ réglages ═════════════ */
 
+  /* Gabarits par type de courrier.
+
+     Un seul couple de champs sert à tous : l'onglet choisi dit lequel on est en
+     train d'écrire. Les modifications non enregistrées vivent dans
+     `view.gabarits`, pour qu'on puisse passer d'un type à l'autre sans perdre
+     sa saisie ni écrire au serveur à chaque clic. */
+
+  function ongletsGabarits() {
+    const boite = $('gabaritOnglets');
+    const onglets = [{ id: 'general', label: 'Général' }].concat(
+      util.TYPES_COURRIER.map(function (t) {
+        return { id: t.id, label: t.label };
+      })
+    );
+    boite.innerHTML = onglets
+      .map(function (o) {
+        const propre = o.id !== 'general' && !!view.gabarits[o.id];
+        return (
+          '<button type="button" role="tab" data-gabarit="' + o.id + '"' +
+          (o.id === view.gabaritActif ? ' class="active" aria-selected="true"' : ' aria-selected="false"') +
+          '>' + esc(o.label) + (propre ? '<span class="point-propre" title="modèle propre"></span>' : '') +
+          '</button>'
+        );
+      })
+      .join('');
+    boite.querySelectorAll('button[data-gabarit]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        memoriserGabaritCourant();
+        view.gabaritActif = btn.dataset.gabarit;
+        chargerGabaritActif();
+      });
+    });
+  }
+
+  /** Retient ce qui est affiché avant de changer d'onglet. */
+  function memoriserGabaritCourant() {
+    const subject = $('setSubject').value;
+    const body = $('setBody').value;
+    if (view.gabaritActif === 'general') {
+      view.gabaritGeneral = { subject: subject, body: body };
+      return;
+    }
+    if (subject.trim() && body.trim()) {
+      view.gabarits[view.gabaritActif] = { subject: subject, body: body };
+    } else {
+      // Un type dont on vide les champs revient au modèle général.
+      delete view.gabarits[view.gabaritActif];
+    }
+  }
+
+  function chargerGabaritActif() {
+    const general = view.gabaritGeneral;
+    const propre = view.gabaritActif !== 'general' ? view.gabarits[view.gabaritActif] : null;
+    const courant = view.gabaritActif === 'general' ? general : propre || { subject: '', body: '' };
+
+    $('setSubject').value = courant.subject;
+    $('setBody').value = courant.body;
+    $('setSubject').placeholder = view.gabaritActif === 'general' ? '' : general.subject;
+    $('setBody').placeholder = view.gabaritActif === 'general' ? '' : general.body;
+    $('gabaritActions').hidden = view.gabaritActif === 'general' || !propre;
+
+    const type = view.gabaritActif === 'general' ? null : util.typeCourrier(view.gabaritActif);
+    $('gabaritEtat').textContent =
+      view.gabaritActif === 'general'
+        ? 'Ce texte sert à tous les types qui n’ont pas de modèle propre.'
+        : propre
+          ? 'Modèle propre au type « ' + type.label + ' ».'
+          : 'Aucun modèle propre : « ' + type.label + ' » emploie le modèle général. Écrivez ici pour en créer un.';
+
+    ongletsGabarits();
+    renderPreview();
+  }
+
   function fillSettingsForm() {
     $('setOffice').value = S.settings.officeName || '';
     $('setFrom').value = S.settings.from || '';
     $('setCc').value = S.settings.cc || '';
     $('setBcc').value = S.settings.bcc || '';
-    $('setSubject').value = S.settings.subject || '';
-    $('setBody').value = S.settings.body || '';
-    renderPreview();
+    view.gabaritGeneral = { subject: S.settings.subject || '', body: S.settings.body || '' };
+    view.gabarits = JSON.parse(JSON.stringify(S.settings.templates || {}));
+    chargerGabaritActif();
   }
+
+  $('gabaritEffacerBtn').addEventListener('click', function () {
+    delete view.gabarits[view.gabaritActif];
+    chargerGabaritActif();
+    setMsg('settingsMsg', '', 'Ce type reprendra le modèle général au prochain enregistrement.');
+  });
 
   function renderPreview() {
     const sample = S.contacts[0] || { name: 'Marie Tremblay', email: 'marie@exemple.com' };
+    // Un onglet de type sans texte propre montre ce qui partirait vraiment :
+    // le modèle général.
+    const subject = $('setSubject').value.trim() || view.gabaritGeneral.subject;
+    const body = $('setBody').value.trim() || view.gabaritGeneral.body;
+    const type = view.gabaritActif === 'general' ? util.TYPES_COURRIER[0] : util.typeCourrier(view.gabaritActif);
     const message = notify.compose(sample, {
       officeName: $('setOffice').value,
-      subject: $('setSubject').value,
-      body: $('setBody').value,
+      subject: subject,
+      body: body,
       from: $('setFrom').value,
       cc: $('setCc').value,
       bcc: $('setBcc').value
-    });
+    }, { type: type.id, code: '4821' });
     $('settingsPreview').textContent = notify.plainText(sample, message);
   }
 
@@ -2340,10 +2430,17 @@
   });
 
   $('saveSettingsBtn').addEventListener('click', async function () {
-    const subject = $('setSubject').value.trim();
-    const body = $('setBody').value.trim();
+    memoriserGabaritCourant();
+    const subject = view.gabaritGeneral.subject.trim();
+    const body = view.gabaritGeneral.body.trim();
     if (!subject || !body) {
-      setMsg('settingsMsg', 'error', 'Le sujet et le corps du message ne peuvent pas être vides.');
+      setMsg(
+        'settingsMsg',
+        'error',
+        'Le modèle général ne peut pas être vide : c’est lui qui sert quand un type n’a pas de texte propre.'
+      );
+      view.gabaritActif = 'general';
+      chargerGabaritActif();
       return;
     }
 
@@ -2370,7 +2467,8 @@
         body: body,
         from: from,
         cc: util.formatAddressList(cc.entries),
-        bcc: util.formatAddressList(bcc.entries)
+        bcc: util.formatAddressList(bcc.entries),
+        templates: view.gabarits
       });
       fillSettingsForm();
       syncCopiesFromSettings(!view.copiesTouched);
