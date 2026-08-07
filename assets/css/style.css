@@ -797,6 +797,24 @@ select.filter-input{
 .retrait-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .retrait-row .code-input{width:160px;margin-bottom:0;}
 
+/* ---------- retrait par un tiers ---------- */
+.fiche-porteur{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
+.fiche-porteur input[type=text]{margin-bottom:0;}
+.fiche-porteur label[for]{margin-top:10px;}
+/* Étiquette rouille : le destinataire n'est pas venu lui-même, cela se voit. */
+.porteur-tag{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--rust);
+  border:1px solid var(--rust);
+  padding:1px 6px;
+  margin-left:8px;
+  white-space:nowrap;
+}
+
 /* ---------- coupure réseau ---------- */
 /* Le bandeau est en tête de page et ne se referme pas tout seul : une action
    qui n'est pas encore partie doit rester sous les yeux. */

@@ -447,19 +447,22 @@
     return record;
   }
 
-  /** Marque un courrier retiré (ou revient en arrière). */
-  async function setPickedUp(id, retire, signature) {
+  /** Marque un courrier retiré (ou revient en arrière).
+      `options.porteur` : nom de la personne venue à la place du destinataire. */
+  async function setPickedUp(id, retire, signature, options) {
+    const porteur = (options && options.porteur) || null;
     if (state.mode === 'serveur') {
       const courant = state.history.find(function (h) {
         return h.id === id;
       });
       const optimiste = Object.assign({}, courant, {
         pickedUpAt: retire ? new Date().toISOString() : null,
+        remisA: retire ? porteur : null,
         signature: retire && signature ? signature : null
       });
       const result = await api('/history/' + encodeURIComponent(id) + '/pickup', {
         method: retire ? 'POST' : 'DELETE',
-        body: retire && signature ? JSON.stringify({ signature: signature }) : undefined,
+        body: retire ? JSON.stringify({ signature: signature || '', porteur: porteur || '' }) : undefined,
         horsLigne: {
           op: retire ? 'remise' : 'remise-annulee',
           description:
@@ -474,6 +477,7 @@
     });
     if (!entree) return null;
     entree.pickedUpAt = retire ? new Date().toISOString() : null;
+    entree.remisA = retire ? porteur : null;
     entree.signature = retire && signature ? signature : null;
     persistLocal();
     emit();
@@ -507,8 +511,10 @@
     return { record: record, contact: contact, autres: autres };
   }
 
-  /** Remise au guichet par le code présenté par le destinataire. */
-  async function pickupByCode(code, signature) {
+  /** Remise au guichet par le code présenté par le destinataire.
+      `options.porteur` : nom de la personne venue à sa place. */
+  async function pickupByCode(code, signature, options) {
+    const porteur = (options && options.porteur) || null;
     if (state.mode !== 'serveur') {
       const entree = state.history.find(function (h) {
         return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
@@ -516,6 +522,7 @@
       if (!entree) throw new Error('Aucun courrier en attente avec ce code');
       entree.pickedUpAt = new Date().toISOString();
       entree.pickedUpByCode = true;
+      entree.remisA = porteur;
       entree.signature = signature || null;
       persistLocal();
       emit();
@@ -526,7 +533,7 @@
     });
     const result = await api('/history/pickup-by-code', {
       method: 'POST',
-      body: JSON.stringify({ code: code, signature: signature || '' }),
+      body: JSON.stringify({ code: code, signature: signature || '', porteur: porteur || '' }),
       horsLigne: {
         op: 'remise',
         description: 'Courrier remis à ' + ((vise && vise.name) || 'code ' + code),
@@ -534,6 +541,7 @@
           record: Object.assign({}, vise, {
             pickedUpAt: new Date().toISOString(),
             pickedUpByCode: true,
+            remisA: porteur,
             signature: signature || null
           })
         }

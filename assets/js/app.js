@@ -716,6 +716,17 @@
             .join('') +
           '</div>'
         : '') +
+      /* Retrait par un tiers : le voisin, un collègue, un proche. Sans ce
+         champ, le registre affirme que le destinataire est venu — ce qui est
+         faux, et c'est justement la trace qui manque en cas de litige. */
+      '<div class="fiche-porteur">' +
+      '<label class="check-row"><input type="checkbox" id="ficheTiers"> ' +
+      'Le courrier est retiré par une autre personne</label>' +
+      '<div id="ficheTiersChamp" hidden>' +
+      '<label for="fichePorteur">Nom de la personne qui se présente</label>' +
+      '<input type="text" id="fichePorteur" autocomplete="off" placeholder="ex. Jean Roy, voisin">' +
+      '</div>' +
+      '</div>' +
       '<div class="fiche-retrait-actions">' +
       '<button class="btn" id="ficheConfirmer">Confirmer la remise</button>' +
       '<button class="btn ghost" id="ficheAnnuler">Annuler</button>' +
@@ -727,6 +738,11 @@
       setMsg('pickupMsg', '', '');
       $('pickupCode').value = '';
       $('pickupCode').focus();
+    });
+    $('ficheTiers').addEventListener('change', function (e) {
+      $('ficheTiersChamp').hidden = !e.target.checked;
+      if (e.target.checked) $('fichePorteur').focus();
+      else $('fichePorteur').value = '';
     });
     $('ficheConfirmer').addEventListener('click', function () {
       confirmerRemise(fiche);
@@ -744,14 +760,25 @@
         return input.dataset.aussi;
       });
 
-    const signature = await demanderSignature(fiche.record.name);
+    /* Un tiers annoncé sans nom ne vaut rien : autant ne pas cocher la case. */
+    const tiers = $('ficheTiers') && $('ficheTiers').checked;
+    const porteur = tiers ? $('fichePorteur').value.trim() : '';
+    if (tiers && !porteur) {
+      setMsg('pickupMsg', 'error', 'Indiquez le nom de la personne qui retire le courrier.');
+      $('fichePorteur').focus();
+      return;
+    }
+
+    // Le pavé de signature nomme celui qui signe, pas le destinataire absent.
+    const signature = await demanderSignature(porteur || fiche.record.name);
     if (signature === null) return; // annulé : la fiche reste affichée
 
     if (bouton) bouton.disabled = true;
+    const options = { porteur: porteur || null };
     try {
-      const entree = await store.pickupByCode(fiche.record.pickupCode, signature);
+      const entree = await store.pickupByCode(fiche.record.pickupCode, signature, options);
       for (const id of aussi) {
-        await store.setPickedUp(id, true, signature);
+        await store.setPickedUp(id, true, signature, options);
       }
       effacerFiche();
       $('pickupCode').value = '';
@@ -763,6 +790,7 @@
         'Courrier remis à <strong>' +
           esc(entree.name) +
           '</strong> — marqué récupéré.' +
+          (porteur ? ' Retiré par <strong>' + esc(porteur) + '</strong>.' : '') +
           (aussi.length ? ' ' + aussi.length + ' autre(s) courrier(s) remis également.' : '')
       );
     } catch (err) {
@@ -1292,6 +1320,14 @@
         ['Retirés', String(retires.length)],
         ['En attente', String(courriers.filter(enAttente).length)],
         ['Délai moyen de retrait', moyenne === null ? '—' : moyenne + ' jour(s)'],
+        [
+          'Retirés par un tiers',
+          String(
+            retires.filter(function (h) {
+              return h.remisA;
+            }).length
+          )
+        ],
         [
           'Présence',
           util.presence(c).etat === 'present' ? 'présent·e' : util.presence(c).message
@@ -2280,6 +2316,7 @@
                   ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
                   : '')
               : '<span class="status-pill">Récupéré</span>' +
+                (h.remisA ? '<span class="porteur-tag" title="Retiré par un tiers">par ' + esc(h.remisA) + '</span>' : '') +
                 '<button class="link-btn" data-unpickup="' + esc(h.id) + '">Annuler</button>') +
             '</td><td class="actions"><span class="status-pill ' +
             pill[0] +

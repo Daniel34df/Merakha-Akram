@@ -801,3 +801,65 @@ test('enregistrer des réglages sans parler des gabarits ne les efface pas', fun
     assert.deepEqual(t.db.data.settings.templates, {});
   });
 });
+
+/* ---------- retrait par un tiers ---------- */
+
+test('le nom de la personne qui retire est enregistré et consigné', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana Blin', email: 'ana@ex.com' });
+    const code = envoi.body.record.pickupCode;
+
+    const remise = await t.call('POST', '/api/history/pickup-by-code', {
+      code: code,
+      porteur: 'Jean Roy, voisin'
+    });
+    assert.equal(remise.status, 200);
+    assert.equal(remise.body.record.remisA, 'Jean Roy, voisin');
+    assert.equal(remise.body.record.name, 'Ana Blin', 'le destinataire reste celui du courrier');
+
+    const journal = await t.call('GET', '/api/journal');
+    const ligne = journal.body.entrees.find(function (e) {
+      return e.action === 'courrier remis';
+    });
+    assert.match(ligne.details, /retiré par Jean Roy, voisin/);
+  });
+});
+
+test('sans tiers, le champ reste vide — le destinataire est venu lui-même', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    const remise = await t.call('POST', '/api/history/pickup-by-code', {
+      code: envoi.body.record.pickupCode
+    });
+    assert.equal(remise.body.record.remisA, null);
+  });
+});
+
+test('la remise depuis la liste accepte aussi un porteur', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    const id = envoi.body.record.id;
+
+    const remise = await t.call('POST', '/api/history/' + id + '/pickup', { porteur: '  Luc Tiers  ' });
+    assert.equal(remise.body.record.remisA, 'Luc Tiers', 'les espaces sont rognés');
+
+    // Annuler la remise efface le porteur : plus personne n'a retiré ce courrier.
+    const annule = await t.call('DELETE', '/api/history/' + id + '/pickup');
+    assert.equal(annule.body.record.remisA, null);
+    assert.equal(annule.body.record.pickedUpAt, null);
+  });
+});
+
+test('un nom de porteur démesuré est refusé', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    const res = await t.call('POST', '/api/history/pickup-by-code', {
+      code: envoi.body.record.pickupCode,
+      porteur: 'x'.repeat(200)
+    });
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /trop long/);
+    // Le courrier n'a pas été remis au passage.
+    assert.ok(!t.db.data.history[0].pickedUpAt);
+  });
+});

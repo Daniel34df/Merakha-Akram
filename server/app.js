@@ -85,6 +85,18 @@ function sessionExpiree() {
   return Object.assign(new Error('Connexion requise'), { status: 401, code: 'session' });
 }
 
+/* Retrait par un tiers : le nom de la personne qui se présente quand ce n'est
+   pas le destinataire. À ne pas confondre avec `pickedUpBy`, qui est l'agent du
+   guichet. Vide = le destinataire est venu lui-même, le cas courant. */
+function lirePorteur(corps) {
+  const nom = String((corps && corps.porteur) || '').trim();
+  if (!nom) return null;
+  if (nom.length > 120) {
+    throw Object.assign(new Error('Nom du porteur trop long'), { status: 400 });
+  }
+  return nom;
+}
+
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(
@@ -1148,6 +1160,7 @@ async function handleApi(req, res, ctx, pathname) {
     }
     if (signature.length > 80000) throw Object.assign(new Error('Signature trop volumineuse'), { status: 413 });
 
+    const porteur = lirePorteur(body);
     const cible = candidats[0];
     await db.write(function (data) {
       const h = data.history.find(function (x) {
@@ -1156,13 +1169,17 @@ async function handleApi(req, res, ctx, pathname) {
       h.pickedUpAt = new Date().toISOString();
       h.pickedUpBy = currentUser ? currentUser.name : null;
       h.pickedUpByCode = true;
+      h.remisA = porteur;
       h.signature = signature || null;
     });
     await consigner(db, {
       qui: currentUser && currentUser.name,
       action: 'courrier remis',
       cible: cible.name,
-      details: 'par code' + (signature ? ' avec signature' : '')
+      details:
+        'par code' +
+        (porteur ? ' — retiré par ' + porteur : '') +
+        (signature ? ' avec signature' : '')
     });
     return sendJson(res, 200, {
       record: db.data.history.find(function (h) {
@@ -1194,19 +1211,23 @@ async function handleApi(req, res, ctx, pathname) {
       if (signature.length > 80000) {
         throw Object.assign(new Error('Signature trop volumineuse'), { status: 413 });
       }
+      const porteur = retire ? lirePorteur(corps) : null;
       await db.write(function (data) {
         const cible = data.history.find(function (h) {
           return h.id === id;
         });
         cible.pickedUpAt = retire ? new Date().toISOString() : null;
         cible.pickedUpBy = retire && currentUser ? currentUser.name : null;
+        cible.remisA = porteur;
         cible.signature = retire && signature ? signature : null;
       });
       await consigner(db, {
         qui: currentUser && currentUser.name,
         action: retire ? 'courrier remis' : 'remise annulée',
         cible: entree.name,
-        details: retire && signature ? 'avec signature' : ''
+        details:
+          (porteur ? 'retiré par ' + porteur : '') +
+          (retire && signature ? (porteur ? ' avec signature' : 'avec signature') : '')
       });
       return sendJson(res, 200, {
         record: db.data.history.find(function (h) {

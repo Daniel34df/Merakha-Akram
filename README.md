@@ -262,6 +262,14 @@ courrier*, et le courrier est marqué récupéré automatiquement. Plus d'oubli 
 cochage, et une trace exacte de ce qui a été remis. Les codes sont uniques parmi
 les courriers en attente.
 
+**Retrait par un tiers** — un voisin, un collègue, un proche se présente à la
+place du destinataire. La fiche de remise propose de le nommer ; ce nom est
+enregistré à côté du destinataire, apparaît dans l'historique et la fiche de la
+personne, et le pavé de signature demande la signature de qui se présente
+réellement. Sans cette trace, le registre affirmerait que le destinataire est
+venu lui-même — ce qui est faux, et c'est justement ce qui manque en cas de
+litige.
+
 Le code **n'emporte pas la remise** : il ouvre d'abord une **fiche de
 vérification** — destinataire, numéro de boîte, type de courrier, date de
 réception et jours d'attente, adresse prévenue, nombre de relances, et l'absence
