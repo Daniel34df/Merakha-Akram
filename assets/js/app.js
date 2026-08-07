@@ -29,6 +29,7 @@
     // Recherche au guichet : 'nom' ou 'boite'.
     searchMode: 'nom',
     historyState: 'tous',
+    attenteFilter: '',
     pile: [],
     typeCourrier: 'lettre',
     // Inscription en attente du code de confirmation.
@@ -538,6 +539,7 @@
       const entree = await store.pickupByCode(code, signature);
       $('pickupCode').value = '';
       stamp('Remis', entree.name);
+      $('pickupCode').focus();
       setMsg(
         'pickupMsg',
         'ok',
@@ -608,16 +610,26 @@
       return;
     }
 
+    afficherResultats(matches);
+  }
+
+  /** Liste de destinataires trouvés, avec un en-tête libre. */
+  function afficherResultats(matches, entete) {
+    const box = $('searchResults');
     box.innerHTML =
-      '<div class="card"><h2>' +
-      (matches.length === 1 ? '1 destinataire trouvé' : matches.length + ' destinataires trouvés') +
-      '</h2>' +
+      '<div class="card">' +
+      (entete
+        ? '<div class="msg">' + entete + '</div>'
+        : '<h2>' + (matches.length === 1 ? '1 destinataire trouvé' : matches.length + ' destinataires trouvés') + '</h2>') +
       matches
         .map(function (c) {
           return (
             '<div class="result-row"><div class="who">' +
             (c.box ? '<em class="box-tag">' + esc(c.box) + '</em> ' : '') +
             esc(c.name) +
+            (util.presence(c).etat !== 'present'
+              ? '<span class="absence-tag">' + esc(util.presence(c).message) + '</span>'
+              : '') +
             '<span>' +
             esc(c.email) +
             '</span></div>' +
@@ -675,6 +687,28 @@
   }
 
   function renderUnknown(raw) {
+    /* En mode boîte, la saisie peut être un nom : plutôt que d'annoncer un
+       échec, on cherche dans l'autre mode et on le dit. C'est le cas courant
+       — on tape ce qu'on lit sur l'enveloppe, sans penser au sélecteur. */
+    if (view.searchMode === 'boite') {
+      const parNom = util.sortByName(
+        S.contacts.filter(function (c) {
+          return util.matchesQuery(c, raw, 'nom');
+        })
+      );
+      if (parNom.length) {
+        afficherResultats(
+          parNom,
+          '« ' +
+            esc(raw) +
+            ' » ne correspond à aucun numéro de boîte, mais à ' +
+            (parNom.length === 1 ? 'ce destinataire' : 'ces destinataires') +
+            ' :'
+        );
+        return;
+      }
+    }
+
     // Avant de proposer une création, on regarde si le nom ressemble à quelqu'un.
     const proches = view.searchMode === 'nom' ? util.suggestionsProches(S.contacts, raw, 3) : [];
     if (proches.length) {
@@ -719,36 +753,70 @@
   }
 
   function renderInconnuFranc(raw) {
+    /* Le texte saisi n'est pas la même chose selon le mode : un nom d'un côté,
+       un numéro de boîte de l'autre. Créer un destinataire nommé « B-12 »
+       n'aurait aucun sens — le formulaire s'adapte. */
+    const parBoite = view.searchMode === 'boite';
+
     $('searchResults').innerHTML =
       '<div class="card">' +
-      '<div class="msg error">Aucun destinataire trouvé ' +
-      (view.searchMode === 'boite' ? 'pour la boîte ' : 'pour ') +
-      '« ' +
+      '<div class="msg error">Aucun destinataire ' +
+      (parBoite ? 'à la boîte' : 'trouvé pour') +
+      ' « ' +
       esc(raw) +
       ' » dans le registre.</div>' +
-      '<label for="quickEmail">Ajouter « ' +
-      esc(raw) +
-      ' » au registre et notifier</label>' +
-      '<input type="email" id="quickEmail" placeholder="courriel@exemple.com" autocomplete="off">' +
+      '<label>Ajouter ' +
+      (parBoite ? 'un destinataire à la boîte « ' + esc(raw) + ' »' : '« ' + esc(raw) + ' » au registre') +
+      ' et notifier</label>' +
+      '<div class="copies-grid">' +
+      (parBoite
+        ? '<div><label for="quickName">Nom complet</label>' +
+          '<input type="text" id="quickName" placeholder="Marie Tremblay" autocomplete="off"></div>'
+        : '<div><label for="quickBox">N° de boîte (facultatif)</label>' +
+          '<input type="text" id="quickBox" placeholder="B-12" autocomplete="off"></div>') +
+      '<div><label for="quickEmail">Courriel</label>' +
+      '<input type="email" id="quickEmail" placeholder="courriel@exemple.com" autocomplete="off"></div>' +
+      '</div>' +
       '<div class="row-actions"><button class="btn" id="quickAddBtn">Ajouter et notifier</button>' +
       '<button class="btn ghost" id="quickRegistreBtn">Ouvrir le registre</button></div>' +
       '<div id="quickMsg"></div></div>';
 
     const emailField = $('quickEmail');
-    emailField.focus();
-    emailField.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        $('quickAddBtn').click();
-      }
+    const nameField = parBoite ? $('quickName') : null;
+    const boxField = parBoite ? null : $('quickBox');
+    (nameField || emailField).focus();
+
+    [nameField, boxField, emailField].forEach(function (champ) {
+      if (!champ) return;
+      champ.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          $('quickAddBtn').click();
+        }
+      });
     });
+
     $('quickRegistreBtn').addEventListener('click', function () {
       showPanel('registre');
-      $('newName').value = raw;
-      $('newEmail').focus();
+      if (parBoite) {
+        $('newBox').value = raw;
+        $('newName').focus();
+      } else {
+        $('newName').value = raw;
+        $('newEmail').focus();
+      }
     });
+
     $('quickAddBtn').addEventListener('click', async function () {
       const email = emailField.value.trim();
+      const nom = parBoite ? nameField.value.trim() : raw;
+      const boite = parBoite ? raw : (boxField.value || '').trim();
+
+      if (!nom) {
+        nameField.classList.add('invalid');
+        setMsg('quickMsg', 'error', 'Indiquez le nom du destinataire.');
+        return;
+      }
       if (!util.isValidEmail(email)) {
         emailField.classList.add('invalid');
         setMsg('quickMsg', 'error', 'Veuillez entrer un courriel valide.');
@@ -760,7 +828,7 @@
         return;
       }
       try {
-        const contact = await store.addContact({ name: raw, email: email });
+        const contact = await store.addContact({ name: nom, email: email, box: boite });
         toast('« ' + contact.name + ' » ajouté au registre.', 'ok');
         await sendNotification(contact);
       } catch (err) {
@@ -880,25 +948,39 @@
   function renderPending() {
     const box = $('pendingCard');
     const attente = S.history.filter(enAttente);
+    $('countAttente').textContent = attente.length;
+    $('tabCountAttente').textContent = attente.length;
+
     if (attente.length === 0) {
-      box.innerHTML = '';
+      box.innerHTML = '<div class="empty">Aucun courrier en attente. Tout est retiré.</div>';
       return;
     }
-    const anciens = attente
-      .slice()
-      .sort(function (a, b) {
-        return new Date(a.date) - new Date(b.date);
-      })
-      .slice(0, 8);
+
+    const filtre = view.attenteFilter.trim();
+    const visibles = attente.filter(function (h) {
+      if (!filtre) return true;
+      const contact = S.contacts.find(function (c) {
+        return c.id === h.contactId;
+      });
+      return util.matchesQuery({ name: h.name, email: h.email, box: (contact && contact.box) || '' }, filtre, 'tout');
+    });
+
+    if (visibles.length === 0) {
+      box.innerHTML = '<div class="empty">Aucun courrier en attente ne correspond au filtre.</div>';
+      return;
+    }
+
+    // Du plus ancien au plus récent : c'est celui qui attend le plus qui presse.
+    const anciens = visibles.slice().sort(function (a, b) {
+      return new Date(a.date) - new Date(b.date);
+    });
     const jourMax = joursDepuis(anciens[0].date);
 
     box.innerHTML =
-      '<div class="card"><div class="card-head"><h2>Courriers en attente (' +
-      attente.length +
-      ')</h2><div class="toolbar"><span class="hint">' +
+      '<p class="hint" style="margin-bottom:12px;">' +
       (jourMax >= 7 ? 'Le plus ancien attend depuis ' + jourMax + ' jours.' : 'Rien de très ancien.') +
-      '</span></div></div>' +
-      '<div class="table-scroll"><table><thead><tr><th>Attente</th><th>N° boîte</th><th>Nom</th><th></th></tr></thead><tbody>' +
+      '</p>' +
+      '<div class="table-scroll"><table><thead><tr><th>Attente</th><th>N° boîte</th><th>Nom</th><th>Code</th><th></th></tr></thead><tbody>' +
       anciens
         .map(function (h) {
           const contact = S.contacts.find(function (c) {
@@ -914,10 +996,12 @@
             ((contact && contact.box) || '—') +
             '</td><td>' +
             esc(h.name) +
+            '</td><td class="box-cell">' +
+            esc(h.pickupCode || '—') +
             '</td><td class="actions">' +
             '<button class="link-btn" data-pickup="' +
             esc(h.id) +
-            '">Marquer récupéré</button>' +
+            '">Remettre</button>' +
             (store.canSendAutomatically()
               ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
               : '') +
@@ -925,15 +1009,14 @@
           );
         })
         .join('') +
-      '</tbody></table></div>' +
-      (attente.length > anciens.length
-        ? '<p class="hint" style="margin-top:12px;">Les ' +
-          (attente.length - anciens.length) +
-          ' autres sont dans l’onglet Historique, filtre « En attente ».</p>'
-        : '') +
-      '</div>';
+      '</tbody></table></div>';
     brancherSuivi(box);
   }
+
+  $('attenteFilter').addEventListener('input', function (e) {
+    view.attenteFilter = e.target.value;
+    renderPending();
+  });
 
   /* ═════════════ fiche d'un destinataire ═════════════ */
 
@@ -1308,7 +1391,7 @@
 
   /* ═════════════ feuille de casier ═════════════ */
 
-  $('feuilleCasierBtn').addEventListener('click', function () {
+  function imprimerFeuilleCasier() {
     const attente = S.history.filter(enAttente);
     if (attente.length === 0) {
       toast('Aucun courrier en attente.', 'error');
@@ -1369,7 +1452,10 @@
       document.body.classList.remove('impression-casier');
       $('feuilleCasier').hidden = true;
     }, 500);
-  });
+  }
+
+  $('feuilleCasierBtn').addEventListener('click', imprimerFeuilleCasier);
+  $('feuilleCasierBtn2').addEventListener('click', imprimerFeuilleCasier);
 
   /* ═════════════ pile de courrier ═════════════ */
 
@@ -2753,7 +2839,7 @@
     });
 
     const hash = (root.location.hash || '').replace('#', '');
-    if (['guichet', 'registre', 'dossier', 'historique', 'reglages'].includes(hash)) showPanel(hash);
+    if (['guichet', 'remise', 'registre', 'dossier', 'historique', 'reglages'].includes(hash)) showPanel(hash);
 
     try {
       await store.init();

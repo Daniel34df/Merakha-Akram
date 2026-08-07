@@ -136,10 +136,11 @@
 
   <nav id="mainNav">
     <button class="active" data-panel="guichet" accesskey="1">Guichet</button>
-    <button data-panel="registre" accesskey="2">Registre <span class="tab-count" id="tabCountContacts">0</span></button>
-    <button data-panel="dossier" accesskey="3">Dossier <span class="tab-count" id="tabCountDossier">0</span></button>
-    <button data-panel="historique" accesskey="4">Historique <span class="tab-count" id="tabCountHistory">0</span></button>
-    <button data-panel="reglages" accesskey="5">Réglages</button>
+    <button data-panel="remise" accesskey="2">Remise <span class="tab-count" id="tabCountAttente">0</span></button>
+    <button data-panel="registre" accesskey="3">Registre <span class="tab-count" id="tabCountContacts">0</span></button>
+    <button data-panel="dossier" accesskey="4">Dossier <span class="tab-count" id="tabCountDossier">0</span></button>
+    <button data-panel="historique" accesskey="5">Historique <span class="tab-count" id="tabCountHistory">0</span></button>
+    <button data-panel="reglages" accesskey="6">Réglages</button>
   </nav>
 
   <!-- ═══════════════ GUICHET ═══════════════ -->
@@ -199,10 +200,16 @@
       </details>
     </div>
 
+    <div id="searchResults"></div>
+  </section>
+
+  <!-- ═══════════════ REMISE ═══════════════ -->
+  <section class="panel" id="panel-remise" aria-label="Remise d'un courrier">
     <div class="card" id="retraitCard">
       <h2>Remise d'un courrier</h2>
       <p class="hint" style="margin-bottom:12px;">
         Le destinataire présente le code à quatre chiffres reçu par courriel.
+        Sans code, retrouvez-le dans la liste ci-dessous.
       </p>
       <div class="retrait-row">
         <input type="text" id="pickupCode" inputmode="numeric" maxlength="4"
@@ -212,8 +219,16 @@
       <div id="pickupMsg"></div>
     </div>
 
-    <div id="searchResults"></div>
-    <div id="pendingCard"></div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Courriers en attente (<span id="countAttente">0</span>)</h2>
+        <div class="toolbar">
+          <input type="text" id="attenteFilter" class="filter-input" placeholder="Nom ou boîte…" autocomplete="off">
+          <button class="btn ghost small" id="feuilleCasierBtn2">Feuille de casier</button>
+        </div>
+      </div>
+      <div id="pendingCard"></div>
+    </div>
   </section>
 
   <!-- ═══════════════ REGISTRE ═══════════════ -->

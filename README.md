@@ -192,7 +192,14 @@ champ de recherche.
 
 **Guichet, deux façons de chercher** — un sélecteur au-dessus du champ bascule
 entre **Par nom** et **Par n° de boîte**. En mode boîte, seul le numéro répond :
-« B 12 », « b-12 » et « B12 » trouvent la même boîte.
+« B 12 », « b-12 » et « B12 » trouvent la même boîte. Si la saisie ne correspond
+à aucune boîte mais à un nom, l'application le dit et propose le destinataire —
+on tape ce qu'on lit sur l'enveloppe, sans penser au sélecteur.
+
+**Remise** — un onglet à part, séparé du guichet : d'un côté le courrier qui
+arrive, de l'autre celui qui repart. On y saisit le code de retrait, ou on
+retrouve le courrier dans la liste des courriers en attente, filtrable par nom
+ou par boîte.
 
 **Registre** — ajout, modification et suppression des destinataires (avec leur
 numéro de boîte), filtre, import et export. Un courriel déjà présent est refusé, avec le nom sous
