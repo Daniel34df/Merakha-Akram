@@ -62,8 +62,11 @@ async function main() {
   const verifyRaw = String(process.env.VERIFY_EMAIL || '').toLowerCase();
   const verifyEmail = verifyRaw === '' ? mailer.enabled : verifyRaw === 'true';
 
-  // Relances automatiques : REMINDER_DAYS=0 (ou absent) les désactive.
-  const relanceJours = Number(process.env.REMINDER_DAYS || 0);
+  /* Relances et signalement : quinze jours pour la relance, quinze de plus
+     avant que le courrier passe au dossier à traiter. REMINDER_DAYS=0 désactive
+     l'ensemble. */
+  const relanceJours = process.env.REMINDER_DAYS === undefined ? 15 : Number(process.env.REMINDER_DAYS || 0);
+  const escaladeJours = process.env.ESCALATION_DAYS === undefined ? 15 : Number(process.env.ESCALATION_DAYS || 0);
 
   const server = createServer({
     db: db,
@@ -103,7 +106,7 @@ async function main() {
     console.log(
       '  relances    ' +
         (relanceJours > 0
-          ? 'automatiques après ' + relanceJours + ' jour(s)'
+          ? 'après ' + relanceJours + ' jour(s), signalement ' + escaladeJours + ' jour(s) plus tard'
           : 'manuelles seulement (REMINDER_DAYS pour les automatiser)')
     );
     console.log('  boîte perso ' + (google.enabled ? 'connexion Google disponible' : 'Google non configuré — SMTP personnel seulement'));
@@ -115,8 +118,23 @@ async function main() {
   const ctx = { db: db, mailer: mailer, vault: vault, google: google };
   const arreterRelances = reminders.startReminderLoop(ctx, {
     delaiJours: relanceJours,
+    escaladeJours: escaladeJours,
     envoyer: function (entree) {
       return envoyerRelance(ctx, entree, null);
+    },
+    signaler: function (entrees) {
+      const ids = new Set(
+        entrees.map(function (e) {
+          return e.id;
+        })
+      );
+      return db.write(function (data) {
+        data.history.forEach(function (h) {
+          if (!ids.has(h.id)) return;
+          h.flaggedAt = new Date().toISOString();
+          h.flagReason = 'sans retrait après relance';
+        });
+      });
     }
   });
 

@@ -107,6 +107,65 @@ test('resume compte l’attente et le plus ancien', function () {
   assert.equal(r.plusAncienJours, 12);
 });
 
+test('aSignaler retient les courriers non retirés après la relance', function () {
+  const relanceAncienne = courrier(40, {
+    remindedAt: new Date(maintenant - 16 * JOUR).toISOString(),
+    reminderCount: 1
+  });
+  relanceAncienne.id = 'a-signaler';
+  const relanceRecente = courrier(20, {
+    remindedAt: new Date(maintenant - 3 * JOUR).toISOString(),
+    reminderCount: 1
+  });
+  const dejaSignale = courrier(60, {
+    remindedAt: new Date(maintenant - 40 * JOUR).toISOString(),
+    flaggedAt: new Date().toISOString()
+  });
+  const retire = courrier(60, {
+    remindedAt: new Date(maintenant - 40 * JOUR).toISOString(),
+    pickedUpAt: new Date().toISOString()
+  });
+
+  const dus = reminders.aSignaler([relanceAncienne, relanceRecente, dejaSignale, retire], {
+    delaiJours: 15,
+    escaladeJours: 15,
+    now: maintenant
+  });
+  assert.deepEqual(dus.map(function (d) { return d.id; }), ['a-signaler']);
+});
+
+test('un courrier jamais relancé finit quand même par être signalé', function () {
+  // Sans SMTP, aucune relance ne part : le courrier ne doit pas rester invisible.
+  const orphelin = courrier(31);
+  const jeune = courrier(20);
+  const dus = reminders.aSignaler([orphelin, jeune], { delaiJours: 15, escaladeJours: 15, now: maintenant });
+  assert.deepEqual(dus.map(function (d) { return d.id; }), ['c31'], '15 + 15 jours après réception');
+});
+
+test('etat classe chaque courrier dans un seul état', function () {
+  assert.equal(reminders.etat(courrier(1)), 'attente');
+  assert.equal(reminders.etat(courrier(20, { reminderCount: 1 })), 'relance');
+  assert.equal(reminders.etat(courrier(40, { reminderCount: 1, flaggedAt: 'x' })), 'signale');
+  assert.equal(reminders.etat(courrier(40, { flaggedAt: 'x', pickedUpAt: 'y' })), 'recupere');
+  assert.equal(reminders.etat(courrier(40, { closedAt: 'z' })), 'clos');
+  assert.equal(reminders.etat(courrier(2, { status: 'échec' })), 'echec');
+});
+
+test('le bilan des relances distingue récupérés et non récupérés', function () {
+  const r = reminders.resume(
+    [
+      courrier(20, { reminderCount: 1, pickedUpAt: 'x' }),
+      courrier(21, { reminderCount: 2 }),
+      courrier(40, { reminderCount: 1, flaggedAt: 'x' }),
+      courrier(2)
+    ],
+    maintenant
+  );
+  assert.equal(r.relances, 3);
+  assert.equal(r.recuperesApresRelance, 1);
+  assert.equal(r.signales, 1);
+});
+
 /* ---------- suivi par l'API ---------- */
 
 test('un courrier se marque récupéré, puis se remet en attente', function () {
@@ -148,6 +207,32 @@ test('relancer un courrier inconnu renvoie 404', function () {
   return withServer(async function (t) {
     assert.equal((await t.call('POST', '/api/history/inexistant/remind')).status, 404);
     assert.equal((await t.call('POST', '/api/history/inexistant/pickup')).status, 404);
+  });
+});
+
+test('un courrier se signale, puis se classe avec un motif', function () {
+  return withServer(async function (t) {
+    const envoi = await t.call('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    const id = envoi.body.record.id;
+
+    const signale = await t.call('POST', '/api/history/' + id + '/flag');
+    assert.equal(signale.status, 200);
+    assert.ok(signale.body.record.flaggedAt);
+    assert.equal((await t.call('GET', '/api/state')).body.suivi.signales, 1);
+
+    // Classer sans motif est refusé : la trace doit dire ce qui a été fait.
+    assert.equal((await t.call('POST', '/api/history/' + id + '/close', { reason: '  ' })).status, 400);
+
+    const clos = await t.call('POST', '/api/history/' + id + '/close', { reason: 'Retourné à l’expéditeur' });
+    assert.equal(clos.body.record.closeReason, 'Retourné à l’expéditeur');
+    assert.ok(clos.body.record.closedAt);
+
+    const etat = (await t.call('GET', '/api/state')).body.suivi;
+    assert.equal(etat.enAttente, 0, 'un courrier classé ne compte plus en attente');
+    assert.equal(etat.signales, 0);
+
+    const rouvert = await t.call('DELETE', '/api/history/' + id + '/close');
+    assert.equal(rouvert.body.record.closedAt, null);
   });
 });
 

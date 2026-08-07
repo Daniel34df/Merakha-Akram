@@ -258,6 +258,26 @@
     return entree;
   }
 
+  /** Classe un courrier sans retrait (ou le rouvre : raison à null). */
+  async function closeMail(id, raison) {
+    if (state.mode === 'serveur') {
+      const result = await api('/history/' + encodeURIComponent(id) + '/close', {
+        method: raison ? 'POST' : 'DELETE',
+        body: raison ? JSON.stringify({ reason: raison }) : undefined
+      });
+      return remplacerEntree(result.record);
+    }
+    const entree = state.history.find(function (h) {
+      return h.id === id;
+    });
+    if (!entree) return null;
+    entree.closedAt = raison ? new Date().toISOString() : null;
+    entree.closeReason = raison || null;
+    persistLocal();
+    emit();
+    return entree;
+  }
+
   /** Relance : seul le serveur sait renvoyer un courriel. */
   async function relancer(id) {
     if (state.mode !== 'serveur') throw new Error('La relance demande le registre partagé');
@@ -519,6 +539,7 @@
     connectSmtpMailbox: connectSmtpMailbox,
     disconnectMailbox: disconnectMailbox,
     setPickedUp: setPickedUp,
+    closeMail: closeMail,
     relancer: relancer,
     serverBackup: serverBackup,
     changePassword: changePassword,

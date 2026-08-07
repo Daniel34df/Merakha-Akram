@@ -15,9 +15,11 @@ function joursEcoules(depuis, maintenant) {
   return (maintenant - new Date(depuis).getTime()) / JOUR;
 }
 
-/** Un courrier compte comme en attente tant qu'il n'a pas été retiré. */
+/* Un courrier compte comme en attente tant qu'il n'a été ni retiré ni classé.
+   Un courrier classé est sorti du circuit — renvoyé, détruit, remis en main
+   propre : il ne doit plus ni compter, ni être relancé, ni resurgir au dossier. */
 function enAttente(entree) {
-  return !entree.pickedUpAt && entree.status !== 'échec';
+  return !entree.pickedUpAt && !entree.closedAt && entree.status !== 'échec';
 }
 
 /**
@@ -44,6 +46,42 @@ function aRelancer(history, options) {
   });
 }
 
+/**
+ * Courriers à signaler : relancés il y a assez longtemps, toujours pas retirés.
+ * Ils quittent la file d'attente ordinaire pour un dossier que quelqu'un doit
+ * regarder — retour à l'expéditeur, recherche du destinataire, mise au rebut.
+ *
+ *   delaiJours     — délai avant la relance (même valeur que aRelancer)
+ *   escaladeJours  — délai supplémentaire après la relance
+ */
+function aSignaler(history, options) {
+  const opts = options || {};
+  const delai = Number(opts.delaiJours || 0);
+  const escalade = Number(opts.escaladeJours || delai);
+  if (!(delai > 0) || !(escalade > 0)) return [];
+  const maintenant = opts.now || Date.now();
+
+  return (history || []).filter(function (entree) {
+    if (!enAttente(entree)) return false;
+    if (entree.flaggedAt) return false; // déjà dans le dossier
+    // Le décompte part de la relance si elle a eu lieu, sinon de l'envoi : un
+    // courrier qui n'a pas pu être relancé ne doit pas rester invisible.
+    const reference = entree.remindedAt || entree.date;
+    const seuil = entree.remindedAt ? escalade : delai + escalade;
+    return joursEcoules(reference, maintenant) >= seuil;
+  });
+}
+
+/** État d'un courrier, pour l'affichage et les filtres. */
+function etat(entree) {
+  if (entree.closedAt) return 'clos';
+  if (entree.pickedUpAt) return 'recupere';
+  if (entree.status === 'échec') return 'echec';
+  if (entree.flaggedAt) return 'signale';
+  if (entree.reminderCount > 0) return 'relance';
+  return 'attente';
+}
+
 /** Résumé destiné à l'interface : combien en attente, depuis combien de temps. */
 function resume(history, now) {
   const maintenant = now || Date.now();
@@ -51,10 +89,23 @@ function resume(history, now) {
   const ages = attente.map(function (e) {
     return joursEcoules(e.date, maintenant);
   });
+  const tous = history || [];
+  const relances = tous.filter(function (e) {
+    return (e.reminderCount || 0) > 0;
+  });
+
   return {
     enAttente: attente.length,
     plusAncienJours: ages.length ? Math.floor(Math.max.apply(null, ages)) : 0,
-    recuperes: (history || []).filter(function (e) {
+    recuperes: tous.filter(function (e) {
+      return !!e.pickedUpAt;
+    }).length,
+    signales: tous.filter(function (e) {
+      return etat(e) === 'signale';
+    }).length,
+    relances: relances.length,
+    // Ce que la relance a donné : c'est le chiffre qui dit si elle sert.
+    recuperesApresRelance: relances.filter(function (e) {
       return !!e.pickedUpAt;
     }).length
   };
@@ -73,6 +124,14 @@ function startReminderLoop(ctx, options) {
 
   const passe = async function () {
     try {
+      // Le signalement ne dépend pas du courriel : même sans SMTP, les courriers
+      // trop anciens doivent apparaître dans le dossier à traiter.
+      const aMettreAuDossier = aSignaler(ctx.db.data.history, opts);
+      if (aMettreAuDossier.length && opts.signaler) {
+        await opts.signaler(aMettreAuDossier);
+        console.log('[dossier] ' + aMettreAuDossier.length + ' courrier(s) signalé(s)');
+      }
+
       if (!ctx.mailer || !ctx.mailer.enabled) return;
       const dus = aRelancer(ctx.db.data.history, opts);
       for (const entree of dus) {
@@ -101,6 +160,8 @@ function startReminderLoop(ctx, options) {
 module.exports = {
   enAttente: enAttente,
   aRelancer: aRelancer,
+  aSignaler: aSignaler,
+  etat: etat,
   resume: resume,
   joursEcoules: joursEcoules,
   startReminderLoop: startReminderLoop

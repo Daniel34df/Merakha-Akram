@@ -213,13 +213,27 @@ point-virgule comme séparateur. Les lignes fautives sont
 signalées une par une, les doublons ignorés, et le reste est importé.
 
 **Suivi des courriers** — chaque notification reste **en attente** tant que
-personne n'a marqué la lettre comme retirée. Le guichet affiche les plus anciens
-en tête, en rouge au-delà d'une semaine ; l'historique se filtre sur *En
-attente* ou *Récupérés*.
+personne n'a marqué la lettre comme retirée. Le parcours se fait tout seul :
 
-Le bouton **Relancer** renvoie le message, avec la mention du nombre de jours
-d'attente. `REMINDER_DAYS=7` dans `.env` fait relancer le serveur tout seul, au
-plus trois fois par courrier et pas plus d'une fois par semaine.
+| Quand | Ce qui se passe |
+|---|---|
+| Réception | notification envoyée, courrier *en attente* |
+| **15 jours** sans retrait | **relance automatique** au destinataire |
+| **15 jours de plus** | le courrier passe au **dossier à traiter** |
+
+Les deux délais se règlent par `REMINDER_DAYS` et `ESCALATION_DAYS` ;
+`REMINDER_DAYS=0` désactive l'automatisme, le bouton **Relancer** restant
+disponible. Un courrier est relancé au plus trois fois.
+
+L'onglet **Dossier** répond à la question « qui a récupéré, qui n'a pas » :
+combien de courriers ont été relancés, combien ont été retirés à la suite de la
+relance, combien attendent toujours. Pour chacun, on peut le marquer récupéré,
+le relancer encore, ou le **classer** avec un motif — retourné à l'expéditeur,
+remis en main propre, détruit. Le motif et la personne qui a classé sont
+conservés, et un courrier classé se rouvre si besoin.
+
+Le signalement ne dépend pas du courriel : même sans SMTP, les courriers trop
+anciens apparaissent au dossier.
 
 **Pile de courrier** — au guichet, *Traiter une pile de courrier* accepte une
 liste de noms ou de numéros de boîte, un par ligne. L'application les retrouve,
@@ -389,7 +403,7 @@ test/                 tests (node:test), sans dépendance
 ```
 
 ```bash
-npm test     # 102 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
+npm test     # 107 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

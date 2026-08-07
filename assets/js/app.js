@@ -688,6 +688,181 @@
     brancherSuivi(box);
   }
 
+  /* ═════════════ dossier des courriers signalés ═════════════ */
+
+  function renderDossier() {
+    const signales = S.history.filter(function (h) {
+      return etatCourrier(h) === 'signale';
+    });
+    const classes = S.history.filter(function (h) {
+      return etatCourrier(h) === 'clos';
+    });
+    $('countDossier').textContent = signales.length;
+    $('tabCountDossier').textContent = signales.length;
+
+    /* Bilan des relances : c'est le chiffre qui dit si relancer sert à quelque
+       chose, et qui répond à « qui a récupéré, qui n'a pas ». */
+    const relances = S.history.filter(function (h) {
+      return (h.reminderCount || 0) > 0;
+    });
+    const apresRelance = relances.filter(function (h) {
+      return !!h.pickedUpAt;
+    });
+    $('relanceBilan').innerHTML = [
+      ['Courriers relancés', String(relances.length)],
+      ['Récupérés après relance', apresRelance.length + (relances.length ? ' sur ' + relances.length : '')],
+      ['Toujours pas récupérés', String(relances.length - apresRelance.length)],
+      ['Dans le dossier à traiter', String(signales.length)],
+      ['Classés sans retrait', String(classes.length)]
+    ]
+      .map(function (r) {
+        return '<div><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd></div>';
+      })
+      .join('');
+
+    $('dossierExplication').textContent =
+      'Un courrier arrive ici quand il n’a pas été retiré après la relance. ' +
+      'À vous de décider : le remettre en main propre, le renvoyer, ou le classer.';
+
+    const box = $('dossierTable');
+    if (signales.length === 0) {
+      box.innerHTML = '<div class="empty">Aucun courrier à traiter. Tout est retiré ou en cours.</div>';
+    } else {
+      box.innerHTML =
+        '<div class="table-scroll"><table><thead><tr><th>Attente</th><th>N° boîte</th><th>Nom</th><th>Courriel</th><th>Relances</th><th></th></tr></thead><tbody>' +
+        signales
+          .slice()
+          .sort(function (a, b) {
+            return new Date(a.date) - new Date(b.date);
+          })
+          .map(function (h) {
+            const contact = S.contacts.find(function (c) {
+              return c.id === h.contactId;
+            });
+            return (
+              '<tr class="vieux"><td class="attente-cell">' +
+              joursDepuis(h.date) +
+              ' j</td><td class="box-cell">' +
+              ((contact && contact.box) || '—') +
+              '</td><td>' +
+              esc(h.name) +
+              '</td><td>' +
+              esc(h.email) +
+              '</td><td class="attente-cell">' +
+              (h.reminderCount || 0) +
+              '</td><td class="actions">' +
+              '<button class="link-btn" data-pickup="' + esc(h.id) + '">Récupéré</button>' +
+              (store.canSendAutomatically()
+                ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
+                : '') +
+              '<button class="link-btn danger" data-close="' + esc(h.id) + '">Classer</button>' +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>';
+      brancherSuivi(box);
+      brancherCloture(box);
+    }
+
+    const closBox = $('closedTable');
+    closBox.innerHTML = classes.length
+      ? '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Reçu le</th><th>Classé le</th><th>Motif</th><th></th></tr></thead><tbody>' +
+        classes
+          .map(function (h) {
+            return (
+              '<tr><td>' +
+              esc(h.name) +
+              '</td><td>' +
+              esc(util.formatDateTime(h.date)) +
+              '</td><td>' +
+              esc(util.formatDateTime(h.closedAt)) +
+              '</td><td>' +
+              esc(h.closeReason || '—') +
+              (h.closedBy ? ' <span class="hint">(' + esc(h.closedBy) + ')</span>' : '') +
+              '</td><td class="actions"><button class="link-btn" data-unclose="' +
+              esc(h.id) +
+              '">Rouvrir</button></td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>'
+      : '<div class="empty">Aucun courrier classé.</div>';
+    brancherCloture(closBox);
+  }
+
+  function brancherCloture(racine) {
+    racine.querySelectorAll('[data-close]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        const raison = root.prompt(
+          'Qu’est-il advenu de ce courrier ?\n(retourné à l’expéditeur, remis en main propre, détruit…)'
+        );
+        if (!raison || !raison.trim()) return;
+        try {
+          await store.closeMail(btn.dataset.close, raison.trim());
+          toast('Courrier classé.');
+        } catch (err) {
+          toast('Impossible : ' + err.message, 'error');
+        }
+      });
+    });
+    racine.querySelectorAll('[data-unclose]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        try {
+          await store.closeMail(btn.dataset.unclose, null);
+          toast('Courrier rouvert.');
+        } catch (err) {
+          toast('Impossible : ' + err.message, 'error');
+        }
+      });
+    });
+  }
+
+  $('exportDossierXlsxBtn').addEventListener('click', function () {
+    const lignes = S.history
+      .filter(function (h) {
+        return etatCourrier(h) === 'signale';
+      })
+      .map(function (h) {
+        const contact = S.contacts.find(function (c) {
+          return c.id === h.contactId;
+        });
+        return {
+          jours: joursDepuis(h.date),
+          boite: (contact && contact.box) || '',
+          nom: h.name,
+          courriel: h.email,
+          recu: new Date(h.date),
+          relances: h.reminderCount || 0,
+          derniereRelance: h.remindedAt ? new Date(h.remindedAt) : '',
+          signale: h.flaggedAt ? new Date(h.flaggedAt) : ''
+        };
+      });
+    if (lignes.length === 0) {
+      toast('Aucun courrier à traiter.', 'error');
+      return;
+    }
+    downloadBytes(
+      'a-traiter-' + stampSuffix() + '.xlsx',
+      root.BC.xlsx.build({
+        sheetName: 'À traiter',
+        columns: [
+          { key: 'jours', label: 'Jours d’attente', width: 15 },
+          { key: 'boite', label: 'N° de boîte', width: 13 },
+          { key: 'nom', label: 'Nom', width: 28 },
+          { key: 'courriel', label: 'Courriel', width: 34 },
+          { key: 'recu', label: 'Reçu le', width: 20, type: 'date' },
+          { key: 'relances', label: 'Relances', width: 11 },
+          { key: 'derniereRelance', label: 'Dernière relance', width: 20, type: 'date' },
+          { key: 'signale', label: 'Signalé le', width: 20, type: 'date' }
+        ],
+        rows: lignes
+      }),
+      MIME_XLSX
+    );
+    toast('Dossier exporté.', 'ok');
+  });
+
   /* ═════════════ pile de courrier ═════════════ */
 
   function renderPileState() {
@@ -1109,7 +1284,17 @@
   });
 
   function enAttente(h) {
-    return !h.pickedUpAt && h.status !== 'échec';
+    return !h.pickedUpAt && !h.closedAt && h.status !== 'échec';
+  }
+
+  /** Même classement que le serveur : clos, récupéré, échec, signalé, relancé, attente. */
+  function etatCourrier(h) {
+    if (h.closedAt) return 'clos';
+    if (h.pickedUpAt) return 'recupere';
+    if (h.status === 'échec') return 'echec';
+    if (h.flaggedAt) return 'signale';
+    if (h.reminderCount > 0) return 'relance';
+    return 'attente';
   }
 
   function joursDepuis(iso) {
@@ -1120,8 +1305,7 @@
     return S.history.filter(function (h) {
       if (view.historyDate && !util.isSameDay(h.date, view.historyDate)) return false;
       if (view.historyFilter.trim() && !util.matchesQuery(h, view.historyFilter, 'tout')) return false;
-      if (view.historyState === 'attente' && !enAttente(h)) return false;
-      if (view.historyState === 'recupere' && !h.pickedUpAt) return false;
+      if (view.historyState !== 'tous' && etatCourrier(h) !== view.historyState) return false;
       return true;
     });
   }
@@ -1130,6 +1314,12 @@
     view.historyState = e.target.value;
     renderHistory();
   });
+
+  const ETAT_PILL = {
+    signale: ['failed', 'À traiter', 'Non retiré après la relance : voir l’onglet Dossier.'],
+    clos: ['manual', 'Classé', 'Sorti du circuit sans avoir été retiré.'],
+    relance: ['manual', 'Relancé', 'Une relance a été envoyée, le courrier attend toujours.']
+  };
 
   const STATUS_PILL = {
     'envoyé': ['', 'Envoyé', 'Parti du serveur par SMTP.'],
@@ -1156,7 +1346,7 @@
       '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th>Date</th><th>Attente</th><th>Suivi</th><th></th></tr></thead><tbody>' +
       list
         .map(function (h) {
-          const pill = STATUS_PILL[h.status] || STATUS_PILL['envoyé'];
+          const pill = ETAT_PILL[etatCourrier(h)] || STATUS_PILL[h.status] || STATUS_PILL['envoyé'];
           const copies = [];
           if (h.cc) copies.push('Cc : ' + h.cc);
           if (h.bcc) copies.push('Cci : ' + h.bcc);
@@ -1962,6 +2152,7 @@
     renderStatus();
     renderMailbox();
     renderPending();
+    renderDossier();
     renderAccounts();
   }
 
@@ -1985,7 +2176,7 @@
     });
 
     const hash = (root.location.hash || '').replace('#', '');
-    if (['guichet', 'registre', 'historique', 'reglages'].includes(hash)) showPanel(hash);
+    if (['guichet', 'registre', 'dossier', 'historique', 'reglages'].includes(hash)) showPanel(hash);
 
     try {
       await store.init();

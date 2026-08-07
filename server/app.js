@@ -853,7 +853,9 @@ async function handleApi(req, res, ctx, pathname) {
         method: body.method === 'auto' ? 'auto' : 'manuel',
         status: ['envoyé', 'préparé', 'échec'].includes(body.status) ? body.status : 'préparé',
         pickedUpAt: null,
-        reminderCount: 0
+        reminderCount: 0,
+        flaggedAt: null,
+        closedAt: null
       };
       if (!record.name || !record.email) {
         throw Object.assign(new Error('Nom et courriel requis'), { status: 400 });
@@ -873,7 +875,7 @@ async function handleApi(req, res, ctx, pathname) {
 
   /* --- suivi des courriers --- */
 
-  const suiviMatch = pathname.match(/^\/api\/history\/([^/]+)\/(pickup|remind)$/);
+  const suiviMatch = pathname.match(/^\/api\/history\/([^/]+)\/(pickup|remind|flag|close)$/);
   if (suiviMatch) {
     const id = decodeURIComponent(suiviMatch[1]);
     const entree = (db.data.history || []).find(function (h) {
@@ -900,6 +902,46 @@ async function handleApi(req, res, ctx, pathname) {
     if (suiviMatch[2] === 'remind' && method === 'POST') {
       const envoye = await envoyerRelance(ctx, entree, currentUser);
       return sendJson(res, 200, envoye);
+    }
+
+    if (suiviMatch[2] === 'flag' && (method === 'POST' || method === 'DELETE')) {
+      const signale = method === 'POST';
+      await db.write(function (data) {
+        const cible = data.history.find(function (h) {
+          return h.id === id;
+        });
+        cible.flaggedAt = signale ? new Date().toISOString() : null;
+        cible.flagReason = signale ? 'manuel' : null;
+      });
+      return sendJson(res, 200, {
+        record: db.data.history.find(function (h) {
+          return h.id === id;
+        })
+      });
+    }
+
+    /* Clore : le courrier sort du dossier sans avoir été retiré — renvoyé à
+       l'expéditeur, détruit, remis en main propre. On garde la raison. */
+    if (suiviMatch[2] === 'close' && (method === 'POST' || method === 'DELETE')) {
+      const clore = method === 'POST';
+      const body = clore ? await readBody(req) : {};
+      const raison = String((body && body.reason) || '').trim().slice(0, 200);
+      if (clore && !raison) {
+        throw Object.assign(new Error('Indiquez ce qui a été fait de ce courrier'), { status: 400 });
+      }
+      await db.write(function (data) {
+        const cible = data.history.find(function (h) {
+          return h.id === id;
+        });
+        cible.closedAt = clore ? new Date().toISOString() : null;
+        cible.closeReason = clore ? raison : null;
+        cible.closedBy = clore && currentUser ? currentUser.name : null;
+      });
+      return sendJson(res, 200, {
+        record: db.data.history.find(function (h) {
+          return h.id === id;
+        })
+      });
     }
   }
 
@@ -1051,7 +1093,9 @@ async function handleApi(req, res, ctx, pathname) {
       operator: currentUser ? currentUser.name : null,
       // Suivi : le courrier reste dû tant que personne ne l'a marqué retiré.
       pickedUpAt: null,
-      reminderCount: 0
+      reminderCount: 0,
+      flaggedAt: null,
+      closedAt: null
     };
 
     try {

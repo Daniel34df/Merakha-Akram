@@ -137,8 +137,9 @@
   <nav id="mainNav">
     <button class="active" data-panel="guichet" accesskey="1">Guichet</button>
     <button data-panel="registre" accesskey="2">Registre <span class="tab-count" id="tabCountContacts">0</span></button>
-    <button data-panel="historique" accesskey="3">Historique <span class="tab-count" id="tabCountHistory">0</span></button>
-    <button data-panel="reglages" accesskey="4">Réglages</button>
+    <button data-panel="dossier" accesskey="3">Dossier <span class="tab-count" id="tabCountDossier">0</span></button>
+    <button data-panel="historique" accesskey="4">Historique <span class="tab-count" id="tabCountHistory">0</span></button>
+    <button data-panel="reglages" accesskey="5">Réglages</button>
   </nav>
 
   <!-- ═══════════════ GUICHET ═══════════════ -->
@@ -237,6 +238,30 @@
     </div>
   </section>
 
+  <!-- ═══════════════ DOSSIER ═══════════════ -->
+  <section class="panel" id="panel-dossier" aria-label="Dossier des courriers signalés">
+    <div class="card">
+      <h2>Ce que la relance a donné</h2>
+      <dl class="status-list" id="relanceBilan"></dl>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Courriers à traiter (<span id="countDossier">0</span>)</h2>
+        <div class="toolbar">
+          <button class="btn ghost small" id="exportDossierXlsxBtn">Exporter Excel</button>
+        </div>
+      </div>
+      <p class="hint" id="dossierExplication"></p>
+      <div id="dossierTable"><div class="empty">Chargement…</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Classés sans retrait</h2>
+      <div id="closedTable"><div class="empty">Aucun courrier classé.</div></div>
+    </div>
+  </section>
+
   <!-- ═══════════════ HISTORIQUE ═══════════════ -->
   <section class="panel" id="panel-historique" aria-label="Historique">
     <div class="card">
@@ -247,7 +272,10 @@
           <input type="date" id="historyDate" class="filter-input">
           <select id="historyState" class="filter-input">
             <option value="attente">En attente</option>
+            <option value="relance">Relancés</option>
+            <option value="signale">Signalés</option>
             <option value="recupere">Récupérés</option>
+            <option value="clos">Classés</option>
             <option value="tous" selected>Tous</option>
           </select>
           <button class="btn ghost small" id="exportHistoryXlsxBtn">Exporter Excel</button>
