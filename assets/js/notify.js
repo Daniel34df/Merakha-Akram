@@ -13,6 +13,9 @@
   function compose(contact, settings, overrides) {
     const o = overrides || {};
     const type = util.typeCourrier(o.type);
+    /* La langue vient du destinataire, sauf si l'appelant en impose une —
+       l'aperçu des Réglages montre la langue en cours d'édition. */
+    const langueId = util.langue(o.langue !== undefined ? o.langue : contact && contact.langue).id;
     const vars = {
       nom: contact.name,
       courriel: contact.email,
@@ -32,7 +35,7 @@
     const gabarit =
       o.subject !== undefined || o.body !== undefined
         ? { subject: o.subject !== undefined ? o.subject : settings.subject, body: o.body !== undefined ? o.body : settings.body }
-        : util.gabaritPour(settings, type.id);
+        : util.gabaritPour(settings, type.id, langueId);
     const pick = function (key) {
       return util.formatAddressList(
         util.parseAddressList(o[key] !== undefined ? o[key] : settings[key] || '').entries

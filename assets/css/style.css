@@ -969,6 +969,24 @@ tr.urgent{background:var(--danger-wash);}
 .bandeau-file .link-btn{margin-left:6px;}
 .mode-badge.hors-ligne{border-color:var(--rust);color:var(--rust);}
 
+/* ---------- langues ---------- */
+.langue-select{
+  font-family:var(--serif);
+  font-size:15px;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  background:var(--field);
+  color:var(--navy);
+  width:100%;
+}
+.langue-choix{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.langue-choix label{margin-bottom:0;white-space:nowrap;}
+.langue-choix .langue-select{width:auto;min-width:150px;}
+.langue-choix .hint{margin:0;flex:1 1 240px;}
+.add-form .langue-select{margin-bottom:16px;}
+/* Un texte arabe se lit de droite à gauche : le champ doit suivre. */
+#setSubject[dir=rtl], #setBody[dir=rtl]{text-align:right;}
+
 /* ---------- gabarits par type de courrier ---------- */
 .gabarit-onglets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
 .gabarit-onglets button{

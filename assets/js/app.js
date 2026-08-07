@@ -42,6 +42,9 @@
     gabaritActif: 'general',
     gabaritGeneral: { subject: '', body: '' },
     gabarits: {},
+    // Langue en cours d'édition dans les Réglages ; 'fr' = le modèle de référence.
+    gabaritLangue: 'fr',
+    gabaritsLangues: {},
     // Onglet Domiciliation : année du rapport, données servies par le serveur.
     rapportAnnee: new Date().getFullYear(),
     domiciliation: null,
@@ -2385,6 +2388,22 @@
       : 'L’échéance sera calculée à douze mois.';
   }
 
+  /* Listes de langues. Une notification qu'on ne peut pas lire ne notifie rien :
+     la langue est une propriété du destinataire, choisie à l'inscription. */
+  function remplirLangues(select, valeur) {
+    select.innerHTML = util.LANGUES.map(function (l) {
+      return '<option value="' + l.id + '"' + (l.id === valeur ? ' selected' : '') + '>' + esc(l.label) + '</option>';
+    }).join('');
+  }
+  remplirLangues($('newLangue'), 'fr');
+  remplirLangues($('gabaritLangue'), 'fr');
+
+  $('gabaritLangue').addEventListener('change', function (e) {
+    memoriserGabaritCourant();
+    view.gabaritLangue = e.target.value;
+    chargerGabaritActif();
+  });
+
   $('newDomicilie').addEventListener('change', function (e) {
     $('newDomiciliationChamps').hidden = !e.target.checked;
     if (e.target.checked) {
@@ -2428,12 +2447,14 @@
         name: name,
         email: email,
         box: box,
+        langue: $('newLangue').value,
         domicilie: domicilie,
         domicilieDepuis: domicilie ? depuis : ''
       });
       nameField.value = '';
       emailField.value = '';
       $('newBox').value = '';
+      $('newLangue').value = 'fr';
       $('newDomicilie').checked = false;
       $('newDomicilieDepuis').value = '';
       $('newDomiciliationChamps').hidden = true;
@@ -2997,7 +3018,11 @@
     );
     boite.innerHTML = onglets
       .map(function (o) {
-        const propre = o.id !== 'general' && !!view.gabarits[o.id];
+        const jeu = jeuCourant();
+        const propre =
+          o.id === 'general'
+            ? view.gabaritLangue !== 'fr' && !!(jeu.general.subject && jeu.general.body)
+            : !!jeu.types[o.id];
         return (
           '<button type="button" role="tab" data-gabarit="' + o.id + '"' +
           (o.id === view.gabaritActif ? ' class="active" aria-selected="true"' : ' aria-selected="false"') +
@@ -3016,39 +3041,86 @@
   }
 
   /** Retient ce qui est affiché avant de changer d'onglet. */
+  /* Où ranger ce qui est affiché : le français est le modèle de référence
+     (`gabaritGeneral` + `gabarits`), chaque autre langue a son propre jeu dans
+     `gabaritsLangues`. */
+  function jeuCourant() {
+    if (view.gabaritLangue === 'fr') {
+      return { general: view.gabaritGeneral, types: view.gabarits };
+    }
+    if (!view.gabaritsLangues[view.gabaritLangue]) {
+      view.gabaritsLangues[view.gabaritLangue] = { subject: '', body: '', templates: {} };
+    }
+    const l = view.gabaritsLangues[view.gabaritLangue];
+    if (!l.templates) l.templates = {};
+    return { general: l, types: l.templates };
+  }
+
   function memoriserGabaritCourant() {
     const subject = $('setSubject').value;
     const body = $('setBody').value;
+    const jeu = jeuCourant();
+
     if (view.gabaritActif === 'general') {
-      view.gabaritGeneral = { subject: subject, body: body };
+      jeu.general.subject = subject;
+      jeu.general.body = body;
       return;
     }
     if (subject.trim() && body.trim()) {
-      view.gabarits[view.gabaritActif] = { subject: subject, body: body };
+      jeu.types[view.gabaritActif] = { subject: subject, body: body };
     } else {
-      // Un type dont on vide les champs revient au modèle général.
-      delete view.gabarits[view.gabaritActif];
+      // Un type dont on vide les champs revient au modèle de la langue.
+      delete jeu.types[view.gabaritActif];
     }
   }
 
   function chargerGabaritActif() {
-    const general = view.gabaritGeneral;
-    const propre = view.gabaritActif !== 'general' ? view.gabarits[view.gabaritActif] : null;
-    const courant = view.gabaritActif === 'general' ? general : propre || { subject: '', body: '' };
+    const enFrancais = view.gabaritLangue === 'fr';
+    const jeu = jeuCourant();
+    const propre = view.gabaritActif !== 'general' ? jeu.types[view.gabaritActif] : null;
+    const courant =
+      view.gabaritActif === 'general' ? jeu.general : propre || { subject: '', body: '' };
 
-    $('setSubject').value = courant.subject;
-    $('setBody').value = courant.body;
-    $('setSubject').placeholder = view.gabaritActif === 'general' ? '' : general.subject;
-    $('setBody').placeholder = view.gabaritActif === 'general' ? '' : general.body;
-    $('gabaritActions').hidden = view.gabaritActif === 'general' || !propre;
+    /* L'invite montre ce qui partirait réellement si l'on n'écrit rien : le
+       modèle français du même type, sinon le modèle français général. */
+    const repli = enFrancais
+      ? view.gabaritActif === 'general'
+        ? { subject: '', body: '' }
+        : view.gabaritGeneral
+      : (view.gabaritActif !== 'general' && view.gabarits[view.gabaritActif]) ||
+        (view.gabaritsLangues[view.gabaritLangue] && view.gabaritsLangues[view.gabaritLangue].subject
+          ? view.gabaritsLangues[view.gabaritLangue]
+          : view.gabaritGeneral);
 
+    $('setSubject').value = courant.subject || '';
+    $('setBody').value = courant.body || '';
+    $('setSubject').placeholder = repli.subject || '';
+    $('setBody').placeholder = repli.body || '';
+    $('gabaritActions').hidden = enFrancais && view.gabaritActif === 'general';
+
+    // Les langues qui s'écrivent de droite à gauche doivent s'afficher ainsi.
+    const rtl = util.estRtl(view.gabaritLangue);
+    $('setSubject').dir = rtl ? 'rtl' : 'ltr';
+    $('setBody').dir = rtl ? 'rtl' : 'ltr';
+
+    const langue = util.langue(view.gabaritLangue);
     const type = view.gabaritActif === 'general' ? null : util.typeCourrier(view.gabaritActif);
+    const aQuelqueChose = !!(courant.subject && courant.body);
+
     $('gabaritEtat').textContent =
       view.gabaritActif === 'general'
-        ? 'Ce texte sert à tous les types qui n’ont pas de modèle propre.'
-        : propre
-          ? 'Modèle propre au type « ' + type.label + ' ».'
-          : 'Aucun modèle propre : « ' + type.label + ' » emploie le modèle général. Écrivez ici pour en créer un.';
+        ? enFrancais
+          ? 'Ce texte sert à tous les types qui n’ont pas de modèle propre.'
+          : aQuelqueChose
+            ? 'Message courant en ' + langue.label + '.'
+            : 'Aucun texte en ' + langue.label + ' : ces destinataires recevront le message français.'
+        : aQuelqueChose
+          ? 'Modèle « ' + type.label +' » en ' + langue.label + '.'
+          : '« ' + type.label + ' » en ' + langue.label + ' n’a pas de texte propre : le repli s’applique.';
+
+    $('gabaritLangueEtat').textContent = enFrancais
+      ? 'Le français est le modèle de référence : c’est lui qui sert quand une langue n’a pas de texte.'
+      : 'Écrit par le bureau — l’application ne traduit rien.';
 
     ongletsGabarits();
     renderPreview();
@@ -3062,21 +3134,28 @@
     $('conservationMois').value = String(S.settings.conservationMois || 0);
     view.gabaritGeneral = { subject: S.settings.subject || '', body: S.settings.body || '' };
     view.gabarits = JSON.parse(JSON.stringify(S.settings.templates || {}));
+    view.gabaritsLangues = JSON.parse(JSON.stringify(S.settings.langues || {}));
     chargerGabaritActif();
   }
 
   $('gabaritEffacerBtn').addEventListener('click', function () {
-    delete view.gabarits[view.gabaritActif];
+    const jeu = jeuCourant();
+    if (view.gabaritActif === 'general') {
+      jeu.general.subject = '';
+      jeu.general.body = '';
+    } else {
+      delete jeu.types[view.gabaritActif];
+    }
     chargerGabaritActif();
-    setMsg('settingsMsg', '', 'Ce type reprendra le modèle général au prochain enregistrement.');
+    setMsg('settingsMsg', '', 'Ce cas reprendra le modèle de repli au prochain enregistrement.');
   });
 
   function renderPreview() {
     const sample = S.contacts[0] || { name: 'Marie Tremblay', email: 'marie@exemple.com' };
     // Un onglet de type sans texte propre montre ce qui partirait vraiment :
     // le modèle général.
-    const subject = $('setSubject').value.trim() || view.gabaritGeneral.subject;
-    const body = $('setBody').value.trim() || view.gabaritGeneral.body;
+    const subject = $('setSubject').value.trim() || $('setSubject').placeholder || view.gabaritGeneral.subject;
+    const body = $('setBody').value.trim() || $('setBody').placeholder || view.gabaritGeneral.body;
     const type = view.gabaritActif === 'general' ? util.TYPES_COURRIER[0] : util.typeCourrier(view.gabaritActif);
     const message = notify.compose(sample, {
       officeName: $('setOffice').value,
@@ -3085,7 +3164,7 @@
       from: $('setFrom').value,
       cc: $('setCc').value,
       bcc: $('setBcc').value
-    }, { type: type.id, code: '4821' });
+    }, { type: type.id, langue: view.gabaritLangue, code: '4821' });
     $('settingsPreview').textContent = notify.plainText(sample, message);
   }
 
@@ -3095,9 +3174,10 @@
 
   $('saveSettingsBtn').addEventListener('click', async function () {
     memoriserGabaritCourant();
-    const subject = view.gabaritGeneral.subject.trim();
-    const body = view.gabaritGeneral.body.trim();
+    const subject = (view.gabaritGeneral.subject || '').trim();
+    const body = (view.gabaritGeneral.body || '').trim();
     if (!subject || !body) {
+      view.gabaritLangue = 'fr';
       setMsg(
         'settingsMsg',
         'error',
@@ -3132,7 +3212,8 @@
         from: from,
         cc: util.formatAddressList(cc.entries),
         bcc: util.formatAddressList(bcc.entries),
-        templates: view.gabarits
+        templates: view.gabarits,
+        langues: view.gabaritsLangues
       });
       fillSettingsForm();
       syncCopiesFromSettings(!view.copiesTouched);

@@ -1187,3 +1187,103 @@ test('purger applique la durée au registre', function () {
     assert.equal(t.db.data.history.length, 0);
   });
 });
+
+/* ---------- messages en plusieurs langues ---------- */
+
+test('le destinataire reçoit le message dans sa langue', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'Un courrier vous attend',
+      body: 'Bonjour {nom}.',
+      langues: {
+        ar: { subject: 'لديك بريد', body: 'مرحباً {nom}.' },
+        en: { subject: 'You have mail', body: 'Hello {nom}.' }
+      }
+    });
+    const yasmine = (await t.call('POST', '/api/contacts', {
+      name: 'Yasmine', email: 'yasmine@ex.com', langue: 'ar'
+    })).body;
+    assert.equal(yasmine.langue, 'ar');
+
+    await t.call('POST', '/api/notify', { contactId: yasmine.id, name: 'Yasmine', email: 'yasmine@ex.com' });
+    assert.equal(t.mailer.sent[0].subject, 'لديك بريد');
+    assert.match(t.mailer.sent[0].text, /مرحباً Yasmine\./);
+
+    // Un francophone garde le modèle de référence.
+    const marc = (await t.call('POST', '/api/contacts', { name: 'Marc', email: 'marc@ex.com' })).body;
+    assert.equal(marc.langue, 'fr', 'français par défaut');
+    await t.call('POST', '/api/notify', { contactId: marc.id, name: 'Marc', email: 'marc@ex.com' });
+    assert.equal(t.mailer.sent[1].subject, 'Un courrier vous attend');
+  });
+});
+
+test('une langue sans texte propre retombe sur le français', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'Un courrier vous attend',
+      body: 'Bonjour {nom}.',
+      langues: { ar: { subject: 'لديك بريد', body: 'مرحباً {nom}.' } }
+    });
+    const c = (await t.call('POST', '/api/contacts', { name: 'Sofía', email: 's@ex.com', langue: 'es' })).body;
+    await t.call('POST', '/api/notify', { contactId: c.id, name: 'Sofía', email: 's@ex.com' });
+    assert.equal(t.mailer.sent[0].subject, 'Un courrier vous attend', 'mieux que rien envoyer');
+  });
+});
+
+test('le gabarit d’un type dans une langue l’emporte sur les deux', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'Général FR',
+      body: 'Corps FR',
+      templates: { colis: { subject: 'Colis FR', body: 'Corps colis FR' } },
+      langues: {
+        en: {
+          subject: 'General EN',
+          body: 'Body EN',
+          templates: { colis: { subject: 'A parcel is waiting', body: 'Hello {nom}, a parcel.' } }
+        }
+      }
+    });
+    const c = (await t.call('POST', '/api/contacts', { name: 'John', email: 'j@ex.com', langue: 'en' })).body;
+
+    await t.call('POST', '/api/notify', { contactId: c.id, name: 'John', email: 'j@ex.com', type: 'colis' });
+    assert.equal(t.mailer.sent[0].subject, 'A parcel is waiting');
+
+    // Un type sans texte anglais retombe sur le message anglais courant.
+    await t.call('POST', '/api/notify', { contactId: c.id, name: 'John', email: 'j@ex.com', type: 'lettre' });
+    assert.equal(t.mailer.sent[1].subject, 'General EN');
+  });
+});
+
+test('la relance suit aussi la langue du destinataire', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'FR', body: 'Corps FR',
+      langues: { en: { subject: 'Mail waiting', body: 'Hello {nom}.' } }
+    });
+    const c = (await t.call('POST', '/api/contacts', { name: 'John', email: 'j@ex.com', langue: 'en' })).body;
+    const envoi = await t.call('POST', '/api/notify', { contactId: c.id, name: 'John', email: 'j@ex.com' });
+    t.mailer.sent.length = 0;
+
+    await t.call('POST', '/api/history/' + envoi.body.record.id + '/remind');
+    assert.equal(t.mailer.sent[0].subject, 'Rappel — Mail waiting');
+  });
+});
+
+test('une langue inconnue ou un gabarit incomplet sont écartés', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      langues: {
+        en: { subject: 'EN', body: 'Body' },
+        ar: { subject: 'Sujet seul', body: '' },
+        klingon: { subject: 'X', body: 'Y' }
+      }
+    });
+    assert.deepEqual(Object.keys(t.db.data.settings.langues), ['en']);
+
+    // Une langue inconnue sur un destinataire retombe sur le français.
+    const c = (await t.call('POST', '/api/contacts', { name: 'X', email: 'x@ex.com', langue: 'klingon' })).body;
+    assert.equal(c.langue, 'fr');
+  });
+});

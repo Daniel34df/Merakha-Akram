@@ -31,7 +31,9 @@
     cc: '',
     bcc: '',
     // Gabarits propres à un type de courrier ; vide = tout suit le modèle général.
-    templates: {}
+    templates: {},
+    // Gabarits par langue ; vide = tout le monde reçoit le message français.
+    langues: {}
   };
 
   const state = {
@@ -789,6 +791,7 @@
       name: input.name.trim(),
       email: input.email.trim(),
       box: (input.box || '').trim(),
+      langue: util.langue(input.langue).id,
       absentUntil: input.absentUntil || '',
       departed: !!input.departed,
       substituteId: input.substituteId || null,
@@ -846,6 +849,7 @@
       absentUntil: patch.absentUntil !== undefined ? patch.absentUntil : state.contacts[idx].absentUntil || '',
       departed: patch.departed !== undefined ? !!patch.departed : !!state.contacts[idx].departed,
       substituteId: patch.substituteId !== undefined ? patch.substituteId : state.contacts[idx].substituteId || null,
+      langue: util.langue(patch.langue !== undefined ? patch.langue : state.contacts[idx].langue).id,
       /* Domiciliation : ce que la modification ne mentionne pas est conservé.
          Une correction de nom ne doit pas effacer une élection de domicile. */
       domicilie: patch.domicilie !== undefined ? !!patch.domicilie : !!state.contacts[idx].domicilie,

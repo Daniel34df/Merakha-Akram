@@ -466,6 +466,33 @@ fuite, et la durée de conservation est aussi une obligation.
 
 ---
 
+## Messages en plusieurs langues
+
+Une notification qu'on ne peut pas lire ne notifie rien. Chaque destinataire
+porte une **langue**, choisie à l'inscription — huit sont proposées, dont
+l'arabe, l'ukrainien et le roumain.
+
+*Réglages → Message → Langue du message* : on choisit une langue, puis on écrit
+le texte. Les champs passent en écriture de droite à gauche quand la langue le
+demande. Les onglets par type (lettre, colis, recommandé, administratif)
+fonctionnent à l'intérieur de chaque langue.
+
+Le message envoyé suit cet ordre, du plus précis au plus général :
+
+1. le texte de **la langue pour ce type** — « colis » en arabe ;
+2. le texte **de la langue** — message courant en arabe ;
+3. le texte **du type** en français ;
+4. le **modèle français général**.
+
+Une langue sans texte propre retombe donc sur le français, plutôt que de ne rien
+envoyer. Les relances suivent la même règle.
+
+**L'application ne traduit rien** : chaque texte est écrit par le bureau. C'est
+volontaire — une traduction automatique d'un courrier administratif ferait plus
+de dégâts qu'un message en français.
+
+---
+
 ## Deux façons d'entrer : responsable et agents
 
 L'application a **deux portes d'entrée**, pour deux usages différents.

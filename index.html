@@ -353,6 +353,10 @@
           <label for="newEmail">Courriel</label>
           <input type="email" id="newEmail" placeholder="marie@exemple.com" autocomplete="off">
         </div>
+        <div>
+          <label for="newLangue">Langue</label>
+          <select id="newLangue" class="langue-select"></select>
+        </div>
         <button class="btn" type="submit" id="addContactBtn">Ajouter</button>
       </form>
       <label class="check-row" style="margin-top:6px;">
@@ -505,6 +509,11 @@
         Le modèle général sert à tout le courrier. Chaque type peut recevoir son propre
         texte : un recommandé n'appelle pas la même phrase qu'un prospectus.
       </p>
+      <div class="langue-choix">
+        <label for="gabaritLangue">Langue du message</label>
+        <select id="gabaritLangue" class="langue-select"></select>
+        <span class="hint" id="gabaritLangueEtat"></span>
+      </div>
       <div class="gabarit-onglets" id="gabaritOnglets" role="tablist"></div>
       <p class="hint" id="gabaritEtat" style="margin:-4px 0 14px;"></p>
 
