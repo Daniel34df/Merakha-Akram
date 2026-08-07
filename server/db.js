@@ -23,6 +23,9 @@ const DEFAULT_SETTINGS = {
   /* Gabarits par langue : { ar: { subject, body, templates: {…} } }. Vide par
      défaut ; une langue sans texte propre retombe sur le modèle français. */
   langues: {},
+  /* Antennes : plusieurs points d'accueil partageant un serveur. Vide = un seul
+     bureau, et l'application ne montre rien de cette notion. */
+  antennes: [],
   /* Durée de conservation des courriers terminés, en mois. 0 = illimitée.
      Un registre qui garde tout indéfiniment expose bien plus qu'il ne devrait
      le jour d'une fuite ; c'est aussi une obligation. */

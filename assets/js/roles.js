@@ -56,7 +56,9 @@
     {
       id: 'domiciliation',
       label: 'Domiciliation',
-      detail: 'Consulter les échéances d’attestation et les passages.'
+      detail:
+        'Ouvrir un dossier depuis le formulaire, consulter les échéances ' +
+        'd’attestation, noter les passages et voir le rapport annuel.'
     },
     {
       id: 'exports',
@@ -78,7 +80,11 @@
     remise: true,
     codes: false,
     registre: false,
-    domiciliation: false,
+    /* La domiciliation est ouverte : c'est le travail d'accueil lui-même —
+       recevoir quelqu'un, ouvrir son dossier, noter son passage. Le
+       responsable peut la refermer, mais la refuser par défaut reviendrait à
+       empêcher l'agent de faire ce pour quoi il est au guichet. */
+    domiciliation: true,
     exports: false,
     reglages: false
   };

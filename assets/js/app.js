@@ -49,7 +49,9 @@
     rapportAnnee: new Date().getFullYear(),
     domiciliation: null,
     // Saisie en série : ce qui a été traité depuis l'activation du mode.
-    serie: []
+    serie: [],
+    // Antenne affichée ; '' = toutes. Propre au poste, retenu d'une visite à l'autre.
+    antenneActive: ''
   };
 
   /* ═════════════ retours visuels ═════════════ */
@@ -882,7 +884,7 @@
     }
     const matches = util.sortByName(
       S.contacts.filter(function (c) {
-        return util.matchesQuery(c, raw, view.searchMode);
+        return deLAntenne(c) && util.matchesQuery(c, raw, view.searchMode);
       })
     );
 
@@ -1338,7 +1340,7 @@
     }
 
     S.contacts.forEach(function (c) {
-      if (!util.matchesQuery(c, q, 'tout')) return;
+      if (!deLAntenne(c) || !util.matchesQuery(c, q, 'tout')) return;
       const enAttentePour = S.history.filter(function (h) {
         return enAttente(h) && (h.contactId === c.id || util.normalize(h.email) === util.normalize(c.email));
       }).length;
@@ -1446,7 +1448,9 @@
 
   function renderPending() {
     const box = $('pendingCard');
-    const attente = S.history.filter(enAttente);
+    const attente = S.history.filter(function (h) {
+      return enAttente(h) && deLAntenne(h);
+    });
     $('countAttente').textContent = attente.length;
     $('tabCountAttente').textContent = attente.length;
 
@@ -1817,6 +1821,174 @@
     return lignes;
   }
 
+  /* ═════════════ formulaire de domiciliation ═════════════ */
+
+  /* Ouvrir un dossier d'élection de domicile, et inscrire la personne au
+     registre du même geste. Sans ce formulaire, l'accueil saisissait deux fois
+     — une fois sur papier, une fois dans l'application — et les notifications
+     de courrier ne partaient qu'après la seconde saisie, quand elle avait lieu. */
+
+  remplirLangues($('domLangue'), 'fr');
+
+  function apercuEcheanceDomi() {
+    const d = $('domDebut').value;
+    $('domEcheance').textContent = d
+      ? 'Attestation valable jusqu’au ' + util.formatJour(domi.echeance(d)) + '.'
+      : 'L’échéance sera calculée à douze mois.';
+  }
+  $('domDebut').addEventListener('input', apercuEcheanceDomi);
+
+  function ouvrirFormDomiciliation() {
+    const f = $('formDomiciliation');
+    f.hidden = false;
+    ['domNom', 'domPrenom', 'domNaissance', 'domCourriel', 'domTelephone', 'domBoite', 'domNotes'].forEach(
+      function (id) {
+        $(id).value = '';
+        $(id).classList.remove('invalid');
+      }
+    );
+    $('domLangue').value = 'fr';
+    $('domDebut').value = new Date().toISOString().slice(0, 10);
+    apercuEcheanceDomi();
+    const liste = antennes();
+    $('domAntenneBloc').hidden = liste.length === 0;
+    if (liste.length) {
+      $('domAntenne').innerHTML = liste
+        .map(function (a) {
+          return '<option value="' + esc(a.id) + '">' + esc(a.nom) + '</option>';
+        })
+        .join('');
+      if (view.antenneActive) $('domAntenne').value = view.antenneActive;
+    }
+    setMsg('domiMsg', '', '');
+    $('domNom').focus();
+  }
+
+  $('ouvrirFormDomiBtn').addEventListener('click', ouvrirFormDomiciliation);
+  $('annulerDomiBtn').addEventListener('click', function () {
+    $('formDomiciliation').hidden = true;
+    setMsg('domiMsg', '', '');
+  });
+
+  /** Ce que le formulaire produit : un destinataire du registre, domicilié. */
+  function lireFormDomiciliation() {
+    const nom = $('domNom').value.trim();
+    const prenom = $('domPrenom').value.trim();
+    const courriel = $('domCourriel').value.trim();
+    const debut = $('domDebut').value;
+
+    $('domNom').classList.toggle('invalid', !nom);
+    $('domPrenom').classList.toggle('invalid', !prenom);
+    $('domDebut').classList.toggle('invalid', !debut);
+    $('domCourriel').classList.toggle('invalid', !!courriel && !util.isValidEmail(courriel));
+
+    if (!nom || !prenom) return { erreur: 'Le nom et le prénom sont nécessaires pour ouvrir un dossier.' };
+    if (!debut) return { erreur: 'Indiquez la date d’élection de domicile.' };
+    if (courriel && !util.isValidEmail(courriel)) return { erreur: 'Cette adresse électronique n’est pas valide.' };
+    /* Sans adresse, la personne ne peut pas être notifiée par courriel : le
+       registre l'accepte, mais il faut le dire plutôt que de le laisser
+       découvrir le jour où un courrier arrive. */
+    if (!courriel && !$('domTelephone').value.trim()) {
+      return { erreur: 'Donnez au moins un courriel ou un téléphone : sans cela, personne ne pourra la prévenir.' };
+    }
+
+    return {
+      contact: {
+        // « Prénom NOM » : l'ordre sous lequel on cherche quelqu'un au guichet.
+        name: prenom + ' ' + nom,
+        email: courriel,
+        telephone: $('domTelephone').value.trim(),
+        naissance: $('domNaissance').value,
+        box: $('domBoite').value.trim(),
+        langue: $('domLangue').value,
+        antenneId: antennes().length ? $('domAntenne').value : '',
+        notes: $('domNotes').value.trim(),
+        domicilie: true,
+        domicilieDepuis: debut
+      }
+    };
+  }
+
+  $('formDomiciliation').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const lu = lireFormDomiciliation();
+    if (lu.erreur) {
+      setMsg('domiMsg', 'error', esc(lu.erreur));
+      return;
+    }
+    const dejaLa = lu.contact.email ? store.findByEmail(lu.contact.email) : null;
+    if (dejaLa) {
+      setMsg('domiMsg', 'error', 'Cette adresse est déjà au registre sous « ' + esc(dejaLa.name) + ' ».');
+      return;
+    }
+
+    const btn = $('enregistrerDomiBtn');
+    btn.disabled = true;
+    try {
+      const c = await store.addContact(lu.contact);
+      const e2 = domi.etat(c, S.history);
+      $('formDomiciliation').hidden = true;
+      stamp('Domicilié', c.name);
+      setMsg(
+        'domiMsg',
+        'ok',
+        '<strong>' + esc(c.name) + '</strong> est domicilié·e ici et inscrit·e au registre.<br>' +
+          'Attestation valable jusqu’au <strong>' + esc(util.formatJour(e2.echeance)) + '</strong>.' +
+          (c.box ? ' Boîte ' + esc(c.box) + '.' : '') +
+          (c.email
+            ? ' Les avis de courrier partiront à ' + esc(c.email) + '.'
+            : ' <em>Sans adresse électronique : à prévenir par téléphone.</em>')
+      );
+      renderAll();
+    } catch (err) {
+      setMsg('domiMsg', 'error', esc(err.message));
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  /* Fiche papier reprenant la saisie : de quoi la faire signer et la classer,
+     sans imiter le formulaire officiel — celui-ci se remplit à part. */
+  $('imprimerDomiBtn').addEventListener('click', function () {
+    const lu = lireFormDomiciliation();
+    if (lu.erreur) {
+      setMsg('domiMsg', 'error', esc(lu.erreur));
+      return;
+    }
+    const c = lu.contact;
+    const lignes = [
+      ['Nom et prénom', c.name],
+      ['Date de naissance', c.naissance ? util.formatJour(c.naissance) : '—'],
+      ['Courriel', c.email || '—'],
+      ['Téléphone', c.telephone || '—'],
+      ['Langue de correspondance', util.langue(c.langue).label],
+      ['Date d’élection de domicile', util.formatJour(c.domicilieDepuis)],
+      ['Échéance de l’attestation', util.formatJour(domi.echeance(c.domicilieDepuis))],
+      ['Numéro de boîte', c.box || '—'],
+      ['Observations', c.notes || '—']
+    ];
+    $('feuilleCasier').innerHTML =
+      '<h1>Élection de domicile</h1>' +
+      '<p>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — ' +
+      new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) + '</p>' +
+      '<table><tbody>' +
+      lignes
+        .map(function (l) {
+          return '<tr><td>' + esc(l[0]) + '</td><td class="b">' + esc(l[1]) + '</td></tr>';
+        })
+        .join('') +
+      '</tbody></table>' +
+      '<p style="margin-top:36px;">Signature de la personne domiciliée :</p>' +
+      '<p style="margin-top:48px;">Signature de l’organisme :</p>';
+    $('feuilleCasier').hidden = false;
+    document.body.classList.add('impression-casier');
+    root.print();
+    setTimeout(function () {
+      document.body.classList.remove('impression-casier');
+      $('feuilleCasier').hidden = true;
+    }, 500);
+  });
+
   /* ═════════════ domiciliation ═════════════ */
 
   /* Deux listes de travail et un rapport. Tout est calculé par le serveur : le
@@ -1838,6 +2010,7 @@
       $('renouvelerTable').innerHTML =
         '<div class="empty">Le suivi des domiciliations demande le registre partagé.</div>';
       $('sansPassageTable').innerHTML = '';
+      $('activesTable').innerHTML = '';
       $('rapportCorps').innerHTML = '';
       return;
     }
@@ -1852,6 +2025,8 @@
     // Le compteur de l'onglet additionne ce qui demande une action.
     $('tabCountDomiciliation').textContent = String(d.aRenouveler.length + d.sansPassage.length);
 
+    renderActives();
+
     $('countRenouveler').textContent = d.aRenouveler.length;
     $('renouvelerTable').innerHTML = d.aRenouveler.length
       ? tableauDomiciliation(d.aRenouveler, 'echeance')
@@ -1863,8 +2038,87 @@
       : '<div class="empty">Tout le monde est passé récemment.</div>';
 
     renderRapport(d.rapport);
-    brancherDomiciliation();
   }
+
+  /* Le registre des domiciliations en cours. Contrairement aux deux listes
+     d'alerte, celle-ci se filtre : passé quelques dizaines de dossiers, on
+     cherche un nom, on ne parcourt plus. */
+  function activesFiltrees() {
+    const d = view.domiciliation;
+    const toutes = (d && d.actives) || [];
+    const q = util.normalize($('filtreActives').value || '');
+    if (!q) return toutes;
+    return toutes.filter(function (l) {
+      return util.normalize(l.name).includes(q) || util.normalize(l.box).includes(q);
+    });
+  }
+
+  function renderActives() {
+    const d = view.domiciliation;
+    const toutes = (d && d.actives) || [];
+    const lignes = activesFiltrees();
+    $('countActives').textContent = String(toutes.length);
+    $('activesTable').innerHTML = toutes.length
+      ? lignes.length
+        ? tableauDomiciliation(lignes, 'echeance')
+        : '<div class="empty">Aucune fiche ne correspond à cette recherche.</div>'
+      : '<div class="empty">Aucune domiciliation en cours. Le formulaire ci-dessus en ouvre une.</div>';
+  }
+
+  $('filtreActives').addEventListener('input', renderActives);
+
+  $('activesImprimerBtn').addEventListener('click', function () {
+    const lignes = activesFiltrees();
+    if (!lignes.length) return;
+    $('feuilleCasier').innerHTML =
+      '<h1>Personnes domiciliées</h1>' +
+      '<p>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — ' +
+      new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) +
+      ' — ' + lignes.length + ' dossier(s)</p>' +
+      '<table><thead><tr><th>N° boîte</th><th>Nom</th><th>Échéance</th></tr></thead><tbody>' +
+      lignes
+        .map(function (l) {
+          return (
+            '<tr><td>' + esc(l.box || '—') + '</td><td class="b">' + esc(l.name) + '</td><td>' +
+            esc(l.etat && l.etat.echeance ? util.formatJour(l.etat.echeance) : '—') + '</td></tr>'
+          );
+        })
+        .join('') +
+      '</tbody></table>';
+    $('feuilleCasier').hidden = false;
+    document.body.classList.add('impression-casier');
+    root.print();
+    setTimeout(function () {
+      document.body.classList.remove('impression-casier');
+      $('feuilleCasier').hidden = true;
+    }, 500);
+  });
+
+  $('activesXlsxBtn').addEventListener('click', function () {
+    const lignes = activesFiltrees();
+    if (!lignes.length) return;
+    const bytes = root.BC.xlsx.build({
+      sheetName: 'Domiciliations',
+      columns: [
+        { key: 'box', label: 'N° boîte', width: 12 },
+        { key: 'nom', label: 'Nom', width: 30 },
+        { key: 'email', label: 'Courriel', width: 30 },
+        { key: 'echeance', label: 'Échéance', width: 14 },
+        { key: 'etat', label: 'État', width: 16 }
+      ],
+      rows: lignes.map(function (l) {
+        const e = l.etat || {};
+        return {
+          box: l.box || '',
+          nom: l.name,
+          email: l.email || '',
+          echeance: e.echeance || '',
+          etat: (ETAT_DOMI[e.etat] || ETAT_DOMI.aucune)[1]
+        };
+      })
+    });
+    downloadBytes('domiciliations.xlsx', bytes, MIME_XLSX);
+  });
 
   function tableauDomiciliation(lignes, colonne) {
     const entete =
@@ -1945,18 +2199,16 @@
         : '');
   }
 
-  function brancherDomiciliation() {
-    document.querySelectorAll('#panel-domiciliation button[data-domifiche]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        ouvrirFiche(b.dataset.domifiche);
-      });
-    });
-    document.querySelectorAll('#panel-domiciliation button[data-passage]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        noterPassage(b.dataset.passage, b);
-      });
-    });
-  }
+  /* Un seul écouteur pour tout le panneau, posé une fois. Rebrancher bouton par
+     bouton après chaque rendu doublait les liaisons dès qu'une des trois listes
+     se redessinait seule — et un clic ouvrait alors deux fois la même fiche. */
+  $('panel-domiciliation').addEventListener('click', function (e) {
+    const fiche = e.target.closest('button[data-domifiche]');
+    if (fiche) return ouvrirFiche(fiche.dataset.domifiche);
+    const passage = e.target.closest('button[data-passage]');
+    if (passage) return noterPassage(passage.dataset.passage, passage);
+  });
+
 
   /* Noter un passage sans courrier : c'est ce qui empêche de croire disparue
      une personne qui est bel et bien venue. */
@@ -2448,6 +2700,7 @@
         email: email,
         box: box,
         langue: $('newLangue').value,
+        antenneId: antennes().length ? $('newAntenne').value : '',
         domicilie: domicilie,
         domicilieDepuis: domicilie ? depuis : ''
       });
@@ -2479,11 +2732,13 @@
 
   function visibleContacts() {
     const q = view.contactFilter.trim();
+    // L'antenne affichée filtre avant tout le reste.
+    const duBureau = S.contacts.filter(deLAntenne);
     const list = q
-      ? S.contacts.filter(function (c) {
+      ? duBureau.filter(function (c) {
           return util.matchesQuery(c, q, 'tout');
         })
-      : S.contacts;
+      : duBureau;
     return util.sortByName(list);
   }
 
@@ -2499,8 +2754,9 @@
   }
 
   function renderContacts() {
-    $('countContacts').textContent = S.contacts.length;
-    $('tabCountContacts').textContent = S.contacts.length;
+    const duBureau = S.contacts.filter(deLAntenne);
+    $('countContacts').textContent = duBureau.length;
+    $('tabCountContacts').textContent = duBureau.length;
     const box = $('contactsTable');
     const list = visibleContacts();
 
@@ -2798,6 +3054,7 @@
 
   function visibleHistory() {
     return S.history.filter(function (h) {
+      if (!deLAntenne(h)) return false;
       if (view.historyDate && !util.isSameDay(h.date, view.historyDate)) return false;
       if (view.historyFilter.trim() && !util.matchesQuery(h, view.historyFilter, 'tout')) return false;
       if (view.historyState !== 'tous' && etatCourrier(h) !== view.historyState) return false;
@@ -3993,6 +4250,185 @@
 
   /* Le retour s'affiche dans le bloc du mot de passe, pas au bas de la carte :
      un refus qu'on ne voit pas ressemble à une application qui ne répond plus. */
+  /* ═════════════ antennes ═════════════ */
+
+  /* Plusieurs points d'accueil sur un même serveur. Tant qu'aucune antenne
+     n'est déclarée, la notion n'existe pas : aucun sélecteur, aucun champ.
+     C'est la règle qui garde l'application simple pour un bureau unique. */
+
+  const ANTENNE_KEY = 'courrier-antenne';
+
+  function antennes() {
+    return S.settings.antennes || [];
+  }
+
+  function antenneImposee() {
+    return (S.auth.user && S.auth.user.antenneId) || '';
+  }
+
+  function renderAntennes() {
+    const liste = antennes();
+    const select = $('antenneActive');
+    const imposee = antenneImposee();
+
+    // Un accès limité n'a rien à choisir : on affiche son antenne, figée.
+    if (imposee) {
+      view.antenneActive = imposee;
+    } else if (liste.length && view.antenneActive && !liste.some(function (a) { return a.id === view.antenneActive; })) {
+      /* On n'oublie le choix que si la liste est chargée et n'en veut plus :
+         au tout premier rendu, les réglages ne sont pas encore là, et effacer
+         ici perdrait l'antenne retenue d'une visite à l'autre. */
+      view.antenneActive = '';
+    }
+
+    select.hidden = liste.length === 0;
+    if (liste.length === 0) return;
+
+    select.innerHTML =
+      (imposee ? '' : '<option value="">Toutes les antennes</option>') +
+      liste
+        .map(function (a) {
+          return (
+            '<option value="' + esc(a.id) + '"' +
+            (a.id === view.antenneActive ? ' selected' : '') + '>' + esc(a.nom) + '</option>'
+          );
+        })
+        .join('');
+    select.disabled = !!imposee;
+    select.title = imposee ? 'Votre accès est limité à cette antenne.' : 'Filtrer l’écran par antenne';
+
+    // Les listes déroulantes de saisie suivent la même liste.
+    const options = liste
+      .map(function (a) {
+        return '<option value="' + esc(a.id) + '">' + esc(a.nom) + '</option>';
+      })
+      .join('');
+    $('newAntenneBloc').hidden = false;
+    $('newAntenne').innerHTML = options;
+    if (view.antenneActive) $('newAntenne').value = view.antenneActive;
+    if ($('agentAntenne')) {
+      $('agentAntenneBloc').hidden = false;
+      $('agentAntenne').innerHTML = '<option value="">Toutes les antennes</option>' + options;
+    }
+  }
+
+  $('antenneActive').addEventListener('change', function (e) {
+    view.antenneActive = e.target.value;
+    try {
+      root.localStorage.setItem(ANTENNE_KEY, view.antenneActive);
+    } catch (err) {
+      /* stockage indisponible : le choix vaut pour cette session */
+    }
+    renderAll();
+  });
+
+  /** Filtre commun : tout ce qui s'affiche passe par là. */
+  function deLAntenne(objet) {
+    return util.dansAntenne(objet, view.antenneActive, antennes());
+  }
+
+  async function renderCarteAntennes() {
+    const carte = $('antennesCard');
+    carte.hidden = !(S.auth.user && roles.estResponsable(S.auth.user) && S.mode === 'serveur');
+    if (carte.hidden) return;
+
+    const liste = antennes();
+    $('countAntennes').textContent = liste.length;
+    $('antennesListe').innerHTML = liste.length
+      ? '<div class="table-scroll"><table><thead><tr><th>Antenne</th><th>Adresse</th>' +
+        '<th>Destinataires</th><th>En attente</th><th></th></tr></thead><tbody>' +
+        liste
+          .map(function (a) {
+            const dest = S.contacts.filter(function (c) {
+              return util.dansAntenne(c, a.id, liste);
+            }).length;
+            const attente = S.history.filter(function (h) {
+              return enAttente(h) && util.dansAntenne(h, a.id, liste);
+            }).length;
+            return (
+              '<tr><td><strong>' + esc(a.nom) + '</strong></td><td>' + esc(a.adresse || '—') +
+              '</td><td>' + dest + '</td><td>' + attente +
+              '</td><td class="actions"><button class="link-btn danger" data-antenne-del="' +
+              esc(a.id) + '">Retirer</button></td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>'
+      : '<div class="empty">Un seul bureau. Ajoutez une antenne si vous en tenez plusieurs.</div>';
+
+    $('antennesListe').querySelectorAll('button[data-antenne-del]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        retirerAntenne(b.dataset.antenneDel);
+      });
+    });
+  }
+
+  async function retirerAntenne(id) {
+    const a = antennes().find(function (x) {
+      return x.id === id;
+    });
+    const rattaches = S.contacts.filter(function (c) {
+      return util.dansAntenne(c, id, antennes());
+    }).length;
+    const ok = await confirmDialog(
+      'Retirer l’antenne',
+      'L’antenne « ' + (a ? a.nom : id) + ' » disparaît de la liste. ' +
+        (rattaches
+          ? rattaches + ' destinataire(s) y sont rattachés : ils basculeront sur la première antenne restante. '
+          : '') +
+        'Aucun destinataire ni courrier n’est supprimé.',
+      'Retirer'
+    );
+    if (!ok) return;
+    try {
+      await store.saveSettings({
+        antennes: antennes().filter(function (x) {
+          return x.id !== id;
+        })
+      });
+      if (view.antenneActive === id) view.antenneActive = '';
+      setMsg('antennesMsg', 'ok', 'Antenne retirée.');
+      renderAll();
+    } catch (err) {
+      setMsg('antennesMsg', 'error', esc(err.message));
+    }
+  }
+
+  $('nouvelleAntenneBtn').addEventListener('click', function () {
+    $('nouvelleAntenneForm').hidden = false;
+    $('antenneNom').value = '';
+    $('antenneAdresse').value = '';
+    $('antenneNom').focus();
+  });
+
+  $('annulerAntenneBtn').addEventListener('click', function () {
+    $('nouvelleAntenneForm').hidden = true;
+  });
+
+  $('creerAntenneBtn').addEventListener('click', async function () {
+    const nom = $('antenneNom').value.trim();
+    if (!nom) {
+      setMsg('antennesMsg', 'error', 'Donnez un nom à l’antenne.');
+      $('antenneNom').focus();
+      return;
+    }
+    const id = util.idAntenne(nom);
+    if (antennes().some(function (a) { return a.id === id; })) {
+      setMsg('antennesMsg', 'error', 'Une antenne porte déjà ce nom.');
+      return;
+    }
+    try {
+      await store.saveSettings({
+        antennes: antennes().concat([{ id: id, nom: nom, adresse: $('antenneAdresse').value.trim() }])
+      });
+      $('nouvelleAntenneForm').hidden = true;
+      setMsg('antennesMsg', 'ok', 'Antenne « ' + esc(nom) + ' » ajoutée.');
+      renderAll();
+    } catch (err) {
+      setMsg('antennesMsg', 'error', esc(err.message));
+    }
+  });
+
   /* ═════════════ accès des agents ═════════════ */
 
   /* Le responsable crée ici les accès secondaires. Un accès = un nom, un
@@ -4169,7 +4605,9 @@
       return;
     }
     try {
-      const r = await store.creerAgent(nom, lireDroits($('agentDroitsNeuf')));
+      const r = await store.creerAgent(nom, lireDroits($('agentDroitsNeuf')), {
+        antenneId: $('agentAntenne') ? $('agentAntenne').value : ''
+      });
       $('nouvelAgentForm').hidden = true;
       montrerCode(nom, r.agent.identifiant, r.code);
       renderAgents();
@@ -4306,6 +4744,8 @@
     renderJournal();
     renderDomiciliation();
     renderAgents();
+    renderAntennes();
+    renderCarteAntennes();
     appliquerDroits();
   }
 
@@ -4390,6 +4830,11 @@
   });
 
   async function start() {
+    try {
+      view.antenneActive = root.localStorage.getItem(ANTENNE_KEY) || '';
+    } catch (e) {
+      view.antenneActive = '';
+    }
     $('dateStamp').textContent = new Date().toLocaleDateString('fr-CA', {
       weekday: 'long',
       year: 'numeric',

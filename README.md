@@ -404,6 +404,27 @@ de la CAF, de France Travail, de la préfecture, de l'assurance maladie. Deux
 échéances pèsent sur ce dispositif, et aucune ne se surveille de tête sur trois
 cents dossiers. L'onglet **Domiciliation** les tient à jour tout seul.
 
+**Ouvrir un dossier.** Le bouton *Ouvrir un dossier* déplie le formulaire
+d'élection de domicile : identité, date de naissance, langue de correspondance,
+courriel, téléphone, date d'élection, numéro de boîte, observations. L'échéance
+de l'attestation s'affiche pendant la saisie. Ce qui est saisi **entre
+directement au registre** : la personne reçoit dès lors ses avis de courrier,
+sans double saisie ni recopie. *Imprimer la fiche* sort la même chose sur papier,
+à faire signer et à classer.
+
+Le formulaire réclame au moins un courriel **ou** un téléphone : sans l'un des
+deux, personne ne pourra prévenir la personne le jour où un courrier arrive, et
+mieux vaut le dire à la saisie que le découvrir ce jour-là.
+
+C'est un geste d'accueil, pas d'administration du registre : **un agent peut
+ouvrir un dossier** sans avoir le droit de modifier le registre — il ne pourra
+pour autant ni corriger ni supprimer la fiche ensuite.
+
+**Personnes domiciliées.** Le registre des élections de domicile en cours, avec
+son échéance et son état, filtrable par nom ou par boîte, exportable en Excel et
+imprimable. Les deux listes suivantes ne montrent que ce qui cloche ; celle-ci
+montre tout le monde. Un agent rattaché à une antenne n'y voit que la sienne.
+
 **Attestations à renouveler.** Une attestation d'élection de domicile a une
 durée de validité — un an par défaut. Périmée, elle coupe l'accès aux droits,
 souvent sans que personne ne s'en aperçoive avant le refus d'un guichet. On
@@ -490,6 +511,25 @@ envoyer. Les relances suivent la même règle.
 **L'application ne traduit rien** : chaque texte est écrit par le bureau. C'est
 volontaire — une traduction automatique d'un courrier administratif ferait plus
 de dégâts qu'un message en français.
+
+---
+
+## Plusieurs antennes
+
+Un même organisme peut tenir plusieurs points d'accueil. *Réglages → Antennes*
+en déclare autant qu'il en faut, avec leur adresse. **Tant que la liste est
+vide, l'application n'en montre rien** : un bureau unique n'a pas à porter le
+vocabulaire d'un réseau.
+
+Dès qu'une antenne existe, un sélecteur apparaît en en-tête. Il filtre le
+registre, l'historique et les domiciliations — le choix est retenu d'un
+rechargement à l'autre. Chaque destinataire, chaque courrier et chaque accès
+d'agent peut être rattaché à une antenne.
+
+Un accès d'agent rattaché à une antenne y est **enfermé** : son sélecteur est
+figé, et le serveur ne lui envoie que ce qui la concerne. Le tri se fait avant
+l'envoi, pas à l'affichage — le registre des autres points d'accueil ne transite
+jamais par ce poste.
 
 ---
 

@@ -216,6 +216,7 @@
         <button class="btn ghost small install-btn" id="installBtn" hidden>Installer l'application</button>
         <div class="mode-badge" id="modeBadge" title="Mode de stockage">…</div>
         <div class="mode-badge hors-ligne" id="ligneBadge" hidden>Hors ligne</div>
+        <select id="antenneActive" class="antenne-select" hidden aria-label="Antenne"></select>
       </div>
       <div class="header-badges" id="accountBar" hidden>
         <span class="who-badge" id="whoBadge"></span>
@@ -357,6 +358,10 @@
           <label for="newLangue">Langue</label>
           <select id="newLangue" class="langue-select"></select>
         </div>
+        <div id="newAntenneBloc" hidden>
+          <label for="newAntenne">Antenne</label>
+          <select id="newAntenne" class="langue-select"></select>
+        </div>
         <button class="btn" type="submit" id="addContactBtn">Ajouter</button>
       </form>
       <label class="check-row" style="margin-top:6px;">
@@ -448,6 +453,99 @@
 
   <!-- ═══════════════ DOMICILIATION ═══════════════ -->
   <section class="panel" id="panel-domiciliation" aria-label="Domiciliation">
+    <div class="card" id="formDomiciliationCard">
+      <div class="card-head">
+        <h2>Nouvelle domiciliation</h2>
+        <div class="toolbar">
+          <button class="btn small" id="ouvrirFormDomiBtn">Ouvrir un dossier</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-bottom:14px;">
+        Le formulaire d'élection de domicile. Ce qui est saisi ici entre directement au
+        registre : la personne reçoit dès lors ses notifications de courrier, sans double saisie.
+      </p>
+
+      <form id="formDomiciliation" hidden novalidate>
+        <h3 class="sous-titre">Identité</h3>
+        <div class="copies-grid">
+          <div>
+            <label for="domNom">Nom <span class="requis">obligatoire</span></label>
+            <input type="text" id="domNom" autocomplete="off" placeholder="TREMBLAY">
+          </div>
+          <div>
+            <label for="domPrenom">Prénom <span class="requis">obligatoire</span></label>
+            <input type="text" id="domPrenom" autocomplete="off" placeholder="Marie">
+          </div>
+        </div>
+        <div class="copies-grid">
+          <div>
+            <label for="domNaissance">Date de naissance</label>
+            <input type="date" id="domNaissance">
+          </div>
+          <div>
+            <label for="domLangue">Langue de correspondance</label>
+            <select id="domLangue" class="langue-select"></select>
+          </div>
+        </div>
+
+        <h3 class="sous-titre">Pour la joindre</h3>
+        <div class="copies-grid">
+          <div>
+            <label for="domCourriel">Courriel</label>
+            <input type="email" id="domCourriel" autocomplete="off" placeholder="marie@exemple.com">
+            <p class="hint">C'est par là que partiront les avis de courrier.</p>
+          </div>
+          <div>
+            <label for="domTelephone">Téléphone</label>
+            <input type="text" id="domTelephone" autocomplete="off" placeholder="06 12 34 56 78">
+            <p class="hint">Sert quand il n'y a pas d'adresse électronique.</p>
+          </div>
+        </div>
+
+        <h3 class="sous-titre">Élection de domicile</h3>
+        <div class="copies-grid">
+          <div>
+            <label for="domDebut">Date d'élection <span class="requis">obligatoire</span></label>
+            <input type="date" id="domDebut">
+            <p class="hint" id="domEcheance"></p>
+          </div>
+          <div>
+            <label for="domBoite">Numéro de boîte ou de casier</label>
+            <input type="text" id="domBoite" autocomplete="off" placeholder="B-12">
+          </div>
+        </div>
+        <div id="domAntenneBloc" hidden>
+          <label for="domAntenne">Antenne</label>
+          <select id="domAntenne" class="langue-select"></select>
+        </div>
+        <label for="domNotes">Observations (facultatif)</label>
+        <input type="text" id="domNotes" autocomplete="off" placeholder="Orientée par le service social">
+
+        <div class="row-actions">
+          <button class="btn" type="submit" id="enregistrerDomiBtn">Enregistrer la domiciliation</button>
+          <button class="btn ghost" type="button" id="annulerDomiBtn">Annuler</button>
+          <button class="btn ghost" type="button" id="imprimerDomiBtn">Imprimer la fiche</button>
+        </div>
+      </form>
+      <div id="domiMsg"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Personnes domiciliées (<span id="countActives">0</span>)</h2>
+        <div class="toolbar">
+          <input type="search" id="filtreActives" class="filter-input" placeholder="Chercher un nom, une boîte…">
+          <button class="btn ghost small" id="activesXlsxBtn">Exporter Excel</button>
+          <button class="btn ghost small" id="activesImprimerBtn">Imprimer</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-bottom:14px;">
+        Le registre des élections de domicile en cours. Les deux listes suivantes ne
+        montrent que ce qui cloche ; celle-ci montre tout le monde.
+      </p>
+      <div id="activesTable"></div>
+    </div>
+
     <div class="card">
       <h2>Attestations à renouveler (<span id="countRenouveler">0</span>)</h2>
       <p class="hint" style="margin-bottom:14px;">
@@ -664,6 +762,40 @@
       <div id="accountsMsg"></div>
     </div>
 
+    <div class="card" id="antennesCard" hidden>
+      <div class="card-head">
+        <h2>Antennes (<span id="countAntennes">0</span>)</h2>
+        <div class="toolbar">
+          <button class="btn small" id="nouvelleAntenneBtn">Ajouter une antenne</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-bottom:14px;">
+        Plusieurs points d'accueil peuvent partager ce serveur. Chaque destinataire et
+        chaque courrier appartient à une antenne ; le sélecteur en haut de page filtre
+        tout l'écran. Un accès agent peut être limité à une seule antenne — il ne reçoit
+        alors rien des autres.
+        <strong>Tant qu'aucune antenne n'est déclarée, rien de tout cela n'apparaît.</strong>
+      </p>
+      <div id="nouvelleAntenneForm" hidden>
+        <div class="copies-grid">
+          <div>
+            <label for="antenneNom">Nom de l'antenne</label>
+            <input type="text" id="antenneNom" placeholder="Antenne Nord" autocomplete="off">
+          </div>
+          <div>
+            <label for="antenneAdresse">Adresse (facultative)</label>
+            <input type="text" id="antenneAdresse" placeholder="12 rue des Lilas" autocomplete="off">
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn" id="creerAntenneBtn">Ajouter</button>
+          <button class="btn ghost" id="annulerAntenneBtn">Annuler</button>
+        </div>
+      </div>
+      <div id="antennesMsg"></div>
+      <div id="antennesListe"></div>
+    </div>
+
     <div class="card" id="agentsCard" hidden>
       <div class="card-head">
         <h2>Accès des agents (<span id="countAgents">0</span>)</h2>
@@ -680,6 +812,11 @@
       <div id="nouvelAgentForm" hidden>
         <label for="agentNom">Nom de cet accès</label>
         <input type="text" id="agentNom" placeholder="Accueil du matin, Marie B., poste 2" autocomplete="off">
+        <div id="agentAntenneBloc" hidden>
+          <label for="agentAntenne">Antenne de cet accès</label>
+          <select id="agentAntenne" class="langue-select"></select>
+          <p class="hint">Limité à une antenne, cet accès ne reçoit rien des autres.</p>
+        </div>
         <div id="agentDroitsNeuf"></div>
         <div class="row-actions">
           <button class="btn" id="creerAgentBtn">Créer l'accès</button>

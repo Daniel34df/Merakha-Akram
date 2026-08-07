@@ -969,6 +969,37 @@ tr.urgent{background:var(--danger-wash);}
 .bandeau-file .link-btn{margin-left:6px;}
 .mode-badge.hors-ligne{border-color:var(--rust);color:var(--rust);}
 
+/* ---------- formulaire de domiciliation ---------- */
+.requis{
+  font-family:var(--mono);
+  font-size:9px;
+  letter-spacing:0.5px;
+  color:var(--rust);
+  border:1px solid var(--rust);
+  padding:0 4px;
+  margin-left:6px;
+  text-transform:uppercase;
+}
+#formDomiciliation .sous-titre{margin-top:22px;}
+#formDomiciliation .sous-titre:first-child{margin-top:0;}
+#formDomiciliation .hint{margin:-10px 0 16px;}
+
+/* ---------- antennes ---------- */
+/* Le sélecteur vit dans l'en-tête, à côté du mode de stockage : c'est un
+   contexte d'affichage, pas un réglage. Absent tant qu'il n'y a qu'un bureau. */
+.antenne-select{
+  font-family:var(--mono);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  padding:3px 8px;
+  border:1px solid var(--brass);
+  color:var(--brass);
+  background:transparent;
+  max-width:190px;
+}
+.antenne-select:disabled{opacity:1;cursor:default;}
+
 /* ---------- langues ---------- */
 .langue-select{
   font-family:var(--serif);

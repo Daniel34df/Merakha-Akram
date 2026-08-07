@@ -21,6 +21,8 @@ test('un agent tout neuf tient le guichet, sans voir les codes', function () {
   assert.equal(roles.peut(a, 'codes'), false, 'c’est la règle qui motive tout le module');
   assert.equal(roles.peut(a, 'registre'), false);
   assert.equal(roles.peut(a, 'reglages'), false);
+  /* La domiciliation est ouverte : c'est le travail d'accueil lui-même. */
+  assert.equal(roles.peut(a, 'domiciliation'), true);
 });
 
 test('les autorisations se règlent une par une', function () {
@@ -268,11 +270,135 @@ test('l’agent sans droit ne peut ni modifier le registre ni toucher aux régla
     assert.equal(ajout.body.code, 'droit', 'refus de droit, pas de session');
 
     assert.equal((await t.agent('PUT', '/api/settings', { subject: 'S', body: 'B' })).status, 403);
-    assert.equal((await t.agent('GET', '/api/domiciliation')).status, 403);
+    // La domiciliation, elle, reste ouverte par défaut.
+    assert.equal((await t.agent('GET', '/api/domiciliation')).status, 200);
     assert.equal((await t.agent('GET', '/api/auth/agents')).status, 403, 'un agent ne gère pas les accès');
 
     // Mais il tient le guichet.
     assert.equal((await t.agent('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' })).status, 200);
+  });
+});
+
+test('l’agent ouvre une domiciliation sans avoir la main sur le registre', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const cree = (await t.patron('POST', '/api/auth/agents', { name: 'Accueil' })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    /* Recevoir quelqu'un et ouvrir son dossier, c'est le métier de l'accueil.
+       Le droit « registre » resterait fermé — il ouvrirait la correction et la
+       suppression de n'importe quelle fiche. */
+    const dossier = await t.agent('POST', '/api/contacts', {
+      name: 'Awa Diallo',
+      email: 'awa@ex.com',
+      telephone: '06 11 22 33 44',
+      naissance: '1990-04-12',
+      notes: 'Reçue au guichet',
+      domicilie: true,
+      domicilieDepuis: '2026-01-15'
+    });
+    assert.equal(dossier.status, 201, 'la domiciliation passe');
+    assert.equal(dossier.body.domicilie, true);
+    assert.equal(dossier.body.telephone, '06 11 22 33 44', 'le téléphone est conservé');
+    assert.equal(dossier.body.naissance, '1990-04-12');
+    assert.equal(dossier.body.notes, 'Reçue au guichet');
+
+    // Une fiche ordinaire, elle, reste refusée : rien n'a été élargi au passage.
+    const ordinaire = await t.agent('POST', '/api/contacts', { name: 'Y', email: 'y@ex.com' });
+    assert.equal(ordinaire.status, 403);
+
+    // Et modifier ou supprimer la fiche qu'il vient d'ouvrir lui reste fermé.
+    assert.equal((await t.agent('PUT', '/api/contacts/' + dossier.body.id, { name: 'Z' })).status, 403);
+    assert.equal((await t.agent('DELETE', '/api/contacts/' + dossier.body.id)).status, 403);
+  });
+});
+
+test('le registre des domiciliations en cours liste les dossiers en règle', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('POST', '/api/contacts', {
+      name: 'Awa Diallo', email: 'awa@ex.com', box: 'D-07',
+      domicilie: true, domicilieDepuis: new Date().toISOString().slice(0, 10)
+    });
+    await t.patron('POST', '/api/contacts', { name: 'Simon Passant', email: 'simon@ex.com' });
+
+    const vue = (await t.patron('GET', '/api/domiciliation')).body;
+    /* Une domiciliation ouverte aujourd'hui n'est ni à renouveler ni en
+       absence : sans cette liste, elle n'apparaîtrait nulle part. */
+    assert.equal(vue.aRenouveler.length, 0);
+    assert.equal(vue.sansPassage.length, 0);
+    assert.equal(vue.actives.length, 1, 'le dossier en règle est bien listé');
+    assert.equal(vue.actives[0].name, 'Awa Diallo');
+    assert.equal(vue.actives[0].box, 'D-07');
+    assert.ok(vue.actives[0].etat.echeance, 'avec son échéance');
+  });
+});
+
+test('une domiciliation close sort du registre des dossiers en cours', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const fiche = (
+      await t.patron('POST', '/api/contacts', {
+        name: 'Awa Diallo', email: 'awa@ex.com', domicilie: true, domicilieDepuis: '2026-01-10'
+      })
+    ).body;
+    assert.equal((await t.patron('GET', '/api/domiciliation')).body.actives.length, 1);
+
+    await t.patron('PUT', '/api/contacts/' + fiche.id, {
+      name: 'Awa Diallo', email: 'awa@ex.com', domicilie: true,
+      domicilieDepuis: '2026-01-10', domiciliationCloseLe: '2026-06-30', domiciliationMotif: 'relogée'
+    });
+    assert.equal((await t.patron('GET', '/api/domiciliation')).body.actives.length, 0);
+  });
+});
+
+test('un agent d’antenne ne voit que les domiciliations de son antenne', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [{ id: 'antenne-nord', nom: 'Antenne Nord' }, { id: 'antenne-sud', nom: 'Antenne Sud' }]
+    });
+    const jour = new Date().toISOString().slice(0, 10);
+    await t.patron('POST', '/api/contacts', {
+      name: 'Nadia Nord', email: 'nadia@ex.com', antenneId: 'antenne-nord', domicilie: true, domicilieDepuis: jour
+    });
+    await t.patron('POST', '/api/contacts', {
+      name: 'Simon Sud', email: 'simon@ex.com', antenneId: 'antenne-sud', domicilie: true, domicilieDepuis: jour
+    });
+
+    const cree = (await t.patron('POST', '/api/auth/agents', { name: 'Accueil Sud', antenneId: 'antenne-sud' })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    assert.equal((await t.patron('GET', '/api/domiciliation')).body.actives.length, 2, 'le responsable voit les deux');
+
+    const vue = (await t.agent('GET', '/api/domiciliation')).body;
+    assert.equal(vue.actives.length, 1, 'l’agent ne voit que son antenne');
+    assert.equal(vue.actives[0].name, 'Simon Sud');
+    assert.equal(vue.rapport.actives, 1, 'le rapport annuel se limite lui aussi à son antenne');
+  });
+});
+
+test('un agent privé de domiciliation ne peut plus ouvrir de dossier', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const cree = (
+      await t.patron('POST', '/api/auth/agents', {
+        name: 'Guichet seul',
+        permissions: { guichet: true, remise: true, domiciliation: false }
+      })
+    ).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    const refus = await t.agent('POST', '/api/contacts', {
+      name: 'Awa Diallo',
+      email: 'awa@ex.com',
+      domicilie: true,
+      domicilieDepuis: '2026-01-15'
+    });
+    assert.equal(refus.status, 403);
+    assert.equal(refus.body.code, 'droit');
+    assert.equal((await t.agent('GET', '/api/domiciliation')).status, 403);
   });
 });
 

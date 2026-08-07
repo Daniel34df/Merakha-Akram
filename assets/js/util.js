@@ -331,6 +331,57 @@
     return out;
   }
 
+  /* Antennes — plusieurs points d'accueil sur un même serveur.
+
+     Une antenne est une simple étiquette portée par les destinataires, les
+     courriers et les accès. Tant qu'aucune n'est déclarée, la notion n'existe
+     pas : l'interface n'en montre rien et rien ne change pour un bureau unique.
+
+     Les objets antérieurs aux antennes n'en portent pas : ils appartiennent à
+     la première déclarée, faute de quoi ils disparaîtraient de tous les écrans
+     le jour où l'on en crée une. */
+  function nettoyerAntennes(antennes) {
+    if (!Array.isArray(antennes)) return [];
+    const vus = new Set();
+    return antennes
+      .map(function (a) {
+        return {
+          id: String((a && a.id) || '').trim().slice(0, 40),
+          nom: String((a && a.nom) || '').trim().slice(0, 80),
+          adresse: String((a && a.adresse) || '').trim().slice(0, 200)
+        };
+      })
+      .filter(function (a) {
+        if (!a.id || !a.nom || vus.has(a.id)) return false;
+        vus.add(a.id);
+        return true;
+      })
+      .slice(0, 40);
+  }
+
+  /** Identifiant d'antenne tiré du nom : « Antenne Nord » → « antenne-nord ». */
+  function idAntenne(nom) {
+    return normalize(nom).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  }
+
+  function antenneDe(objet, antennes) {
+    const liste = antennes || [];
+    if (liste.length === 0) return null;
+    const id = String((objet && objet.antenneId) || '').trim();
+    const trouvee = liste.find(function (a) {
+      return a.id === id;
+    });
+    // Antérieur aux antennes : rattaché à la première, plutôt qu'invisible.
+    return trouvee || liste[0];
+  }
+
+  /** Vrai si l'objet relève de l'antenne demandée. '' ou null = toutes. */
+  function dansAntenne(objet, antenneId, antennes) {
+    if (!antenneId) return true;
+    const a = antenneDe(objet, antennes);
+    return !!a && a.id === antenneId;
+  }
+
   /** Deux destinataires sont « les mêmes » si le courriel coïncide (insensible à la casse). */
   function sameContact(a, b) {
     return normalize(a && a.email) === normalize(b && b.email);
@@ -548,6 +599,10 @@
     normalizeBox: normalizeBox,
     TYPES_COURRIER: TYPES_COURRIER,
     typeCourrier: typeCourrier,
+    nettoyerAntennes: nettoyerAntennes,
+    idAntenne: idAntenne,
+    antenneDe: antenneDe,
+    dansAntenne: dansAntenne,
     LANGUES: LANGUES,
     langue: langue,
     estRtl: estRtl,

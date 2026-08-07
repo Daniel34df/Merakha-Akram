@@ -179,7 +179,6 @@ function cleanContact(input) {
   /* Élection de domicile. L'attestation a une échéance : si elle n'est pas
      fournie, on la calcule à partir de la date d'élection, ce qui évite de la
      saisir deux fois — et de la saisir faux. */
-  const domicilie = !!(input && input.domicilie);
   const jourValide = function (valeur, quoi) {
     const v = String(valeur || '').trim();
     if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
@@ -187,6 +186,7 @@ function cleanContact(input) {
     }
     return v;
   };
+  const domicilie = !!(input && input.domicilie);
   const domicilieDepuis = jourValide(input && input.domicilieDepuis, 'Date d’élection de domicile');
   let domicilieJusqua = jourValide(input && input.domicilieJusqua, 'Échéance de l’attestation');
   if (domicilie && domicilieDepuis && !domicilieJusqua) {
@@ -206,6 +206,13 @@ function cleanContact(input) {
     substituteId: String((input && input.substituteId) || '').trim() || null,
     // Langue de notification. 'fr' par défaut : un destinataire existant n'en a pas.
     langue: util.langue(input && input.langue).id,
+    // Antenne de rattachement. Vide = la première déclarée, s'il y en a.
+    antenneId: String((input && input.antenneId) || '').trim().slice(0, 40),
+    /* Renseignements du formulaire de domiciliation. Le téléphone compte
+       autant que le courriel : une partie du public n'a pas d'adresse. */
+    telephone: String((input && input.telephone) || '').trim().slice(0, 40),
+    naissance: jourValide(input && input.naissance, 'Date de naissance'),
+    notes: String((input && input.notes) || '').trim().slice(0, 300),
     domicilie: domicilie,
     domicilieDepuis: domicilie ? domicilieDepuis : '',
     domicilieJusqua: domicilie ? domicilieJusqua : '',
@@ -331,6 +338,17 @@ function exigerDroit(user, droit) {
   if (!roles.peut(user, droit)) throw droitManquant(droit);
 }
 
+/* Un des droits suffit. Sert là où deux métiers différents mènent à la même
+   écriture : ouvrir une domiciliation crée un destinataire, mais c'est le
+   travail de l'accueil, pas une modification du registre. */
+function exigerUnDesDroits(user, droits) {
+  if (!user) return;
+  const ouvert = droits.some(function (d) {
+    return roles.peut(user, d);
+  });
+  if (!ouvert) throw droitManquant(droits[0]);
+}
+
 function createUserRecord(name, email, passwordHash, options) {
   const opts = options || {};
   return {
@@ -345,6 +363,9 @@ function createUserRecord(name, email, passwordHash, options) {
     permissions: opts.role === 'agent' ? roles.nettoyerPermissions(opts.permissions) : null,
     identifiant: opts.identifiant || '',
     accessCodeHash: opts.accessCodeHash || '',
+    /* Antenne d'un accès. Vide = toutes — le cas du responsable et d'un agent
+       qui tourne sur plusieurs points d'accueil. */
+    antenneId: String(opts.antenneId || '').trim().slice(0, 40),
     createdAt: new Date().toISOString(),
     emailVerifiedAt: new Date().toISOString(),
     mailbox: null,
@@ -872,6 +893,7 @@ async function handleAuth(req, res, ctx, pathname) {
               name: u.name,
               identifiant: u.identifiant,
               permissions: roles.nettoyerPermissions(u.permissions),
+              antenneId: u.antenneId || '',
               suspendu: !!u.suspendu,
               createdAt: u.createdAt,
               derniereConnexion: u.derniereConnexion || null
@@ -903,6 +925,7 @@ async function handleAuth(req, res, ctx, pathname) {
       role: 'agent',
       permissions: corps.permissions,
       identifiant: identifiant,
+      antenneId: corps.antenneId,
       accessCodeHash: auth.hashPassword(code)
     });
     await db.write(function (data) {
@@ -968,6 +991,9 @@ async function handleAuth(req, res, ctx, pathname) {
         if (corps.name !== undefined) cible.name = String(corps.name).trim() || cible.name;
         if (corps.permissions !== undefined) {
           cible.permissions = roles.nettoyerPermissions(corps.permissions);
+        }
+        if (corps.antenneId !== undefined) {
+          cible.antenneId = String(corps.antenneId || '').trim().slice(0, 40);
         }
         if (corps.suspendu !== undefined) {
           cible.suspendu = !!corps.suspendu;
@@ -1365,16 +1391,32 @@ async function handleApi(req, res, ctx, pathname) {
     throw sessionExpiree();
   }
 
+  /* Un accès limité à une antenne ne reçoit que ce qui la concerne. Le tri se
+     fait ici, pas à l'affichage : le registre d'un autre point d'accueil n'a
+     pas à transiter par ce poste. Toute route qui sert des fiches ou des
+     courriers passe par là — en oublier une rouvrirait la porte de côté. */
+  function pourSonAntenne(liste) {
+    const limite = (currentUser && currentUser.antenneId) || '';
+    if (!limite) return liste;
+    const antennes = db.data.settings.antennes || [];
+    return (liste || []).filter(function (o) {
+      return util.dansAntenne(o, limite, antennes);
+    });
+  }
+
   if (pathname === '/api/state' && method === 'GET') {
     // Ni comptes ni sessions : le registre partagé n'a pas à transporter les
     // secrets des autres employé·es.
+    const contacts = pourSonAntenne(db.data.contacts);
+    const history = pourSonAntenne(db.data.history);
+
     return sendJson(res, 200, {
-      contacts: db.data.contacts,
+      contacts: contacts,
       // Les codes sont retirés du contenu servi, pas seulement de l'affichage :
       // un onglet de développeur suffirait à lire ce que l'interface masque.
-      history: roles.masquerCodes(db.data.history, currentUser),
+      history: roles.masquerCodes(history, currentUser),
       settings: db.data.settings,
-      suivi: reminders.resume(db.data.history)
+      suivi: reminders.resume(history)
     });
   }
 
@@ -1383,8 +1425,13 @@ async function handleApi(req, res, ctx, pathname) {
   if (pathname === '/api/contacts') {
     if (method === 'GET') return sendJson(res, 200, db.data.contacts);
     if (method === 'POST') {
-      exigerDroit(currentUser, 'registre');
       const input = cleanContact(await readBody(req));
+      /* Ouvrir une domiciliation, c'est inscrire quelqu'un : l'agent d'accueil
+         le fait tous les jours. On ne lui demande donc pas le droit de
+         modifier le registre — seulement celui de domicilier, et uniquement
+         pour une fiche effectivement domiciliée. */
+      if (input.domicilie) exigerUnDesDroits(currentUser, ['registre', 'domiciliation']);
+      else exigerDroit(currentUser, 'registre');
       const clash = findDuplicate(db.data.contacts, input.email, null);
       if (clash) {
         throw Object.assign(new Error('Ce courriel est déjà au registre sous « ' + clash.name + ' »'), { status: 409 });
@@ -1722,8 +1769,8 @@ async function handleApi(req, res, ctx, pathname) {
       validiteMois: Number(ctx.domiciliationMois) || undefined,
       absenceMois: Number(ctx.domiciliationAbsenceMois) || undefined
     };
-    const contacts = db.data.contacts || [];
-    const history = db.data.history || [];
+    const contacts = pourSonAntenne(db.data.contacts || []);
+    const history = pourSonAntenne(db.data.history || []);
 
     /* On ne renvoie que ce qu'il faut pour afficher : nom, boîte, dates. Les
        listes de travail n'ont pas besoin de transporter tout le dossier. */
@@ -1737,7 +1784,24 @@ async function handleApi(req, res, ctx, pathname) {
       };
     };
 
+    /* Les personnes domiciliées en ce moment. Les deux autres listes ne
+       montrent que des exceptions — une attestation qui expire, une absence
+       trop longue. Sans celle-ci, quelqu'un dont le dossier est en règle
+       n'apparaît nulle part, et le bureau n'a aucun endroit où lire le
+       registre des domiciliations qu'il est pourtant tenu de tenir. */
+    const actives = (contacts || [])
+      .filter(function (c) {
+        return c.domicilie && !c.domiciliationCloseLe;
+      })
+      .map(function (c) {
+        return alleger({ contact: c, etat: domiciliation.etat(c, history, options) });
+      })
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name, 'fr');
+      });
+
     return sendJson(res, 200, {
+      actives: actives,
       aRenouveler: domiciliation.aRenouveler(contacts, history, options).map(alleger),
       sansPassage: domiciliation.sansPassage(contacts, history, options).map(alleger),
       rapport: domiciliation.rapportAnnuel(contacts, history, { annee: annee }),
@@ -1785,6 +1849,10 @@ async function handleApi(req, res, ctx, pathname) {
            général pour ce type. */
         templates: util.nettoyerGabarits(
           body.templates !== undefined ? body.templates : db.data.settings.templates
+        ),
+        // Antennes : plusieurs points d'accueil sur un même serveur.
+        antennes: util.nettoyerAntennes(
+          body.antennes !== undefined ? body.antennes : db.data.settings.antennes
         ),
         /* Gabarits par langue. Même règle que par type : incomplet = ignoré,
            absent de la requête = conservé tel quel. */
@@ -1965,6 +2033,11 @@ async function handleApi(req, res, ctx, pathname) {
       contactId: body.contactId || null,
       // Urgence déclarée à la réception : elle raccourcit le délai de relance.
       urgent: !!body.urgent,
+      /* Antenne où le courrier est arrivé. Elle vient du destinataire quand il
+         en a une — un courrier suit la boîte, pas le poste qui l'a saisi. */
+      antenneId: String(
+        body.antenneId || (contactVise && contactVise.antenneId) || (currentUser && currentUser.antenneId) || ''
+      ).trim(),
       name: name,
       email: to,
       subject: subject,

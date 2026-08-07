@@ -33,7 +33,9 @@
     // Gabarits propres à un type de courrier ; vide = tout suit le modèle général.
     templates: {},
     // Gabarits par langue ; vide = tout le monde reçoit le message français.
-    langues: {}
+    langues: {},
+    // Antennes ; vide = un seul bureau, la notion n'apparaît pas.
+    antennes: []
   };
 
   const state = {
@@ -367,10 +369,12 @@
     return api('/auth/agents');
   }
 
-  async function creerAgent(nom, permissions) {
+  async function creerAgent(nom, permissions, options) {
     return api('/auth/agents', {
       method: 'POST',
-      body: JSON.stringify({ name: nom, permissions: permissions })
+      body: JSON.stringify(
+        Object.assign({ name: nom, permissions: permissions }, options || {})
+      )
     });
   }
 
@@ -792,6 +796,10 @@
       email: input.email.trim(),
       box: (input.box || '').trim(),
       langue: util.langue(input.langue).id,
+      antenneId: input.antenneId || '',
+      telephone: (input.telephone || '').trim(),
+      naissance: input.naissance || '',
+      notes: (input.notes || '').trim(),
       absentUntil: input.absentUntil || '',
       departed: !!input.departed,
       substituteId: input.substituteId || null,
@@ -850,6 +858,7 @@
       departed: patch.departed !== undefined ? !!patch.departed : !!state.contacts[idx].departed,
       substituteId: patch.substituteId !== undefined ? patch.substituteId : state.contacts[idx].substituteId || null,
       langue: util.langue(patch.langue !== undefined ? patch.langue : state.contacts[idx].langue).id,
+      antenneId: patch.antenneId !== undefined ? patch.antenneId : state.contacts[idx].antenneId || '',
       /* Domiciliation : ce que la modification ne mentionne pas est conservé.
          Une correction de nom ne doit pas effacer une élection de domicile. */
       domicilie: patch.domicilie !== undefined ? !!patch.domicilie : !!state.contacts[idx].domicilie,

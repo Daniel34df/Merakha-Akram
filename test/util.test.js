@@ -203,3 +203,40 @@ test('nettoyerGabarits ne garde que les modèles complets sur des types connus',
   assert.deepEqual(util.nettoyerGabarits(undefined), {});
   assert.deepEqual(util.nettoyerGabarits('n’importe quoi'), {});
 });
+
+/* ---------- antennes ---------- */
+
+test('les antennes incomplètes ou en double sont écartées', function () {
+  const a = util.nettoyerAntennes([
+    { id: 'nord', nom: 'Nord', adresse: 'ici' },
+    { id: 'nord', nom: 'Doublon' },
+    { id: '', nom: 'Sans id' },
+    { id: 'vide', nom: '   ' },
+    null
+  ]);
+  assert.deepEqual(a.map(function (x) { return x.id; }), ['nord']);
+  assert.deepEqual(util.nettoyerAntennes('rien'), []);
+});
+
+test('l’identifiant d’antenne se déduit du nom', function () {
+  assert.equal(util.idAntenne('Antenne Nord'), 'antenne-nord');
+  assert.equal(util.idAntenne('Accueil — Bd Saint-Michel'), 'accueil-bd-saint-michel');
+  assert.equal(util.idAntenne(''), '');
+});
+
+test('un objet antérieur aux antennes appartient à la première', function () {
+  const liste = [{ id: 'nord', nom: 'Nord' }, { id: 'sud', nom: 'Sud' }];
+  // Sans antenneId, un destinataire existant ne doit pas devenir invisible.
+  assert.equal(util.antenneDe({ name: 'Ancien' }, liste).id, 'nord');
+  assert.equal(util.antenneDe({ antenneId: 'sud' }, liste).id, 'sud');
+  assert.equal(util.antenneDe({ antenneId: 'disparue' }, liste).id, 'nord');
+  assert.equal(util.antenneDe({}, []), null, 'sans antenne déclarée, la notion n’existe pas');
+});
+
+test('dansAntenne laisse tout passer quand aucune antenne n’est demandée', function () {
+  const liste = [{ id: 'nord', nom: 'Nord' }, { id: 'sud', nom: 'Sud' }];
+  assert.equal(util.dansAntenne({ antenneId: 'sud' }, '', liste), true);
+  assert.equal(util.dansAntenne({ antenneId: 'sud' }, 'sud', liste), true);
+  assert.equal(util.dansAntenne({ antenneId: 'sud' }, 'nord', liste), false);
+  assert.equal(util.dansAntenne({}, 'nord', liste), true, 'l’ancien relève de la première');
+});

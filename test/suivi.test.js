@@ -1287,3 +1287,100 @@ test('une langue inconnue ou un gabarit incomplet sont écartés', function () {
     assert.equal(c.langue, 'fr');
   });
 });
+
+/* ---------- plusieurs antennes ---------- */
+
+test('sans antenne déclarée, rien ne change', function () {
+  return withServer(async function (t) {
+    const c = (await t.call('POST', '/api/contacts', { name: 'Ana', email: 'ana@ex.com' })).body;
+    assert.equal(c.antenneId, '');
+    assert.deepEqual(t.db.data.settings.antennes, []);
+    assert.equal((await t.call('GET', '/api/state')).body.contacts.length, 1);
+  });
+});
+
+test('les antennes se déclarent dans les réglages, sans doublon', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [
+        { id: 'nord', nom: 'Antenne Nord', adresse: '12 rue des Lilas' },
+        { id: 'sud', nom: 'Antenne Sud' },
+        { id: 'nord', nom: 'Doublon' },
+        { id: '', nom: 'Sans identifiant' },
+        { id: 'vide', nom: '' }
+      ]
+    });
+    assert.deepEqual(
+      t.db.data.settings.antennes.map(function (a) { return a.id; }),
+      ['nord', 'sud'],
+      'doublons et entrées incomplètes écartés'
+    );
+    assert.equal(t.db.data.settings.antennes[0].adresse, '12 rue des Lilas');
+  });
+});
+
+test('un courrier hérite de l’antenne de son destinataire', function () {
+  return withServer(async function (t) {
+    await t.call('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [{ id: 'nord', nom: 'Nord' }, { id: 'sud', nom: 'Sud' }]
+    });
+    const ana = (await t.call('POST', '/api/contacts', {
+      name: 'Ana', email: 'ana@ex.com', antenneId: 'sud'
+    })).body;
+    assert.equal(ana.antenneId, 'sud');
+
+    const envoi = await t.call('POST', '/api/notify', {
+      contactId: ana.id, name: 'Ana', email: 'ana@ex.com'
+    });
+    assert.equal(envoi.body.record.antenneId, 'sud', 'le courrier suit la boîte, pas le poste');
+  });
+});
+
+test('un accès limité à une antenne ne reçoit rien des autres', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', {
+      name: 'Akram', email: 'akram@bureau.org', password: 'mot-de-passe-long'
+    });
+    await t.call('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [{ id: 'nord', nom: 'Nord' }, { id: 'sud', nom: 'Sud' }]
+    });
+    const nord = (await t.call('POST', '/api/contacts', { name: 'Nordiste', email: 'n@ex.com', antenneId: 'nord' })).body;
+    const sud = (await t.call('POST', '/api/contacts', { name: 'Sudiste', email: 's@ex.com', antenneId: 'sud' })).body;
+    await t.call('POST', '/api/notify', { contactId: nord.id, name: 'Nordiste', email: 'n@ex.com' });
+    await t.call('POST', '/api/notify', { contactId: sud.id, name: 'Sudiste', email: 's@ex.com' });
+
+    // Le responsable voit tout.
+    const tout = await t.call('GET', '/api/state');
+    assert.equal(tout.body.contacts.length, 2);
+    assert.equal(tout.body.history.length, 2);
+
+    // Un agent rattaché au sud ne voit que le sud.
+    const acces = (await t.call('POST', '/api/auth/agents', { name: 'Sud', antenneId: 'sud' })).body;
+    assert.equal(acces.agent.identifiant.length, 7);
+
+    const jarAgent = { cookie: '' };
+    const commeAgent = async function (method, url, body) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (jarAgent.cookie) headers.Cookie = jarAgent.cookie;
+      const res = await fetch(t.base + url, {
+        method: method, headers: headers,
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const sc = res.headers.get('set-cookie');
+      if (sc) jarAgent.cookie = sc.split(';')[0];
+      return { status: res.status, body: await res.json().catch(function () { return null; }) };
+    };
+    await commeAgent('POST', '/api/auth/login-code', {
+      identifiant: acces.agent.identifiant, code: acces.code
+    });
+
+    const vu = await commeAgent('GET', '/api/state');
+    assert.equal(vu.body.contacts.length, 1);
+    assert.equal(vu.body.contacts[0].name, 'Sudiste');
+    assert.equal(vu.body.history.length, 1);
+    assert.ok(!JSON.stringify(vu.body).includes('Nordiste'), 'rien du nord ne transite par ce poste');
+  });
+});

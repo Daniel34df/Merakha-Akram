@@ -249,6 +249,8 @@ function publicUser(user) {
         ? roles.toutesLesPermissions(true)
         : roles.nettoyerPermissions(user.permissions),
     identifiant: user.identifiant || '',
+    // L'antenne d'un accès limité : l'interface s'en sert pour figer le sélecteur.
+    antenneId: user.antenneId || '',
     createdAt: user.createdAt,
     mailbox: mailbox
       ? {
