@@ -12,6 +12,7 @@
   'use strict';
 
   const util = root.BC.util;
+  const attente = root.BC.attente;
 
   const CONTACTS_KEY = 'courrier-contacts';
   const HISTORY_KEY = 'courrier-history';
@@ -41,6 +42,13 @@
     settings: Object.assign({}, DEFAULT_SETTINGS),
     lastError: null,
     registryPreference: 'partage',
+    /* Hors ligne : `enLigne` dit si le serveur répond, `file` retient les
+       écritures qui n'ont pas pu partir, `dernierRejeu` le bilan du dernier
+       retour de réseau. */
+    enLigne: true,
+    file: [],
+    rejeuEnCours: false,
+    dernierRejeu: null,
     suivi: { enAttente: 0, plusAncienJours: 0, recuperes: 0 },
     // Comptes : n'existent qu'en mode serveur. accountsExist bascule dès la
     // création du premier compte, et c'est lui qui rend la connexion obligatoire.
@@ -74,11 +82,84 @@
 
   /* ---------- transport HTTP ---------- */
 
+  /* ---------- hors ligne ----------
+
+     Une écriture qui n'atteint pas le serveur n'est pas perdue : elle est
+     appliquée au registre affiché, mise en file, et rejouée au retour du
+     réseau. Les lectures, elles, échouent franchement — mieux vaut une erreur
+     visible qu'un écran figé sur des données périmées sans le dire. */
+
+  const FILE_KEY = 'courrier-file';
+
+  function chargerFile() {
+    state.file = localRead(FILE_KEY, []) || [];
+  }
+
+  function enregistrerFile() {
+    localWrite(FILE_KEY, state.file);
+  }
+
+  /** Vrai pour une panne de réseau, faux pour un refus du serveur. */
+  function estPanneReseau(err) {
+    return err instanceof TypeError || err.name === 'AbortError';
+  }
+
+  function passerHorsLigne(raison) {
+    if (!state.enLigne) return;
+    state.enLigne = false;
+    state.lastError = raison || 'serveur injoignable';
+    surveillerRetour();
+    emit();
+  }
+
+  function passerEnLigne() {
+    if (state.enLigne) return;
+    state.enLigne = true;
+    emit();
+  }
+
+  /* Tant qu'on est hors ligne, on tâte le serveur régulièrement. L'événement
+     « online » du navigateur ne suffit pas : il dit que la carte réseau est
+     revenue, pas que le serveur du bureau répond. */
+  let sonde = null;
+
+  function surveillerRetour() {
+    if (sonde) return;
+    sonde = setInterval(async function () {
+      const health = await detectServer();
+      if (!health) return;
+      clearInterval(sonde);
+      sonde = null;
+      passerEnLigne();
+      await viderFile();
+    }, 15000);
+  }
+
   async function api(path, options) {
-    const res = await fetch(
-      '/api' + path,
-      Object.assign({ headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' }, options)
-    );
+    const opts = options || {};
+    const mutation = !!opts.method && opts.method !== 'GET';
+
+    /* Une écriture connue de la file part directement en attente quand on sait
+       déjà le serveur injoignable : inutile de refaire échouer un appel. */
+    if (mutation && opts.horsLigne && !state.enLigne) {
+      return mettreEnFile(path, opts);
+    }
+
+    let res;
+    try {
+      res = await fetch(
+        '/api' + path,
+        Object.assign({ headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' }, opts)
+      );
+    } catch (reseau) {
+      if (!estPanneReseau(reseau)) throw reseau;
+      passerHorsLigne(reseau.message);
+      if (mutation && opts.horsLigne) return mettreEnFile(path, opts);
+      const err = new Error('Serveur injoignable — action impossible pour l’instant.');
+      err.code = 'hors-ligne';
+      throw err;
+    }
+    passerEnLigne();
     let payload = null;
     try {
       payload = await res.json();
@@ -107,6 +188,105 @@
       throw err;
     }
     return payload;
+  }
+
+  /* Met l'écriture de côté et rend tout de suite le résultat optimiste que
+     l'appelant attend. L'appelant fournit ce résultat : lui seul sait à quoi
+     ressemble une réponse réussie pour son opération. */
+  function mettreEnFile(path, opts) {
+    const descripteur = opts.horsLigne;
+    const intention = attente.creerIntention({
+      op: descripteur.op,
+      method: opts.method,
+      path: path,
+      body: opts.body ? JSON.parse(opts.body) : null,
+      idLocal: descripteur.idLocal || null,
+      description: descripteur.description
+    });
+    state.file = attente.ajouter(state.file, intention);
+    enregistrerFile();
+    emit();
+    return descripteur.optimiste === undefined ? { enAttente: true } : descripteur.optimiste;
+  }
+
+  /* Rejeu de la file, dans l'ordre. On s'arrête à la première panne réseau :
+     l'ordre compte (créer le destinataire avant de lui signaler un courrier),
+     et insister sur un réseau absent ne ferait que perdre du temps. */
+  async function viderFile() {
+    if (state.file.length === 0 || state.mode !== 'serveur') return { envoyees: 0, echecs: [] };
+    if (state.rejeuEnCours) return { envoyees: 0, echecs: [] };
+    state.rejeuEnCours = true;
+
+    let envoyees = 0;
+    const echecs = [];
+    try {
+      while (state.file.length > 0) {
+        const intention = state.file[0];
+        let res;
+        try {
+          res = await fetch('/api' + intention.path, {
+            method: intention.method,
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: intention.body === null ? undefined : JSON.stringify(intention.body)
+          });
+        } catch (reseau) {
+          passerHorsLigne(reseau.message);
+          break; // le réseau est reparti : on reprendra plus tard, dans l'ordre
+        }
+
+        const payload = await res.json().catch(function () {
+          return null;
+        });
+
+        if (res.ok) {
+          envoyees++;
+          reconcilier(intention, payload);
+        } else if (attente.estDefinitif(res.status)) {
+          /* Refus définitif : le courrier a pu être remis par un collègue, le
+             destinataire supprimé. On retire l'action et on le dit — la faire
+             disparaître en silence serait pire. */
+          echecs.push({
+            description: intention.description,
+            raison: (payload && payload.error) || 'refusé par le serveur (' + res.status + ')'
+          });
+        } else {
+          break; // 5xx : le serveur va mal, on réessaiera
+        }
+        state.file = attente.retirer(state.file, intention.id);
+        enregistrerFile();
+      }
+    } finally {
+      state.rejeuEnCours = false;
+    }
+
+    state.dernierRejeu = { envoyees: envoyees, echecs: echecs, at: new Date().toISOString() };
+    if (envoyees > 0) await loadServerState();
+    emit();
+    return state.dernierRejeu;
+  }
+
+  /* Le serveur vient d'attribuer les vrais identifiants : on remplace l'objet
+     provisoire dans le registre affiché et on répercute la substitution sur
+     tout ce qui attend encore. */
+  function reconcilier(intention, payload) {
+    const reel = (payload && (payload.record || payload.contact)) || (payload && payload.id ? payload : null);
+    if (!reel || !reel.id) return;
+    const provisoire = intention.idLocal;
+    if (!provisoire || provisoire === reel.id) return;
+
+    const correspondances = {};
+    correspondances[provisoire] = reel.id;
+    state.file = attente.remapper(state.file, correspondances);
+
+    const remplacer = function (liste) {
+      const i = liste.findIndex(function (x) {
+        return x.id === provisoire;
+      });
+      if (i !== -1) liste[i] = reel;
+    };
+    remplacer(state.contacts);
+    remplacer(state.history);
   }
 
   /* ---------- comptes ---------- */
@@ -270,9 +450,22 @@
   /** Marque un courrier retiré (ou revient en arrière). */
   async function setPickedUp(id, retire, signature) {
     if (state.mode === 'serveur') {
+      const courant = state.history.find(function (h) {
+        return h.id === id;
+      });
+      const optimiste = Object.assign({}, courant, {
+        pickedUpAt: retire ? new Date().toISOString() : null,
+        signature: retire && signature ? signature : null
+      });
       const result = await api('/history/' + encodeURIComponent(id) + '/pickup', {
         method: retire ? 'POST' : 'DELETE',
-        body: retire && signature ? JSON.stringify({ signature: signature }) : undefined
+        body: retire && signature ? JSON.stringify({ signature: signature }) : undefined,
+        horsLigne: {
+          op: retire ? 'remise' : 'remise-annulee',
+          description:
+            (retire ? 'Courrier remis à ' : 'Remise annulée pour ') + ((courant && courant.name) || 'un destinataire'),
+          optimiste: { record: optimiste }
+        }
       });
       return remplacerEntree(result.record);
     }
@@ -328,9 +521,23 @@
       emit();
       return entree;
     }
+    const vise = state.history.find(function (h) {
+      return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
+    });
     const result = await api('/history/pickup-by-code', {
       method: 'POST',
-      body: JSON.stringify({ code: code, signature: signature || '' })
+      body: JSON.stringify({ code: code, signature: signature || '' }),
+      horsLigne: {
+        op: 'remise',
+        description: 'Courrier remis à ' + ((vise && vise.name) || 'code ' + code),
+        optimiste: {
+          record: Object.assign({}, vise, {
+            pickedUpAt: new Date().toISOString(),
+            pickedUpByCode: true,
+            signature: signature || null
+          })
+        }
+      }
     });
     return remplacerEntree(result.record);
   }
@@ -410,8 +617,25 @@
     return state.registryPreference;
   }
 
+  /* Après le choix du mode : reprendre la file laissée par la session
+     précédente. Appelé sur tous les chemins de sortie d'init() — une écriture
+     en attente ne doit pas dépendre de la façon dont l'application a démarré. */
+  function reprendreFile() {
+    if (root.addEventListener) {
+      // Le retour du réseau est une bonne raison de réessayer sans attendre la sonde.
+      root.addEventListener('online', function () {
+        if (state.mode === 'serveur') viderFile();
+      });
+    }
+    if (state.mode === 'serveur' && state.file.length > 0) viderFile();
+  }
+
   async function init() {
     state.registryPreference = registryPreference();
+    /* La file survit à la fermeture du navigateur : on la relit avant tout, y
+       compris avant de savoir si le serveur répond. Une remise enregistrée hier
+       soir pendant une coupure part ce matin. */
+    chargerFile();
     // « Ce poste seulement » : on ne cherche même pas le serveur.
     const health = state.registryPreference === 'local' ? null : await detectServer();
 
@@ -424,6 +648,7 @@
       try {
         applyAuth(await api('/auth/me'));
         if (!state.auth.required) await loadServerState();
+        reprendreFile();
         emit();
         return state;
       } catch (e) {
@@ -456,6 +681,7 @@
       }
     }
 
+    reprendreFile();
     emit();
     return state;
   }
@@ -463,8 +689,10 @@
   /* ---------- destinataires ---------- */
 
   async function addContact(input) {
+    /* Hors ligne, l'identifiant est provisoire : le serveur donnera le vrai au
+       rejeu, et `reconcilier` le substituera partout. */
     const contact = {
-      id: util.uuid(),
+      id: state.enLigne ? util.uuid() : attente.nouvelIdLocal(util.uuid),
       name: input.name.trim(),
       email: input.email.trim(),
       box: (input.box || '').trim(),
@@ -473,7 +701,20 @@
       substituteId: input.substituteId || null
     };
     if (state.mode === 'serveur') {
-      const saved = await api('/contacts', { method: 'POST', body: JSON.stringify(contact) });
+      const saved = await api('/contacts', {
+        method: 'POST',
+        body: JSON.stringify(contact),
+        horsLigne: {
+          op: 'contact-ajout',
+          description: 'Destinataire ajouté : ' + contact.name,
+          /* L'identifiant compte même sans préfixe « local- » : le serveur
+             attribue le sien à la création, et le courrier signalé ensuite
+             renvoie à celui-ci. Sans cette correspondance, le courrier
+             rejoué pointerait vers un destinataire inexistant. */
+          idLocal: contact.id,
+          optimiste: contact
+        }
+      });
       state.contacts.push(saved);
     } else {
       state.contacts.push(contact);
@@ -507,7 +748,12 @@
     if (state.mode === 'serveur') {
       state.contacts[idx] = await api('/contacts/' + encodeURIComponent(id), {
         method: 'PUT',
-        body: JSON.stringify(updated)
+        body: JSON.stringify(updated),
+        horsLigne: {
+          op: 'contact-maj',
+          description: 'Destinataire modifié : ' + updated.name,
+          optimiste: updated
+        }
       });
     } else {
       state.contacts[idx] = updated;
@@ -590,6 +836,30 @@
     if (!canSendAutomatically()) {
       throw new Error('Envoi automatique indisponible');
     }
+    /* Hors ligne, le courriel ne peut pas partir : il partira au rejeu. Le
+       courrier, lui, est inscrit tout de suite — c'est ce qui compte au
+       guichet. Le code de retrait n'existera qu'au retour du réseau : le
+       registre le dit plutôt que d'en inventer un. */
+    const optimiste = {
+      sent: false,
+      enAttente: true,
+      record: {
+        id: attente.nouvelIdLocal(util.uuid),
+        contactId: contact.id,
+        name: contact.name,
+        email: contact.email,
+        subject: message.subject,
+        type: message.type || 'lettre',
+        cc: message.cc || '',
+        bcc: message.bcc || '',
+        date: new Date().toISOString(),
+        method: 'auto',
+        status: 'à envoyer',
+        pickupCode: null,
+        pickedUpAt: null,
+        reminderCount: 0
+      }
+    };
     const result = await api('/notify', {
       method: 'POST',
       body: JSON.stringify({
@@ -602,7 +872,13 @@
         from: message.from || '',
         cc: message.cc || '',
         bcc: message.bcc || ''
-      })
+      }),
+      horsLigne: {
+        op: 'notification',
+        description: 'Courrier signalé à ' + contact.name,
+        idLocal: optimiste.record.id,
+        optimiste: optimiste
+      }
     });
     // Le serveur consigne lui-même l'envoi : on reprend son entrée telle quelle
     // plutôt que d'en créer une seconde côté client.
@@ -651,6 +927,10 @@
     addHistory: addHistory,
     clearHistory: clearHistory,
     saveSettings: saveSettings,
-    sendViaServer: sendViaServer
+    sendViaServer: sendViaServer,
+    viderFile: viderFile,
+    resumeFile: function () {
+      return attente.resume(state.file);
+    }
   };
 })(window);

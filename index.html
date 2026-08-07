@@ -151,6 +151,9 @@
 </div>
 
 <div class="wrap">
+  <!-- Bandeau de coupure réseau : ce qui attend, et depuis quand. -->
+  <div class="bandeau-file" id="bandeauFile" role="status" hidden></div>
+
   <header>
     <div class="brand">
       <img src="assets/icons/logo.svg" alt="" class="brand-logo" id="brandLogo">
@@ -164,6 +167,7 @@
       <div class="header-badges">
         <button class="btn ghost small install-btn" id="installBtn" hidden>Installer l'application</button>
         <div class="mode-badge" id="modeBadge" title="Mode de stockage">…</div>
+        <div class="mode-badge hors-ligne" id="ligneBadge" hidden>Hors ligne</div>
       </div>
       <div class="header-badges" id="accountBar" hidden>
         <span class="who-badge" id="whoBadge"></span>
@@ -595,6 +599,7 @@
 </dialog>
 
 <script src="assets/js/util.js"></script>
+<script src="assets/js/attente.js"></script>
 <script src="assets/js/xlsx.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/notify.js"></script>

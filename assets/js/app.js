@@ -183,6 +183,99 @@
       notes.push('Attention : aucun stockage n’est disponible ici, le registre sera vidé à la fermeture de la page.');
     }
     $('footerNote').textContent = notes.join(' ');
+    renderFile();
+  }
+
+  /* ═════════════ file d'attente hors ligne ═════════════ */
+
+  /* Le bandeau ne dit pas seulement « hors ligne » : il dit ce qui attend. Au
+     guichet, ce qui compte est de savoir si la remise qu'on vient d'enregistrer
+     est partie ou non. */
+  function renderFile() {
+    const bandeau = $('bandeauFile');
+    const badge = $('ligneBadge');
+    const resume = store.resumeFile();
+    const bilan = S.dernierRejeu;
+
+    badge.hidden = S.enLigne || S.mode !== 'serveur';
+
+    if (!S.enLigne) {
+      const depuis = resume.depuis ? ' depuis ' + util.formatDateTime(resume.depuis) : '';
+      bandeau.hidden = false;
+      bandeau.className = 'bandeau-file coupure';
+      bandeau.innerHTML =
+        '<strong>Serveur injoignable.</strong> ' +
+        (resume.total === 0
+          ? 'Vos prochaines actions seront enregistrées ici et envoyées au retour du réseau.'
+          : resume.total +
+            ' action(s) en attente d’envoi' + depuis + ' — rien n’est perdu. ' +
+            '<button class="link-btn" id="fileVoirBtn">Voir</button> ' +
+            '<button class="link-btn" id="fileRejouerBtn">Réessayer maintenant</button>');
+      brancherFile();
+      return;
+    }
+
+    if (resume.total > 0) {
+      // En ligne mais la file n'est pas vide : un rejeu est en cours ou a calé.
+      bandeau.hidden = false;
+      bandeau.className = 'bandeau-file attente';
+      bandeau.innerHTML =
+        resume.total + ' action(s) restent à envoyer. ' +
+        '<button class="link-btn" id="fileVoirBtn">Voir</button> ' +
+        '<button class="link-btn" id="fileRejouerBtn">Envoyer maintenant</button>';
+      brancherFile();
+      return;
+    }
+
+    /* Rien n'attend. On annonce le bilan du dernier rejeu tant qu'il contient
+       des refus : une action écartée par le serveur doit être vue. */
+    if (bilan && bilan.echecs.length > 0) {
+      bandeau.hidden = false;
+      bandeau.className = 'bandeau-file echec';
+      bandeau.innerHTML =
+        '<strong>' + bilan.echecs.length + ' action(s) refusée(s) au retour du réseau :</strong>' +
+        '<ul>' +
+        bilan.echecs
+          .map(function (e) {
+            return '<li>' + esc(e.description) + ' — ' + esc(e.raison) + '</li>';
+          })
+          .join('') +
+        '</ul>' +
+        '<button class="link-btn" id="fileFermerBtn">J’ai vu</button>';
+      const fermer = $('fileFermerBtn');
+      if (fermer) {
+        fermer.addEventListener('click', function () {
+          S.dernierRejeu = null;
+          renderFile();
+        });
+      }
+      return;
+    }
+    bandeau.hidden = true;
+  }
+
+  function brancherFile() {
+    const voir = $('fileVoirBtn');
+    if (voir) {
+      voir.addEventListener('click', function () {
+        const resume = store.resumeFile();
+        confirmDialog(
+          'Actions en attente',
+          resume.libelles.join('\n'),
+          'Fermer'
+        );
+      });
+    }
+    const rejouer = $('fileRejouerBtn');
+    if (rejouer) {
+      rejouer.addEventListener('click', async function () {
+        rejouer.disabled = true;
+        const bilan = await store.viderFile();
+        if (bilan.envoyees > 0) toast(bilan.envoyees + ' action(s) envoyée(s).', 'ok');
+        else if (!S.enLigne) toast('Serveur toujours injoignable.', 'error');
+        renderFile();
+      });
+    }
   }
 
   function renderStatus() {
