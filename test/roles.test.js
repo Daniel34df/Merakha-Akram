@@ -145,7 +145,7 @@ async function withServer(run) {
 
   const session = function () {
     const jar = { cookie: '' };
-    return async function (method, url, body) {
+    const appeler = async function (method, url, body) {
       const headers = { 'Content-Type': 'application/json' };
       if (jar.cookie) headers.Cookie = jar.cookie;
       const res = await fetch(base + url, {
@@ -159,11 +159,27 @@ async function withServer(run) {
       try { json = JSON.parse(texte); } catch (e) { json = texte; }
       return { status: res.status, body: json };
     };
+    // Le flux d'événements ne passe pas par fetch : il lui faut le cookie brut.
+    appeler.jar = jar;
+    return appeler;
   };
 
+  const patron = session();
+  const agent = session();
+
   try {
-    await run({ patron: session(), agent: session(), db: db, base: base });
+    await run({
+      patron: patron,
+      agent: agent,
+      cookiePatron: function () { return patron.jar.cookie; },
+      cookieAgent: function () { return agent.jar.cookie; },
+      db: db,
+      base: base
+    });
   } finally {
+    /* Un flux d'événements resté ouvert empêcherait close() d'aboutir : c'est
+       une connexion qui, par construction, ne se termine jamais toute seule. */
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
     await new Promise(function (r) { server.close(r); });
     await fs.rm(dir, { recursive: true, force: true });
   }
@@ -313,6 +329,143 @@ test('l’agent ouvre une domiciliation sans avoir la main sur le registre', fun
   });
 });
 
+/* ---------- les quatre postes du bureau ---------- */
+
+/** Ouvre le flux et rend une promesse sur les prochains événements reçus. */
+function ouvrirFlux(base, cookie) {
+  const http = require('node:http');
+  return new Promise(function (resolve, reject) {
+    const req = http.get(
+      base + '/api/flux',
+      { headers: cookie ? { Cookie: cookie } : {} },
+      function (res) {
+        if (res.statusCode !== 200) {
+          res.resume();
+          return reject(Object.assign(new Error('flux refusé'), { status: res.statusCode }));
+        }
+        let tampon = '';
+        /* Les événements arrivent quand ils arrivent — souvent avant qu'on ne
+           les demande. On les met de côté ; « prochain » sert la file s'il y a
+           déjà quelque chose, et n'attend que si elle est vide. */
+        const recus = [];
+        const attentes = [];
+        res.setEncoding('utf8');
+        res.on('data', function (bout) {
+          tampon += bout;
+          let coupe;
+          while ((coupe = tampon.indexOf('\n\n')) !== -1) {
+            const bloc = tampon.slice(0, coupe);
+            tampon = tampon.slice(coupe + 2);
+            // Les commentaires de maintien (« : ping ») ne sont pas des événements.
+            if (!/^event: /m.test(bloc)) continue;
+            const evenement = {
+              nom: (bloc.match(/^event: (.+)$/m) || [])[1],
+              data: JSON.parse((bloc.match(/^data: (.+)$/m) || [])[1] || 'null')
+            };
+            if (attentes.length) attentes.shift()(evenement);
+            else recus.push(evenement);
+          }
+        });
+        resolve({
+          prochain: function () {
+            if (recus.length) return Promise.resolve(recus.shift());
+            return new Promise(function (r, rej) {
+              const minuteur = setTimeout(function () {
+                rej(new Error('aucun événement reçu en 4 s'));
+              }, 4000);
+              attentes.push(function (evenement) {
+                clearTimeout(minuteur);
+                r(evenement);
+              });
+            });
+          },
+          fermer: function () {
+            req.destroy();
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+  });
+}
+
+test('le flux prévient les autres postes à chaque écriture', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const cree = (await t.patron('POST', '/api/auth/agents', { name: 'Accueil' })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    const flux = await ouvrirFlux(t.base, t.cookieAgent());
+    const accueil = await flux.prochain();
+    assert.equal(accueil.nom, 'bonjour', 'le flux s’annonce avec la révision courante');
+
+    // Une écriture faite par le poste du responsable…
+    const attendu = flux.prochain();
+    await t.patron('POST', '/api/notify', { name: 'Ana', email: 'ana@ex.com' });
+    const maj = await attendu;
+    assert.equal(maj.nom, 'maj', '…arrive sur le poste de l’agent');
+    assert.ok(maj.data.revision > accueil.data.revision, 'la révision avance');
+
+    /* Rien du contenu ne voyage : le poste rappellera /api/state, qui applique
+       ses droits. Un agent sans le droit « codes » n'apprend donc rien ici. */
+    assert.deepEqual(Object.keys(maj.data), ['revision']);
+    flux.fermer();
+  });
+});
+
+test('le flux est refusé sans session', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await assert.rejects(
+      function () {
+        return ouvrirFlux(t.base, '');
+      },
+      function (err) {
+        assert.equal(err.status, 401);
+        return true;
+      }
+    );
+  });
+});
+
+test('les postes reliés se comptent, et se décomptent en partant', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const cree = (await t.patron('POST', '/api/auth/agents', { name: 'Accueil' })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    assert.equal((await t.patron('GET', '/api/reseau')).body.postes.length, 0);
+
+    const a = await ouvrirFlux(t.base, t.cookiePatron());
+    const b = await ouvrirFlux(t.base, t.cookieAgent());
+    await a.prochain();
+    await b.prochain();
+
+    const vue = (await t.patron('GET', '/api/reseau')).body;
+    assert.equal(vue.postes.length, 2);
+    assert.ok(vue.postes.some(function (p) { return p.role === 'responsable' && p.moi; }));
+    assert.ok(vue.postes.some(function (p) { return p.role === 'agent' && p.identifiant === cree.agent.identifiant; }));
+    assert.ok(vue.reseau.port >= 0 && vue.reseau.protocole);
+
+    b.fermer();
+    // Laisser au serveur le temps de voir la connexion tomber.
+    await new Promise(function (r) { setTimeout(r, 250); });
+    assert.equal((await t.patron('GET', '/api/reseau')).body.postes.length, 1, 'le poste parti ne compte plus');
+    a.fermer();
+  });
+});
+
+test('un agent sans le droit réglages ne lit pas l’adresse du serveur', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const cree = (await t.patron('POST', '/api/auth/agents', { name: 'Accueil' })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+    const refus = await t.agent('GET', '/api/reseau');
+    assert.equal(refus.status, 403);
+    assert.equal(refus.body.code, 'droit');
+  });
+});
+
 test('le registre des domiciliations en cours liste les dossiers en règle', function () {
   return withServer(async function (t) {
     await t.patron('POST', '/api/auth/signup', PATRON);
@@ -376,6 +529,44 @@ test('un agent d’antenne ne voit que les domiciliations de son antenne', funct
     assert.equal(vue.actives.length, 1, 'l’agent ne voit que son antenne');
     assert.equal(vue.actives[0].name, 'Simon Sud');
     assert.equal(vue.rapport.actives, 1, 'le rapport annuel se limite lui aussi à son antenne');
+  });
+});
+
+test('un code d’une autre antenne ne livre rien, ni fiche ni remise', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [{ id: 'antenne-nord', nom: 'Antenne Nord' }, { id: 'antenne-sud', nom: 'Antenne Sud' }]
+    });
+    await t.patron('POST', '/api/contacts', {
+      name: 'Nadia Nord', email: 'nadia@ex.com', box: 'N-01', antenneId: 'antenne-nord'
+    });
+    const envoi = await t.patron('POST', '/api/notify', {
+      name: 'Nadia Nord', email: 'nadia@ex.com', antenneId: 'antenne-nord'
+    });
+    const code = envoi.body.record.pickupCode;
+
+    const cree = (await t.patron('POST', '/api/auth/agents', {
+      name: 'Accueil Sud',
+      antenneId: 'antenne-sud',
+      permissions: { guichet: true, remise: true, codes: true }
+    })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    /* Le code est à quatre chiffres : un agent peut en essayer un au hasard.
+       S'il tombe juste, il ne doit rien apprendre d'un autre point d'accueil —
+       ni le nom de la personne, ni sa boîte — et ne rien pouvoir remettre. */
+    const fiche = await t.agent('GET', '/api/history/by-code/' + code);
+    assert.equal(fiche.status, 404, 'la fiche d’une autre antenne reste introuvable');
+    assert.ok(!JSON.stringify(fiche.body).includes('Nadia'), 'aucun nom ne fuit');
+    assert.ok(!JSON.stringify(fiche.body).includes('N-01'), 'aucune boîte ne fuit');
+
+    const remise = await t.agent('POST', '/api/history/pickup-by-code', { code: code });
+    assert.equal(remise.status, 404, 'et il ne peut pas la remettre');
+
+    // Le responsable, lui, y accède : c'est bien un filtre d'antenne, pas une panne.
+    assert.equal((await t.patron('GET', '/api/history/by-code/' + code)).status, 200);
   });
 });
 

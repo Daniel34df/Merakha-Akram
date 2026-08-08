@@ -15,6 +15,7 @@ const { createUserMailer } = require('./mailer.js');
 const reminders = require('./reminders.js');
 const domiciliation = require('../assets/js/domiciliation.js');
 const roles = require('../assets/js/roles.js');
+const reseau = require('./reseau.js');
 
 const VERSION = '1.0.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -1412,6 +1413,93 @@ async function handleApi(req, res, ctx, pathname) {
     });
   }
 
+  /* --- le flux : les quatre postes du bureau en direct ---
+
+     Quatre personnes à l'accueil autour d'un même registre : sans ce flux,
+     chacune ne voit que ses propres écritures, et deux agents peuvent remettre
+     le même courrier sans jamais le savoir.
+
+     Le message ne transporte **aucune donnée** — seulement un numéro d'ordre.
+     Chaque poste rappelle /api/state, qui lui applique déjà son filtrage
+     d'antenne et le masquage des codes de retrait. Un agent privé du droit
+     « codes » n'apprend donc rien du flux qu'il ne pourrait lire autrement. */
+  if (pathname === '/api/flux' && method === 'GET') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      // Un proxy qui met en tampon un flux d'événements le fige.
+      'X-Accel-Buffering': 'no'
+    });
+    // Reconnexion après cinq secondes si la connexion tombe.
+    res.write('retry: 5000\n\n');
+    res.write('event: bonjour\ndata: ' + JSON.stringify({ revision: db.revision }) + '\n\n');
+
+    const desabonner = db.surEcriture(function (revision) {
+      res.write('event: maj\ndata: ' + JSON.stringify({ revision: revision }) + '\n\n');
+    });
+
+    /* Un commentaire régulier : sans trafic, un pare-feu ou un routeur ferme
+       une connexion inactive au bout de quelques minutes, et le poste se croit
+       relié alors qu'il ne reçoit plus rien. */
+    const battement = setInterval(function () {
+      res.write(': ping\n\n');
+    }, 25000);
+    battement.unref();
+
+    const poste = {
+      id: crypto.randomUUID(),
+      userId: (currentUser && currentUser.id) || null,
+      nom: (currentUser && currentUser.name) || 'Poste',
+      role: (currentUser && currentUser.role) || 'responsable',
+      identifiant: (currentUser && currentUser.identifiant) || '',
+      antenneId: (currentUser && currentUser.antenneId) || '',
+      depuis: new Date().toISOString()
+    };
+    ctx.postes.set(poste.id, poste);
+
+    const fermer = function () {
+      clearInterval(battement);
+      desabonner();
+      ctx.postes.delete(poste.id);
+    };
+    req.on('close', fermer);
+    req.on('error', fermer);
+    return;
+  }
+
+  /* --- l'adresse de ce poste sur le réseau du bureau --- */
+
+  if (pathname === '/api/reseau' && method === 'GET') {
+    exigerDroit(currentUser, 'reglages');
+    const memoire = db.data.reseau || null;
+    const vue = reseau.resume({
+      port: ctx.port || 0,
+      protocole: ctx.protocole || 'http',
+      nomPoste: memoire && memoire.nomPoste
+    });
+    /* Un changement d'adresse ne se signale pas éternellement : passé une
+       semaine, soit les postes ont été remis à jour, soit le message est
+       devenu du bruit. */
+    const change =
+      memoire && memoire.changeAu && Date.now() - new Date(memoire.changeAu).getTime() < 7 * 24 * 3600 * 1000;
+    return sendJson(res, 200, {
+      reseau: vue,
+      adresseChangee: change ? { le: memoire.changeAu, precedentes: memoire.precedentes || [] } : null,
+      // Qui est relié en ce moment, un par onglet ouvert.
+      postes: Array.from(ctx.postes.values()).map(function (p) {
+        return {
+          nom: p.nom,
+          role: p.role,
+          identifiant: p.identifiant,
+          antenneId: p.antenneId,
+          depuis: p.depuis,
+          moi: !!currentUser && p.userId === currentUser.id
+        };
+      })
+    });
+  }
+
   if (pathname === '/api/state' && method === 'GET') {
     // Ni comptes ni sessions : le registre partagé n'a pas à transporter les
     // secrets des autres employé·es.
@@ -1593,7 +1681,9 @@ async function handleApi(req, res, ctx, pathname) {
     /* Consultation seule : l'agent doit voir ce qu'il s'apprête à remettre —
        à qui, quelle boîte, depuis combien de temps — avant de valider. */
     const code = codeMatch[1];
-    const candidats = (db.data.history || []).filter(function (h) {
+    /* Filtré par antenne comme le reste : sans cela, un code saisi au hasard
+       livrerait le nom et la boîte de quelqu'un d'un autre point d'accueil. */
+    const candidats = pourSonAntenne(db.data.history || []).filter(function (h) {
       return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
     });
     if (candidats.length === 0) {
@@ -1624,7 +1714,8 @@ async function handleApi(req, res, ctx, pathname) {
     const code = String(body.code || '').replace(/\D/g, '');
     if (code.length !== 4) throw Object.assign(new Error('Le code compte quatre chiffres'), { status: 400 });
 
-    const candidats = (db.data.history || []).filter(function (h) {
+    // Même filtre que la consultation : on ne remet pas le courrier d'une autre antenne.
+    const candidats = pourSonAntenne(db.data.history || []).filter(function (h) {
       return h.pickupCode === code && !h.pickedUpAt && !h.closedAt;
     });
     if (candidats.length === 0) {
@@ -2113,10 +2204,17 @@ function createServer(options) {
        suivre une pratique locale sans toucher au code. */
     masterCodeHash: options.masterCodeHash,
     domiciliationMois: options.domiciliationMois,
-    domiciliationAbsenceMois: options.domiciliationAbsenceMois
+    domiciliationAbsenceMois: options.domiciliationAbsenceMois,
+    /* Les postes reliés en ce moment, un par flux ouvert. En mémoire seulement :
+       une connexion ne survit pas au redémarrage, et un registre de connexions
+       écrit sur disque ne dirait que des choses fausses. */
+    postes: options.postes || new Map(),
+    // Pour dire aux autres postes quoi taper : voir /api/reseau.
+    port: options.port || 0,
+    protocole: options.protocole || 'http'
   });
 
-  return http.createServer(async function (req, res) {
+  const srv = http.createServer(async function (req, res) {
     const pathname = new URL(req.url, 'http://localhost').pathname;
 
     if (!pathname.startsWith('/api/')) {
@@ -2147,6 +2245,12 @@ function createServer(options) {
       }
     }
   });
+
+  /* Le port réel et le protocole ne sont connus qu'une fois l'écoute ouverte —
+     et en https, c'est un autre serveur qui écoute. Le point d'entrée les
+     renseigne ici pour que /api/reseau dise la bonne adresse. */
+  srv.ctx = ctx;
+  return srv;
 }
 
 module.exports = { createServer: createServer, VERSION: VERSION, envoyerRelance: envoyerRelance };

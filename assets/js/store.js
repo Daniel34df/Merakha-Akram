@@ -295,6 +295,73 @@
 
   /* ---------- comptes ---------- */
 
+  /* ---------- le flux : les autres postes du bureau ----------
+
+     Quatre postes autour d'un même registre. Sans ce flux, chacun ne voit que
+     ses propres écritures : le guichet n'apprend l'arrivée d'un pli qu'en
+     rechargeant la page, et deux agents peuvent remettre le même courrier.
+
+     EventSource est natif au navigateur et se reconnecte tout seul — c'est ce
+     qui permet de ne dépendre de rien. Le message reçu ne contient qu'un numéro
+     d'ordre : on redemande l'état, qui arrive filtré selon les droits du poste. */
+  let flux = null;
+  let fluxAttente = null;
+  /* Pour quel compte le flux a été ouvert. Sans cette mémoire, un flux ouvert
+     avant la connexion — au tout premier démarrage, quand aucun compte
+     n'existe encore — resterait en place ensuite, et le serveur continuerait à
+     compter ce poste comme anonyme dans « Postes du bureau ». */
+  let fluxPour;
+
+  function couperFlux() {
+    if (flux) {
+      flux.close();
+      flux = null;
+    }
+    fluxPour = undefined;
+    if (fluxAttente) {
+      clearTimeout(fluxAttente);
+      fluxAttente = null;
+    }
+  }
+
+  function brancherFlux() {
+    const qui = (state.auth.user && state.auth.user.id) || null;
+    // Le compte a changé depuis l'ouverture : on rouvre sous la bonne identité.
+    if (flux && fluxPour !== qui) couperFlux();
+    if (flux) return;
+    if (state.mode !== 'serveur' || state.auth.required) return;
+    if (typeof root.EventSource !== 'function') return; // navigateur ancien : on s'en passe
+    if (root.location && root.location.protocol === 'file:') return;
+
+    const source = new root.EventSource('/api/flux', { withCredentials: true });
+    flux = source;
+    fluxPour = qui;
+
+    source.addEventListener('maj', function () {
+      /* Groupé : une remise de courrier écrit deux fois de suite, et deux
+         rechargements complets pour un même geste seraient du gaspillage sur
+         quatre postes. */
+      if (fluxAttente) return;
+      fluxAttente = setTimeout(async function () {
+        fluxAttente = null;
+        if (state.mode !== 'serveur' || state.auth.required) return;
+        try {
+          await loadServerState();
+          emit();
+        } catch (e) {
+          /* Session fermée ou serveur reparti : la sonde et les appels
+             ordinaires s'en occupent, ce n'est pas au flux de trancher. */
+        }
+      }, 250);
+    });
+
+    source.addEventListener('error', function () {
+      /* EventSource se reconnecte seul. On ne coupe que si la session a été
+         fermée entre-temps — sinon on laisserait le poste isolé sans le dire. */
+      if (state.auth.required) couperFlux();
+    });
+  }
+
   function applyAuth(payload) {
     state.auth.user = (payload && payload.user) || null;
     if (payload && payload.accountsExist !== undefined) state.auth.accountsExist = payload.accountsExist;
@@ -302,6 +369,11 @@
     if (payload && payload.googleOAuth !== undefined) state.auth.googleOAuth = payload.googleOAuth;
     if (payload && payload.verifyEmail !== undefined) state.auth.verifyEmail = payload.verifyEmail;
     state.auth.required = state.auth.accountsExist && !state.auth.user;
+    /* Se connecter branche le poste sur le flux, se déconnecter l'en retire.
+       Laisser un flux ouvert après une déconnexion continuerait à rapatrier
+       l'état d'un compte fermé. */
+    if (state.auth.required) couperFlux();
+    else brancherFlux();
     emit();
     return state.auth;
   }
@@ -637,6 +709,11 @@
     return api('/domiciliation' + (annee ? '?annee=' + encodeURIComponent(annee) : ''));
   }
 
+  /** L'adresse de ce serveur sur le réseau, et les postes reliés en ce moment. */
+  async function loadReseau() {
+    return api('/reseau');
+  }
+
   /** La personne s'est présentée, avec ou sans courrier pour elle. */
   async function enregistrerPassage(id, note) {
     const result = await api('/contacts/' + encodeURIComponent(id) + '/passage', {
@@ -747,6 +824,9 @@
       try {
         applyAuth(await api('/auth/me'));
         if (!state.auth.required) await loadServerState();
+        // Sans compte du tout, applyAuth ne branche rien : le registre est
+        // ouvert, mais les postes doivent tout de même se suivre.
+        brancherFlux();
         reprendreFile();
         emit();
         return state;
@@ -1057,6 +1137,7 @@
     restaurerSauvegarde: restaurerSauvegarde,
     loadStats: loadStats,
     loadDomiciliation: loadDomiciliation,
+    loadReseau: loadReseau,
     enregistrerPassage: enregistrerPassage,
     loadJournal: loadJournal,
     changePassword: changePassword,

@@ -537,6 +537,51 @@ de dégâts qu'un message en français.
 
 ---
 
+## Plusieurs postes dans le bureau
+
+Quatre ordinateurs à l'accueil, reliés par le même wifi ou le même câble.
+L'application **ne s'installe pas quatre fois** : quatre registres séparés
+donneraient quatre vérités différentes sur le même courrier. Elle s'installe sur
+**un** poste — celui du responsable — et les autres l'ouvrent dans leur
+navigateur.
+
+**Quelle adresse taper.** Au démarrage, le serveur l'affiche :
+
+```
+  sur ce poste  http://localhost:3000
+  autres postes http://accueil-pc:3000
+                http://192.168.1.10:3000  (câble)
+```
+
+On la retrouve à l'écran dans *Réglages → Postes du bureau*, avec un bouton
+**Copier** et une **fiche imprimable** à scotcher sur chacun des autres écrans.
+Tapez le **nom du poste** de préférence à l'adresse : le nom ne change pas
+quand la box redistribue les adresses. Si l'adresse a tout de même bougé,
+l'application le signale pendant une semaine, en rappelant l'ancienne.
+
+**Les quatre écrans en direct.** Un courrier signalé sur un poste apparaît sur
+les trois autres **sans rechargement**, et une remise faite à un guichet
+disparaît aussitôt des autres. Sans cela, deux agents pourraient remettre le
+même pli. Une saisie en cours n'est jamais balayée par ce qu'écrit un autre
+poste : le formulaire que vous remplissez reste tel quel.
+
+*Réglages → Postes du bureau* montre aussi **qui est relié en ce moment** —
+c'est la réponse à « est-ce que mes quatre postes se parlent ? ».
+
+**Ce qui circule.** Le message envoyé aux autres postes ne contient qu'un
+numéro d'ordre : chacun redemande alors son état, filtré selon ses droits et
+son antenne. Un agent sans le droit *voir les codes* n'apprend donc rien de
+plus par ce canal.
+
+**En http, sur le réseau local**, le mot de passe circule en clair et les trois
+autres postes ne peuvent ni installer l'application ni travailler hors ligne —
+les navigateurs réservent cela aux adresses reconnues sûres. Voir
+[docs/mise-en-service-https.md](docs/mise-en-service-https.md).
+
+Le poste qui tient le registre doit rester allumé : c'est lui le bureau.
+
+---
+
 ## Plusieurs antennes
 
 Un même organisme peut tenir plusieurs points d'accueil. *Réglages → Antennes*
@@ -724,6 +769,8 @@ autre interface ou un import automatisé.
 | `PUT` `DELETE` | `/api/auth/mailbox/smtp` · `/api/auth/mailbox` | relier ou retirer sa boîte |
 | `GET` | `/api/auth/google/start` · `/callback` | autorisation Gmail |
 | `GET` | `/api/state` | registre + historique + réglages |
+| `GET` | `/api/flux` | flux d'événements : prévient les autres postes d'une écriture |
+| `GET` | `/api/reseau` | adresse de ce serveur, postes reliés en ce moment |
 | `GET` `POST` | `/api/contacts` | lister / ajouter un destinataire |
 | `PUT` `DELETE` | `/api/contacts/:id` | modifier / supprimer |
 | `POST` | `/api/contacts/:id/passage` | la personne s'est présentée |

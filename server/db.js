@@ -48,6 +48,10 @@ function emptyDb() {
     sessions: [],
     pending: [],
     journal: [],
+    /* Ce que ce poste portait comme adresses au dernier démarrage. Sert à
+       prévenir quand elles ont changé : les autres postes du bureau ne
+       trouveraient plus le serveur, sans que personne ne sache pourquoi. */
+    reseau: null,
     // Empreinte du code maître : jamais le code lui-même.
     masterCodeHash: ''
   };
@@ -58,6 +62,23 @@ class Db {
     this.file = file;
     this.data = emptyDb();
     this.queue = Promise.resolve();
+    /* Numéro d'ordre des écritures. Il ne sert pas à retrouver un état passé,
+       seulement à dire aux autres postes du bureau « quelque chose a bougé,
+       redemandez ». Il ne survit pas au redémarrage : les postes se
+       reconnectent alors et rechargent tout, ce qui donne le même résultat. */
+    this.revision = 0;
+    this.abonnes = new Set();
+  }
+
+  /* Prévenu à chaque écriture terminée. Rend la fonction de désabonnement —
+     un poste qui ferme son navigateur ne doit pas laisser un abonné derrière
+     lui, sinon la liste enfle jusqu'au redémarrage. */
+  surEcriture(fn) {
+    this.abonnes.add(fn);
+    const self = this;
+    return function () {
+      self.abonnes.delete(fn);
+    };
   }
 
   async load() {
@@ -127,6 +148,19 @@ class Db {
       // secrets chiffrés, il n'a pas à être lisible par les autres comptes.
       await fs.writeFile(tmp, JSON.stringify(self.data, null, 2), { encoding: 'utf8', mode: 0o600 });
       await fs.rename(tmp, self.file);
+
+      /* Après le rename, jamais avant : prévenir les autres postes d'une
+         écriture qui n'a pas encore touché le disque les ferait recharger un
+         état qu'une panne pourrait effacer. Un abonné qui échoue n'emporte pas
+         l'écriture avec lui — elle est faite. */
+      self.revision++;
+      self.abonnes.forEach(function (fn) {
+        try {
+          fn(self.revision);
+        } catch (e) {
+          /* un poste qui n'écoute plus ne doit pas gêner les autres */
+        }
+      });
       return result;
     });
     return this.queue;

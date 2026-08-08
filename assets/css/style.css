@@ -1188,6 +1188,29 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 .feuille-casier td.b{font-family:var(--mono);font-weight:600;}
 .feuille-casier td.case{width:70px;border:1px solid var(--navy);}
 
+/* ---------- postes du bureau ----------
+   L'adresse à recopier sur le poste d'à côté : c'est la seule chose qu'on
+   vient chercher ici, elle doit se lire de loin et se copier d'un clic. */
+.poste-adresse{
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:12px 14px;
+  margin-bottom:10px;
+}
+.poste-adresse.principale{border-color:var(--navy);border-width:2px;}
+.poste-adresse-titre{
+  font-family:var(--mono);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  color:var(--slate);
+  margin-bottom:6px;
+}
+.poste-adresse-url{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+.poste-adresse-url code{font-family:var(--mono);font-size:17px;word-break:break-all;}
+.poste-adresse.principale .poste-adresse-url code{font-size:20px;font-weight:600;}
+.poste-adresse .hint{margin:6px 0 0;}
+
 /* ---------- attestation d'élection de domicile ----------
    Une page qui doit tenir devant un guichet : en-tête de l'organisme, corps
    aéré, place pour le cachet. Les traits remplacent les mentions qu'on n'a pas

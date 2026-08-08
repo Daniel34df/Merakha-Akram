@@ -14,6 +14,7 @@ const auth = require('./auth.js');
 const { createGoogleOAuth } = require('./google.js');
 const { createServer, VERSION, envoyerRelance } = require('./app.js');
 const reminders = require('./reminders.js');
+const reseau = require('./reseau.js');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -119,9 +120,60 @@ async function main() {
     }
   }
 
-  ecoute.listen(port, host, function () {
+  // /api/reseau doit annoncer l'adresse réellement servie, pas une supposition.
+  server.ctx.port = port;
+  server.ctx.protocole = protocole;
+
+  ecoute.listen(port, host, async function () {
+    const vue = reseau.resume({ port: port, protocole: protocole });
+
     console.log('Bureau du Courrier v' + VERSION);
-    console.log('  interface   ' + protocole + '://localhost:' + port);
+    console.log('  sur ce poste  ' + protocole + '://localhost:' + port);
+
+    /* L'adresse à taper sur les autres postes du bureau. Sans elle, il faut
+       ouvrir une invite de commandes pour savoir quoi écrire sur le poste d'à
+       côté — et personne à l'accueil n'a à faire ça. */
+    if (vue.aucuneAdresse) {
+      console.log('  autres postes aucune adresse réseau — câble débranché ou wifi coupé ?');
+    } else {
+      console.log('  autres postes ' + vue.recommandee);
+      vue.adresses.forEach(function (a) {
+        console.log('                ' + a.url + '  (' + a.type + ')' + (a.privee ? '' : '  ← hors réseau local'));
+      });
+      if (protocole === 'http') {
+        console.log('                en http : mot de passe en clair, et pas d’installation');
+        console.log('                possible sur les autres postes. Voir docs/plusieurs-postes.md');
+      }
+    }
+
+    /* Le wifi redistribue les adresses au redémarrage : si celle-ci a bougé,
+       les autres postes ne trouvent plus rien et personne ne sait pourquoi. On
+       le note, pour que Réglages puisse le dire au responsable. */
+    const connu = db.data.reseau || null;
+    const aBouge = !!connu && !vue.aucuneAdresse && reseau.aChange(connu.adresses, vue.adresses);
+    if (aBouge) {
+      console.log('  ⚠ l’adresse de ce poste a changé depuis le dernier démarrage.');
+      console.log('    Les autres postes doivent être remis à jour (Réglages → Postes du bureau).');
+    }
+    const maintenant = new Date().toISOString();
+    try {
+      await db.write(function (data) {
+        data.reseau = {
+          nomPoste: vue.nomPoste,
+          adresses: vue.adresses.map(function (a) {
+            return { adresse: a.adresse, carte: a.carte, type: a.type, famille: a.famille };
+          }),
+          // Ce qu'il fallait taper avant : de quoi comprendre ce qui a changé.
+          precedentes: aBouge ? connu.adresses || [] : (connu && connu.precedentes) || [],
+          changeAu: aBouge ? maintenant : (connu && connu.changeAu) || null,
+          vuLe: maintenant
+        };
+      });
+    } catch (err) {
+      // Ne pas empêcher le démarrage pour une note d'information.
+      console.error('  (adresse réseau non mémorisée : ' + err.message + ')');
+    }
+
     console.log('  registre    ' + dbFile + ' (' + db.data.contacts.length + ' destinataire(s))');
     console.log(
       '  courriel    ' +
@@ -238,6 +290,10 @@ async function main() {
   const shutdown = function () {
     arreterRelances();
     console.log('\nArrêt du serveur…');
+    /* Les flux d'événements des autres postes ne se terminent jamais d'eux-mêmes.
+       Sans cela, l'arrêt attendrait le délai de secours à chaque fois qu'un
+       poste est relié — c'est-à-dire toujours, dans un bureau à quatre postes. */
+    if (typeof ecoute.closeAllConnections === 'function') ecoute.closeAllConnections();
     ecoute.close(function () {
       process.exit(0);
     });

@@ -4465,6 +4465,163 @@
     return util.dansAntenne(objet, view.antenneActive, antennes());
   }
 
+  /* ═════════════ les postes du bureau ═════════════
+
+     Quatre ordinateurs à l'accueil, un seul registre. Cette carte répond à la
+     seule question que se pose le responsable : « qu'est-ce que je tape sur le
+     poste d'à côté, et est-ce que mes postes sont bien reliés ? » */
+  function ligneAdresse(titre, url, detail, principale) {
+    return (
+      '<div class="poste-adresse' + (principale ? ' principale' : '') + '">' +
+      '<div class="poste-adresse-titre">' + esc(titre) + '</div>' +
+      '<div class="poste-adresse-url"><code>' + esc(url) + '</code>' +
+      '<button class="link-btn" data-copier="' + esc(url) + '">Copier</button></div>' +
+      (detail ? '<div class="hint">' + esc(detail) + '</div>' : '') +
+      '</div>'
+    );
+  }
+
+  async function renderPostes(force) {
+    const carte = $('postesCard');
+    /* Sans serveur, il n'y a pas de poste à relier : le registre tient dans ce
+       navigateur, et parler de réseau n'aurait aucun sens. */
+    const ouvert = S.mode === 'serveur' && S.auth.user && roles.peut(S.auth.user, 'reglages');
+    carte.hidden = !ouvert;
+    if (!ouvert) return;
+
+    /* renderAll() est rappelé à chaque changement d'état — et le flux en
+       provoque un à chaque écriture des autres postes. Interroger le serveur à
+       chaque fois ferait un appel par écriture et par poste, pour une carte que
+       personne ne regarde. On ne la charge que si elle est à l'écran. */
+    const visible = document.getElementById('panel-reglages').classList.contains('active');
+    if (!visible && !force) return;
+
+    let vue;
+    try {
+      vue = await store.loadReseau();
+    } catch (err) {
+      $('postesAdresse').innerHTML = '<div class="empty">Adresse du serveur indisponible.</div>';
+      return;
+    }
+    view.reseau = vue;
+    const r = vue.reseau;
+
+    if (r.aucuneAdresse) {
+      $('postesAdresse').innerHTML =
+        '<div class="msg error">Ce poste n’a aucune adresse sur le réseau : câble débranché, ' +
+        'ou wifi coupé. Les autres postes ne peuvent rien joindre tant que c’est le cas.</div>';
+    } else {
+      $('postesAdresse').innerHTML =
+        (r.nomPoste
+          ? ligneAdresse('À taper sur les autres postes', r.recommandee,
+              'Le nom du poste ne change pas, même si son adresse change.', true)
+          : '') +
+        r.adresses
+          .map(function (a, i) {
+            return ligneAdresse(
+              r.nomPoste ? 'Ou, par l’adresse (' + a.type + ')' : 'À taper sur les autres postes',
+              a.url,
+              a.privee ? '' : 'Cette adresse n’est pas celle d’un réseau local habituel.',
+              !r.nomPoste && i === 0
+            );
+          })
+          .join('');
+    }
+
+    const alertes = [];
+    if (vue.adresseChangee) {
+      const avant = (vue.adresseChangee.precedentes || [])
+        .map(function (a) {
+          return a.adresse;
+        })
+        .join(', ');
+      alertes.push(
+        '<div class="msg error">L’adresse de ce poste a changé le ' +
+          esc(util.formatJour(String(vue.adresseChangee.le).slice(0, 10))) +
+          (avant ? ' (avant : ' + esc(avant) + ')' : '') +
+          '. Les autres postes doivent être remis à jour — ou faites réserver une adresse ' +
+          'fixe à ce poste sur votre box.</div>'
+      );
+    }
+    if (r.protocole === 'http' && !r.aucuneAdresse) {
+      alertes.push(
+        '<div class="msg">En <strong>http</strong>, le mot de passe circule en clair sur le ' +
+          'réseau, et les autres postes ne peuvent ni installer l’application ni travailler ' +
+          'hors ligne. Voir <code>docs/plusieurs-postes.md</code> pour passer en https.</div>'
+      );
+    }
+    $('postesAlertes').innerHTML = alertes.join('');
+
+    const postes = vue.postes || [];
+    $('postesListe').innerHTML = postes.length
+      ? '<div class="table-scroll"><table><thead><tr><th>Poste</th><th>Accès</th>' +
+        '<th>Antenne</th><th>Relié depuis</th></tr></thead><tbody>' +
+        postes
+          .map(function (p) {
+            const antenne = p.antenneId
+              ? (antennes().find(function (a) {
+                  return a.id === p.antenneId;
+                }) || {}).nom || p.antenneId
+              : '—';
+            return (
+              '<tr><td><strong>' + esc(p.nom) + '</strong>' +
+              (p.moi ? ' <span class="status-pill">ce poste</span>' : '') +
+              '</td><td>' +
+              (p.role === 'responsable' ? 'responsable' : 'agent ' + esc(p.identifiant)) +
+              '</td><td>' + esc(antenne) + '</td><td class="attente-cell">' +
+              esc(util.formatDateTime(p.depuis)) +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>'
+      : '<div class="empty">Aucun poste relié — pas même celui-ci, ce qui est anormal.</div>';
+  }
+
+  $('postesCard').addEventListener('click', function (e) {
+    const copier = e.target.closest('button[data-copier]');
+    if (!copier) return;
+    const texte = copier.dataset.copier;
+    if (root.navigator.clipboard) {
+      root.navigator.clipboard.writeText(texte).then(
+        function () {
+          toast('Adresse copiée : ' + texte, 'ok');
+        },
+        function () {
+          toast('Copie impossible. Recopiez : ' + texte, 'error');
+        }
+      );
+    } else {
+      toast('Recopiez : ' + texte, '');
+    }
+  });
+
+  $('rafraichirPostesBtn').addEventListener('click', function () {
+    renderPostes(true);
+  });
+
+  /* La fiche à scotcher sur chacun des autres écrans : l'adresse, et les
+     gestes à faire. Un papier collé au bord de l'écran vaut mieux qu'une
+     explication donnée une fois. */
+  $('imprimerPostesBtn').addEventListener('click', function () {
+    const vue = view.reseau;
+    if (!vue) return;
+    const r = vue.reseau;
+    const adresse = r.recommandee || '—';
+    const secours = r.adresses.length && r.adresses[0].url !== adresse ? r.adresses[0].url : '';
+    imprimerFeuille(
+      '<h1>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — accès depuis ce poste</h1>' +
+        '<p>Le registre est tenu sur le poste du bureau. Cet ordinateur s’y connecte ; ' +
+        'il n’a rien à installer.</p>' +
+        '<table><tbody>' +
+        '<tr><td>1. Ouvrir le navigateur et taper</td><td class="b">' + esc(adresse) + '</td></tr>' +
+        (secours ? '<tr><td>2. Si cela ne répond pas, essayer</td><td class="b">' + esc(secours) + '</td></tr>' : '') +
+        '<tr><td>' + (secours ? '3' : '2') + '. Se connecter avec</td><td class="b">l’identifiant et le code remis par le responsable</td></tr>' +
+        '</tbody></table>' +
+        '<p style="margin-top:28px;">Le poste du bureau doit être allumé : c’est lui qui garde le registre.</p>'
+    );
+  });
+
   async function renderCarteAntennes() {
     const carte = $('antennesCard');
     carte.hidden = !(S.auth.user && roles.estResponsable(S.auth.user) && S.mode === 'serveur');
@@ -4884,6 +5041,7 @@
     renderAgents();
     renderAntennes();
     renderCarteAntennes();
+    renderPostes();
     appliquerDroits();
   }
 
