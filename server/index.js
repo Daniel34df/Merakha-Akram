@@ -105,24 +105,45 @@ async function main() {
      d'installer l'application. Voir docs/mise-en-service-https.md. */
   let ecoute = server;
   let protocole = 'http';
-  if (process.env.HTTPS_KEY && process.env.HTTPS_CERT) {
-    try {
-      ecoute = https.createServer(
-        {
-          key: fs.readFileSync(process.env.HTTPS_KEY),
-          cert: fs.readFileSync(process.env.HTTPS_CERT)
-        },
-        server.listeners('request')[0]
-      );
-      protocole = 'https';
-    } catch (err) {
-      console.error('Certificat illisible (' + err.message + ') — démarrage en http.');
+
+  /* Deux formes de certificat, parce que les deux systèmes n'en fabriquent pas
+     la même : OpenSSL (macOS, Linux) écrit une clé et un certificat séparés,
+     tandis que Windows sait produire un .pfx sans rien installer, par
+     New-SelfSignedCertificate. Node lit le pfx directement — ce qui évite une
+     conversion que node:crypto ne sait pas faire. */
+  const optionsTls = function () {
+    if (process.env.HTTPS_PFX) {
+      return {
+        pfx: fs.readFileSync(process.env.HTTPS_PFX),
+        passphrase: process.env.HTTPS_PFX_PASS || undefined
+      };
     }
+    if (process.env.HTTPS_KEY && process.env.HTTPS_CERT) {
+      return {
+        key: fs.readFileSync(process.env.HTTPS_KEY),
+        cert: fs.readFileSync(process.env.HTTPS_CERT)
+      };
+    }
+    return null;
+  };
+
+  try {
+    const tls = optionsTls();
+    if (tls) {
+      ecoute = https.createServer(tls, server.listeners('request')[0]);
+      protocole = 'https';
+    }
+  } catch (err) {
+    /* Un certificat illisible ne doit jamais empêcher le bureau d'ouvrir : on
+       démarre en http en le disant, plutôt que de refuser de fonctionner un
+       matin où la seule chose qui compte est de rendre le courrier. */
+    console.error('Certificat illisible (' + err.message + ') — démarrage en http.');
   }
 
   // /api/reseau doit annoncer l'adresse réellement servie, pas une supposition.
   server.ctx.port = port;
   server.ctx.protocole = protocole;
+  server.ctx.hote = host;
 
   ecoute.listen(port, host, async function () {
     const vue = reseau.resume({ port: port, protocole: protocole });
@@ -133,7 +154,14 @@ async function main() {
     /* L'adresse à taper sur les autres postes du bureau. Sans elle, il faut
        ouvrir une invite de commandes pour savoir quoi écrire sur le poste d'à
        côté — et personne à l'accueil n'a à faire ça. */
-    if (vue.aucuneAdresse) {
+    if (reseau.ecouteFermee(host)) {
+      /* Le cas le plus traître : tout a l'air normal, une adresse s'affiche,
+         et rien ne répond jamais depuis les autres postes. */
+      console.log('  autres postes AUCUN — ce serveur n’écoute que sur lui-même (HOST=' + host + ').');
+      console.log('                Pour ouvrir l’accès aux autres postes du bureau :');
+      console.log('                mettez HOST=0.0.0.0 dans le fichier .env, puis redémarrez.');
+      console.log('                Voir docs/plusieurs-postes.md');
+    } else if (vue.aucuneAdresse) {
       console.log('  autres postes aucune adresse réseau — câble débranché ou wifi coupé ?');
     } else {
       console.log('  autres postes ' + vue.recommandee);

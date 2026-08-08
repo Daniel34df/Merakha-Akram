@@ -145,6 +145,19 @@ function resume(options) {
   };
 }
 
+/* Le serveur n'écoute-t-il que sur lui-même ?
+
+   C'est le piège du bureau à plusieurs postes : l'application affiche fièrement
+   une adresse, les trois autres PC la tapent, et rien ne répond — parce que le
+   serveur est lié à la boucle locale et ne sort pas de la machine. Aucun
+   message d'erreur ne dit ça ; on cherche du côté du wifi ou du pare-feu
+   pendant une heure. Autant le détecter et le dire. */
+function ecouteFermee(hote) {
+  const h = String(hote || '').trim().toLowerCase();
+  if (!h) return false;
+  return h === '127.0.0.1' || h === 'localhost' || h === '::1' || /^127\./.test(h);
+}
+
 /** Vrai si la liste d'adresses a changé depuis la dernière fois. */
 function aChange(avant, maintenant) {
   const cle = function (liste) {
@@ -161,6 +174,7 @@ function aChange(avant, maintenant) {
 module.exports = {
   estPrivee: estPrivee,
   estLienLocal: estLienLocal,
+  ecouteFermee: ecouteFermee,
   typeCarte: typeCarte,
   nomUtilisable: nomUtilisable,
   adressesLocales: adressesLocales,

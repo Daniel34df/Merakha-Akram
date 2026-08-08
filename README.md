@@ -545,6 +545,10 @@ donneraient quatre vérités différentes sur le même courrier. Elle s'installe
 **un** poste — celui du responsable — et les autres l'ouvrent dans leur
 navigateur.
 
+**Marche à suivre complète : [docs/plusieurs-postes.md](docs/plusieurs-postes.md).**
+Sur le poste du responsable, `installer-plusieurs-postes.cmd` puis
+`certificat.cmd` ; sur les trois autres, `confiance.cmd` une fois, et c'est tout.
+
 **Quelle adresse taper.** Au démarrage, le serveur l'affiche :
 
 ```
@@ -573,10 +577,23 @@ numéro d'ordre : chacun redemande alors son état, filtré selon ses droits et
 son antenne. Un agent sans le droit *voir les codes* n'apprend donc rien de
 plus par ce canal.
 
+**Deux pièges à connaître.**
+
+L'installation ordinaire écrit `HOST=127.0.0.1` : le serveur n'écoute alors que
+sur son propre poste, et **les autres ne joindront rien, quelle que soit
+l'adresse tapée**. Aucun message ne le dit au poste qui essaie — l'application
+le signale donc du côté du responsable, dans *Réglages → Postes du bureau*.
+`installer-plusieurs-postes.cmd` s'en charge d'emblée.
+
+De même, sans règle de pare-feu, les autres postes n'obtiennent qu'une page qui
+ne charge jamais, sans erreur. L'installateur pose la règle quand il a les
+droits administrateur, et affiche la commande exacte sinon.
+
 **En http, sur le réseau local**, le mot de passe circule en clair et les trois
 autres postes ne peuvent ni installer l'application ni travailler hors ligne —
-les navigateurs réservent cela aux adresses reconnues sûres. Voir
-[docs/mise-en-service-https.md](docs/mise-en-service-https.md).
+les navigateurs réservent cela aux adresses reconnues sûres. `certificat.cmd`
+(ou `tools/certificat.sh`) fabrique le certificat sans rien installer ;
+`confiance.cmd` le fait reconnaître sur chacun des autres postes.
 
 Le poste qui tient le registre doit rester allumé : c'est lui le bureau.
 

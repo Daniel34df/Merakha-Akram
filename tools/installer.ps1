@@ -16,6 +16,14 @@
   déjà en place est conservé.
 #>
 
+param(
+  # Le bureau tient l'accueil sur plusieurs ordinateurs reliés au même wifi ou
+  # au même câble. Le registre reste sur celui-ci ; les autres l'ouvrent dans
+  # leur navigateur. Sans cette option, le serveur n'écoute que sur ce poste —
+  # plus prudent, et c'est ce qu'il faut à un bureau seul.
+  [switch]$PlusieursPostes
+)
+
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'  # sinon la barre de progression ralentit le téléchargement
 
@@ -128,8 +136,16 @@ if (-not (Test-Path $Npm)) {
 # ── 2. configuration ──────────────────────────────────────────────────────────
 
 $EnvFichier = Join-Path $Racine '.env'
+$Hote = if ($PlusieursPostes) { '0.0.0.0' } else { '127.0.0.1' }
+
 if (Test-Path $EnvFichier) {
   Info 'Configuration .env déjà présente — conservée.'
+  # On ne réécrit pas la configuration de quelqu'un. Mais si l'accès aux autres
+  # postes est demandé et que le fichier dit le contraire, il faut le dire.
+  if ($PlusieursPostes -and ((Get-Content $EnvFichier) -match '^HOST=(127\.|localhost|::1)')) {
+    Souci 'Votre .env garde HOST=127.0.0.1 : le serveur n''écoutera que sur ce poste.'
+    Souci 'Remplacez cette ligne par HOST=0.0.0.0 pour ouvrir l''accès aux autres.'
+  }
 } else {
   Info 'Écriture de la configuration…'
   $secret = & $Node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))'
@@ -137,7 +153,12 @@ if (Test-Path $EnvFichier) {
 # Écrit par installer.cmd — modifiable à tout moment.
 # Chaque réglage est expliqué dans .env.example.
 PORT=3000
-HOST=127.0.0.1
+# Qui peut joindre ce serveur.
+#   127.0.0.1  ce seul ordinateur (par défaut, le plus prudent)
+#   0.0.0.0    tous les postes du bureau sur le même wifi ou le même câble
+# Relancez installer-plusieurs-postes.cmd pour ouvrir l'accès, ou changez cette
+# ligne à la main. Voir docs\plusieurs-postes.md
+HOST=$Hote
 DB_FILE=./data/db.json
 
 # Clé de chiffrement des secrets enregistrés. Tirée au sort à l'installation.
@@ -177,6 +198,45 @@ if (Test-Path (Join-Path $Racine 'node_modules\nodemailer')) {
   } else {
     Souci "Installation impossible (réseau ou dépôt npm). L'application fonctionne"
     Souci 'sans lui : les messages s’ouvriront dans votre logiciel de courriel.'
+  }
+}
+
+# ── 3 bis. le pare-feu, quand le bureau a plusieurs postes ────────────────────
+
+# Sans règle de pare-feu, les autres postes reçoivent un silence : pas de refus,
+# pas de message, juste une page qui ne charge jamais. C'est la panne la plus
+# coûteuse à diagnostiquer, et la plus simple à éviter. Elle demande des droits
+# administrateur : si on ne les a pas, on le dit avec la commande exacte plutôt
+# que d'échouer sans explication.
+if ($PlusieursPostes) {
+  $portApp = 3000
+  $ligne = Select-String -Path $EnvFichier -Pattern '^PORT=(\d+)' -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($ligne) { $portApp = [int]$ligne.Matches[0].Groups[1].Value }
+
+  $nomRegle = 'Bureau du Courrier'
+  $admin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+  ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+  if ($admin) {
+    try {
+      # netsh plutôt que New-NetFirewallRule : présent sur toutes les éditions.
+      & netsh advfirewall firewall delete rule name="$nomRegle" 2>&1 | Out-Null
+      & netsh advfirewall firewall add rule name="$nomRegle" dir=in action=allow `
+        protocol=TCP localport=$portApp profile=private 2>&1 | Out-Null
+      if ($LASTEXITCODE -eq 0) {
+        Info "Pare-feu ouvert sur le port $portApp (réseaux privés seulement)."
+      } else {
+        Souci "Règle de pare-feu non posée. Voir la commande ci-dessous."
+        Souci "netsh advfirewall firewall add rule name=`"$nomRegle`" dir=in action=allow protocol=TCP localport=$portApp profile=private"
+      }
+    } catch {
+      Souci "Règle de pare-feu non posée : $($_.Exception.Message)"
+    }
+  } else {
+    Souci 'Sans droits administrateur, le pare-feu de Windows bloquera les autres postes.'
+    Souci 'Ouvrez une invite de commandes « en tant qu''administrateur » et lancez :'
+    Souci "netsh advfirewall firewall add rule name=`"$nomRegle`" dir=in action=allow protocol=TCP localport=$portApp profile=private"
   }
 }
 

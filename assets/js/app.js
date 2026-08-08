@@ -156,6 +156,13 @@
     if (root.location.hash !== '#' + name) {
       history.replaceState(null, '', '#' + name);
     }
+
+    /* La carte « Postes du bureau » interroge le serveur, donc elle ne se
+       charge que lorsqu'elle est à l'écran — sans quoi chaque écriture d'un
+       autre poste déclencherait un appel pour une carte que personne ne
+       regarde. Il faut donc la remplir en ouvrant l'onglet : rien d'autre ne
+       le fera, et elle resterait vide. */
+    if (name === 'reglages' && typeof renderPostes === 'function') renderPostes(true);
   }
 
   document.querySelectorAll('nav button').forEach(function (btn) {
@@ -4506,7 +4513,19 @@
     view.reseau = vue;
     const r = vue.reseau;
 
-    if (r.aucuneAdresse) {
+    if (vue.ecouteFermee) {
+      /* Avant toute adresse : elles ne répondraient pas. C'est le réglage
+         d'installation par défaut, prudent tant qu'on est sur un seul poste,
+         et c'est exactement ce qui bloque tout dès qu'on en a quatre. */
+      $('postesAdresse').innerHTML =
+        '<div class="msg error"><strong>Ce serveur n’écoute que sur cet ordinateur.</strong><br>' +
+        'Les autres postes du bureau ne peuvent pas s’y connecter, quelle que soit l’adresse ' +
+        'qu’ils tapent. C’est le réglage posé à l’installation — prudent pour un poste seul, ' +
+        'bloquant dès qu’il y en a plusieurs.<br><br>' +
+        'Pour l’ouvrir : dans le fichier <code>.env</code>, à côté de l’application, remplacez ' +
+        '<code>HOST=' + esc(vue.hote || '127.0.0.1') + '</code> par <code>HOST=0.0.0.0</code>, ' +
+        'puis redémarrez l’application.</div>';
+    } else if (r.aucuneAdresse) {
       $('postesAdresse').innerHTML =
         '<div class="msg error">Ce poste n’a aucune adresse sur le réseau : câble débranché, ' +
         'ou wifi coupé. Les autres postes ne peuvent rien joindre tant que c’est le cas.</div>';

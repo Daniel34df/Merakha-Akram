@@ -24,6 +24,19 @@ RUNTIME="$RACINE/runtime"
 NODE_MIN_MAJEUR=20
 NODE_REPLI="v22.14.0" # utilisé seulement si nodejs.org ne répond pas
 
+# ./installer.sh --plusieurs-postes : le bureau tient l'accueil sur plusieurs
+# ordinateurs reliés au même réseau. Le registre reste sur celui-ci ; les autres
+# l'ouvrent dans leur navigateur. Sans cette option, le serveur n'écoute que sur
+# ce poste — c'est plus prudent, et c'est ce qu'il faut à un bureau seul.
+PLUSIEURS_POSTES=0
+for arg in "$@"; do
+  case "$arg" in
+    --plusieurs-postes | --postes | --reseau) PLUSIEURS_POSTES=1 ;;
+  esac
+done
+HOTE="127.0.0.1"
+[ "$PLUSIEURS_POSTES" = "1" ] && HOTE="0.0.0.0"
+
 titre() { printf '\n\033[1m  %s\033[0m\n' "$1"; }
 info() { printf '  %s\n' "$1"; }
 souci() { printf '  \033[33m!\033[0m %s\n' "$1"; }
@@ -109,6 +122,13 @@ NPM="$(dirname "$NODE")/npm"
 
 if [ -f .env ]; then
   info "Configuration .env déjà présente — conservée."
+  # Le .env est conservé tel quel : on ne réécrit pas la configuration de
+  # quelqu'un. Mais si l'accès aux autres postes est demandé et que le fichier
+  # dit le contraire, mieux vaut le signaler que le laisser croire.
+  if [ "$PLUSIEURS_POSTES" = "1" ] && grep -qE '^HOST=(127\.|localhost|::1)' .env; then
+    souci "Votre .env garde HOST=127.0.0.1 : le serveur n'écoutera que sur ce poste."
+    souci "Remplacez cette ligne par HOST=0.0.0.0 pour ouvrir l'accès aux autres."
+  fi
 else
   info "Écriture de la configuration…"
   secret="$("$NODE" -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')"
@@ -116,7 +136,12 @@ else
 # Écrit par installer.sh — modifiable à tout moment.
 # Chaque réglage est expliqué dans .env.example.
 PORT=3000
-HOST=127.0.0.1
+# Qui peut joindre ce serveur.
+#   127.0.0.1  ce seul ordinateur (par défaut, le plus prudent)
+#   0.0.0.0    tous les postes du bureau sur le même wifi ou le même câble
+# Relancez ./installer.sh --plusieurs-postes pour ouvrir l'accès, ou changez
+# cette ligne à la main. Voir docs/plusieurs-postes.md
+HOST=$HOTE
 DB_FILE=./data/db.json
 
 # Clé de chiffrement des secrets enregistrés. Tirée au sort à l'installation.
@@ -154,6 +179,33 @@ elif [ -n "$NPM" ]; then
   else
     souci "Installation impossible (réseau ou dépôt npm). L'application fonctionne"
     souci "sans lui : les messages s'ouvriront dans votre logiciel de courriel."
+  fi
+fi
+
+# ── 3 bis. le pare-feu, quand le bureau a plusieurs postes ────────────────────
+
+# Sans règle de pare-feu, les autres postes reçoivent un silence : pas de refus,
+# pas de message, juste une page qui ne charge jamais. C'est la panne la plus
+# coûteuse à diagnostiquer, et la plus simple à éviter.
+if [ "$PLUSIEURS_POSTES" = "1" ]; then
+  PORT_APP="$(grep -E '^PORT=' .env 2>/dev/null | head -1 | cut -d= -f2 | tr -d '[:space:]')"
+  [ -n "$PORT_APP" ] || PORT_APP=3000
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi '^Status: active'; then
+    if sudo -n ufw allow "$PORT_APP/tcp" >/dev/null 2>&1; then
+      info "Pare-feu (ufw) ouvert sur le port $PORT_APP."
+    else
+      souci "Pare-feu ufw actif. Lancez :  sudo ufw allow $PORT_APP/tcp"
+    fi
+  elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+    if sudo -n firewall-cmd --permanent --add-port="$PORT_APP/tcp" >/dev/null 2>&1 &&
+      sudo -n firewall-cmd --reload >/dev/null 2>&1; then
+      info "Pare-feu (firewalld) ouvert sur le port $PORT_APP."
+    else
+      souci "Pare-feu firewalld actif. Lancez :"
+      souci "  sudo firewall-cmd --permanent --add-port=$PORT_APP/tcp && sudo firewall-cmd --reload"
+    fi
+  else
+    info "Aucun pare-feu détecté à configurer."
   fi
 fi
 

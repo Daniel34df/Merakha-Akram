@@ -128,6 +128,18 @@ test('le changement d’adresse se remarque, l’ordre ne compte pas', function 
   assert.equal(reseau.aChange(undefined, []), false);
 });
 
+test('une écoute limitée à la machine est reconnue', function () {
+  /* Le piège du bureau à plusieurs postes : le serveur affiche une adresse,
+     les autres PC la tapent, et rien ne répond — parce qu'il est lié à la
+     boucle locale. Aucune erreur ne le dit ; il faut le détecter. */
+  ['127.0.0.1', 'localhost', 'LOCALHOST', '::1', '127.0.1.1'].forEach(function (h) {
+    assert.equal(reseau.ecouteFermee(h), true, h + ' n’écoute que sur la machine');
+  });
+  ['0.0.0.0', '::', '192.168.1.10', ''].forEach(function (h) {
+    assert.equal(reseau.ecouteFermee(h), false, JSON.stringify(h) + ' laisse passer les autres postes');
+  });
+});
+
 test('le protocole demandé se retrouve dans toutes les adresses', function () {
   const r = reseau.resume({
     interfaces: { eth0: [carte('192.168.1.10')] },

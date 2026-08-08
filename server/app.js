@@ -1485,6 +1485,11 @@ async function handleApi(req, res, ctx, pathname) {
       memoire && memoire.changeAu && Date.now() - new Date(memoire.changeAu).getTime() < 7 * 24 * 3600 * 1000;
     return sendJson(res, 200, {
       reseau: vue,
+      /* Écoute fermée : le serveur ne sort pas de cette machine, et aucune
+         adresse affichée ne répondra jamais aux autres postes. À dire avant
+         tout le reste — sinon on cherche du côté du wifi pendant une heure. */
+      ecouteFermee: reseau.ecouteFermee(ctx.hote),
+      hote: ctx.hote || '',
       adresseChangee: change ? { le: memoire.changeAu, precedentes: memoire.precedentes || [] } : null,
       // Qui est relié en ce moment, un par onglet ouvert.
       postes: Array.from(ctx.postes.values()).map(function (p) {
@@ -2211,7 +2216,9 @@ function createServer(options) {
     postes: options.postes || new Map(),
     // Pour dire aux autres postes quoi taper : voir /api/reseau.
     port: options.port || 0,
-    protocole: options.protocole || 'http'
+    protocole: options.protocole || 'http',
+    // L'adresse d'écoute, pour savoir si le serveur sort de cette machine.
+    hote: options.hote || ''
   });
 
   const srv = http.createServer(async function (req, res) {
