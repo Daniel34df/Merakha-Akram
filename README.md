@@ -937,13 +937,41 @@ server/secrets.js     chiffrement des identifiants au repos (AES-256-GCM)
 server/google.js      autorisation Gmail (OAuth 2.0)
 server/reminders.js   courriers en attente et relances automatiques
 test/                 tests (node:test), sans dépendance
+tools/verifier/       vérifications de navigateur, une par défaut corrigé
 .github/workflows/    intégration continue : npm test sur Node 20.12 et 22
 ```
 
 ```bash
-npm test     # 121 tests : utilitaires, API, comptes, vérification, boîtes d'envoi
+npm test     # 334 tests : utilitaires, API, comptes, domiciliation, appels, socle
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
+
+### Deux niveaux de vérification
+
+`npm test` **n'a besoin d'aucune dépendance** : c'est la propriété à préserver,
+et elle se vérifie en lançant la commande dans un dépôt sans `node_modules`.
+Tout ce qui est calculable — règles de domiciliation, listes d'appels, bornes
+d'affichage, droits, filtrage par antenne — vit dans des modules chargeables des
+deux côtés et se teste là, vite et partout.
+
+Reste ce qui exige un écran. Six parcours cliquent pour de vrai :
+
+```bash
+npm i                    # installe Playwright (outillage seulement)
+npx playwright install chromium
+npm run verifier         # les six, chacun sur son serveur et sa base
+npm run verifier -- rappel   # un seul
+npm run parcours         # le parcours complet, qui s'imprime comme procédure
+```
+
+Chacun garde fermé un défaut qui a réellement existé : un téléphone corrigé qui
+repartait inchangé, une suppression qu'on croyait être un effacement, un code de
+reprise utilisable depuis tout le réseau, une personne appelée une seule fois et
+jamais relancée, un appel qui ne comptait pas comme manifestation. Ce ne sont
+pas des démonstrations — ce sont des verrous.
+
+Playwright est une dépendance de **développement** : ni le serveur ni
+l'interface ne la chargent. Un poste de réception n'installe rien de tout cela.
 
 Les polices sont versionnées dans le dépôt : l'application s'affiche telle
 quelle sur un poste sans accès à Internet, et aucune requête ne part vers un

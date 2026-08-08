@@ -9,12 +9,17 @@
     "start": "node server/index.js",
     "dev": "MAIL_DRY_RUN=true node --watch server/index.js",
     "motdepasse": "node tools/mot-de-passe.js",
-    "test": "node --test"
+    "test": "node --test",
+    "verifier": "node tools/verifier/index.js",
+    "parcours": "node tools/parcours.js"
   },
   "engines": {
     "node": ">=20.12"
   },
   "optionalDependencies": {
     "nodemailer": "^6.9.14"
+  },
+  "devDependencies": {
+    "playwright": "^1.47.0"
   }
 }

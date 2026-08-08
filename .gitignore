@@ -30,3 +30,9 @@ data/secret.key
 data/sauvegardes/
 npm-debug.log*
 .DS_Store
+
+# Dépendances de développement (Playwright) — jamais nécessaires au serveur.
+node_modules/
+
+# Captures des vérifications de navigateur, quand on demande à les garder.
+captures/
