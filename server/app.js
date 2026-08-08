@@ -17,7 +17,7 @@ const domiciliation = require('../assets/js/domiciliation.js');
 const roles = require('../assets/js/roles.js');
 const reseau = require('./reseau.js');
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
 
 const MIME = {
@@ -1524,7 +1524,9 @@ async function handleApi(req, res, ctx, pathname) {
   /* --- destinataires --- */
 
   if (pathname === '/api/contacts') {
-    if (method === 'GET') return sendJson(res, 200, db.data.contacts);
+    // Même filtre que /api/state : l'interface passe par l'un, mais rien
+    // n'empêche d'appeler l'autre directement.
+    if (method === 'GET') return sendJson(res, 200, pourSonAntenne(db.data.contacts));
     if (method === 'POST') {
       const input = cleanContact(await readBody(req));
       /* Ouvrir une domiciliation, c'est inscrire quelqu'un : l'agent d'accueil
@@ -1638,7 +1640,9 @@ async function handleApi(req, res, ctx, pathname) {
   /* --- historique --- */
 
   if (pathname === '/api/history') {
-    if (method === 'GET') return sendJson(res, 200, roles.masquerCodes(db.data.history, currentUser));
+    if (method === 'GET') {
+      return sendJson(res, 200, roles.masquerCodes(pourSonAntenne(db.data.history), currentUser));
+    }
     if (method === 'POST') {
       const body = await readBody(req);
       const record = {
@@ -1994,7 +1998,13 @@ async function handleApi(req, res, ctx, pathname) {
   /* --- journal et statistiques --- */
 
   if (pathname === '/api/stats' && method === 'GET') {
-    return sendJson(res, 200, reminders.statistiques(db.data.history, db.data.contacts));
+    // Des chiffres agrégés restent des chiffres sur d'autres antennes : on
+    // compte ce que ce poste a le droit de voir, pas tout le réseau.
+    return sendJson(
+      res,
+      200,
+      reminders.statistiques(pourSonAntenne(db.data.history), pourSonAntenne(db.data.contacts))
+    );
   }
 
   if (pathname === '/api/journal' && method === 'GET') {
@@ -2005,6 +2015,13 @@ async function handleApi(req, res, ctx, pathname) {
   /* --- sauvegarde --- */
 
   if (pathname === '/api/backup' && method === 'GET') {
+    /* Une sauvegarde emporte tout : tous les destinataires de toutes les
+       antennes, l'historique avec ses codes de retrait en clair, et la liste
+       des comptes. Elle échappe donc par nature au masquage des codes et au
+       filtrage par antenne — et c'est précisément pour cela qu'elle doit être
+       réservée à qui règle le bureau. Sans ce contrôle, un accès d'agent
+       limité à une antenne repartait avec le registre entier en un appel. */
+    exigerDroit(currentUser, 'reglages');
     // Le registre complet, sans les secrets : une sauvegarde n'a pas à
     // transporter des mots de passe hachés ni des jetons chiffrés.
     const copie = {

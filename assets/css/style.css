@@ -710,6 +710,57 @@ footer.note{
   .toasts{left:14px;right:14px;max-width:none;}
 }
 
+/* ---------- mise à jour venue d'un autre poste ----------
+   Un écran qui change tout seul inquiète. Ces deux signes disent d'où ça
+   vient : une annonce brève en bas, et le compteur qui a bougé qui respire
+   une fois. Rien qui clignote, rien qui réclame un clic. */
+.maj-distante{
+  position:fixed;
+  left:22px;
+  bottom:22px;
+  z-index:60;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:9px 15px;
+  border-radius:999px;
+  background:var(--navy);
+  color:var(--paper);
+  font-family:var(--mono);
+  font-size:11.5px;
+  letter-spacing:.02em;
+  box-shadow:0 6px 20px var(--shadow);
+  animation:majIn .34s cubic-bezier(.2,.8,.3,1) both;
+}
+.maj-distante.sortie{animation:majOut .38s ease both;}
+.maj-point{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--brass);
+  box-shadow:0 0 0 0 rgba(184,137,43,.65);
+  animation:majPouls 1.9s ease-out infinite;
+}
+@keyframes majIn{from{opacity:0;transform:translateY(14px) scale(.96);}to{opacity:1;transform:none;}}
+@keyframes majOut{to{opacity:0;transform:translateY(10px) scale(.98);}}
+@keyframes majPouls{
+  0%{box-shadow:0 0 0 0 rgba(184,137,43,.6);}
+  70%{box-shadow:0 0 0 7px rgba(184,137,43,0);}
+  100%{box-shadow:0 0 0 0 rgba(184,137,43,0);}
+}
+
+/* Le compteur qui vient de changer : une respiration, pas un clignotement. */
+.tab-count.vient-de-changer{animation:compteurChange 1.1s cubic-bezier(.2,.8,.3,1);}
+@keyframes compteurChange{
+  0%{transform:scale(1);}
+  22%{transform:scale(1.28);background:var(--brass);color:#fff;}
+  100%{transform:scale(1);}
+}
+
+@media (max-width:640px){
+  .maj-distante{left:14px;right:14px;bottom:14px;justify-content:center;}
+}
+
 /* Réglage système « réduire les animations » : on n'anime plus rien. */
 @media (prefers-reduced-motion:reduce){
   *, *::before, *::after{
@@ -718,6 +769,10 @@ footer.note{
     transition-duration:0.001ms !important;
   }
   .stamp{transform:rotate(-12deg);opacity:1;}
+  /* L'annonce reste lisible, elle cesse seulement de bouger : c'est une
+     information, pas une décoration — la supprimer priverait la personne du
+     seul indice qui explique pourquoi son écran a changé. */
+  .maj-point{animation:none;box-shadow:0 0 0 3px rgba(184,137,43,.35);}
 }
 
 @media print{
@@ -1178,12 +1233,15 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 .feuille-casier table{width:100%;border-collapse:collapse;font-size:13px;}
 .feuille-casier th{
   text-align:left;
-  border-bottom:2px solid var(--navy);
-  padding:6px 4px;
+  background:var(--navy);
+  color:var(--paper);
+  padding:7px 8px;
   font-family:var(--mono);
   font-size:10px;
   text-transform:uppercase;
+  letter-spacing:.05em;
 }
+.feuille-casier tbody tr:nth-child(even) td{background:var(--paper);}
 .feuille-casier td{border-bottom:1px solid var(--line);padding:8px 4px;}
 .feuille-casier td.b{font-family:var(--mono);font-weight:600;}
 .feuille-casier td.case{width:70px;border:1px solid var(--navy);}
@@ -1218,12 +1276,18 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
    main, plutôt que de refuser de sortir. */
 .attestation{max-width:17cm;margin:0 auto;line-height:1.65;}
 .attest-entete{
-  border-bottom:2px solid var(--navy);
+  border-bottom:3px solid var(--brass);
   padding-bottom:10px;
   margin-bottom:28px;
   font-size:12px;
+  color:var(--slate);
 }
-.attest-organisme{font-family:var(--typewriter);font-size:17px;margin-bottom:2px;}
+.attest-organisme{
+  font-family:var(--typewriter);
+  font-size:17px;
+  margin-bottom:2px;
+  color:var(--navy);
+}
 .attestation h1{
   font-family:var(--typewriter);
   font-size:19px;
@@ -1232,8 +1296,17 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 }
 .attest-corps{font-size:13.5px;margin:0 0 16px;}
 .attest-identite{font-size:15px;margin-bottom:20px;}
-.attest-adresse{margin:6px 0 20px 28px;font-family:var(--mono);font-size:13px;}
-.attest-valeur{font-weight:600;}
+/* L'adresse de domiciliation : c'est la ligne que la personne recopiera sur
+   ses formulaires. Elle doit se retrouver d'un coup d'œil sur la page. */
+.attest-adresse{
+  margin:6px 0 20px 0;
+  padding:10px 14px;
+  background:var(--paper);
+  border-left:3px solid var(--brass);
+  font-family:var(--mono);
+  font-size:13px;
+}
+.attest-valeur{font-weight:600;color:var(--navy);}
 .attest-trait{
   display:inline-block;
   border-bottom:1px solid var(--navy);
@@ -1251,9 +1324,53 @@ body.impression-casier .feuille-casier{display:block;}
   body.impression-casier .toasts,
   body.impression-casier dialog{display:none !important;}
   body.impression-casier .feuille-casier{display:block;}
-  .feuille-casier{color:#000;}
-  .feuille-casier td.case{border:1px solid #000;}
-  .attest-entete{border-bottom-color:#000;}
-  .attest-trait{border-bottom-color:#000;}
-  .attest-signature p{color:#000;}
+  /* Les couleurs à l'impression.
+
+     Par défaut, les navigateurs effacent fonds et aplats pour économiser
+     l'encre : sans print-color-adjust, l'en-tête de l'attestation sortirait
+     blanc sur blanc. On le demande explicitement, là où la couleur porte du
+     sens — l'identité de l'organisme, et la lecture des tableaux.
+
+     Tout reste lisible en noir et blanc : la couleur double une information
+     déjà donnée par le texte et la graisse, elle ne la remplace jamais. Un
+     bureau qui imprime en monochrome ne perd rien. */
+  .feuille-casier{color:#16233F;}
+  .feuille-casier h1{color:#16233F;}
+  .feuille-casier th{
+    background:#16233F;
+    color:#F4F0E6;
+    border-bottom:none;
+    padding:7px 8px;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .feuille-casier td{border-bottom:1px solid #CFC6AE;}
+  /* Une ligne sur deux teintée : sur une liste de casiers, c'est ce qui évite
+     de suivre la mauvaise ligne du doigt. */
+  .feuille-casier tbody tr:nth-child(even) td{
+    background:#F4F0E6;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .feuille-casier td.b{color:#16233F;}
+  .feuille-casier td.case{border:1px solid #16233F;}
+
+  .attestation h1{color:#16233F;}
+  .attest-entete{
+    border-bottom-color:#B8892B;
+    border-bottom-width:3px;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .attest-organisme{color:#16233F;}
+  .attest-adresse{
+    background:#F4F0E6;
+    border-left:3px solid #B8892B;
+    padding:10px 14px;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .attest-valeur{color:#16233F;}
+  .attest-trait{border-bottom-color:#16233F;}
+  .attest-signature p{color:#5B6B82;}
 }

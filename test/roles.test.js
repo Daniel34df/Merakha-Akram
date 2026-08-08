@@ -570,6 +570,80 @@ test('un code d’une autre antenne ne livre rien, ni fiche ni remise', function
   });
 });
 
+test('aucune route de lecture ne contourne le filtre d’antenne', function () {
+  /* L'interface passe par /api/state, qui filtre. Mais rien n'empêche
+     d'appeler les autres routes directement depuis un onglet de développeur :
+     ce sont elles qu'il faut vérifier, pas ce que l'écran affiche. */
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [{ id: 'antenne-nord', nom: 'Antenne Nord' }, { id: 'antenne-sud', nom: 'Antenne Sud' }]
+    });
+    await t.patron('POST', '/api/contacts', {
+      name: 'Nadia Nord', email: 'nadia@ex.com', box: 'N-01', antenneId: 'antenne-nord'
+    });
+    await t.patron('POST', '/api/contacts', {
+      name: 'Simon Sud', email: 'simon@ex.com', box: 'S-01', antenneId: 'antenne-sud'
+    });
+    await t.patron('POST', '/api/notify', { name: 'Nadia Nord', email: 'nadia@ex.com', antenneId: 'antenne-nord' });
+
+    const cree = (await t.patron('POST', '/api/auth/agents', {
+      name: 'Accueil Sud',
+      antenneId: 'antenne-sud',
+      permissions: { guichet: true, remise: true, registre: true, exports: true }
+    })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    const sansNadia = function (reponse, route) {
+      assert.ok(
+        !JSON.stringify(reponse.body).includes('Nadia'),
+        route + ' laisse fuir un destinataire d’une autre antenne'
+      );
+    };
+
+    sansNadia(await t.agent('GET', '/api/contacts'), 'GET /api/contacts');
+    sansNadia(await t.agent('GET', '/api/history'), 'GET /api/history');
+    sansNadia(await t.agent('GET', '/api/state'), 'GET /api/state');
+
+    // Les chiffres agrégés portent eux aussi sur la seule antenne de l'agent.
+    const stats = await t.agent('GET', '/api/stats');
+    const statsPatron = await t.patron('GET', '/api/stats');
+    assert.notDeepEqual(stats.body, statsPatron.body, 'l’agent ne compte pas tout le réseau');
+
+    // Et il voit bien la sienne : c'est un filtre, pas une panne.
+    assert.ok(JSON.stringify((await t.agent('GET', '/api/contacts')).body).includes('Simon'));
+  });
+});
+
+test('la sauvegarde complète est réservée à qui règle le bureau', function () {
+  /* Elle emporte tout : toutes les antennes, l'historique avec ses codes en
+     clair, et la liste des comptes. Un accès d'agent ne doit pas pouvoir
+     repartir avec le registre entier en un seul appel. */
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('POST', '/api/contacts', { name: 'Nadia Nord', email: 'nadia@ex.com' });
+    const envoi = await t.patron('POST', '/api/notify', { name: 'Nadia Nord', email: 'nadia@ex.com' });
+
+    const cree = (await t.patron('POST', '/api/auth/agents', {
+      name: 'Accueil',
+      permissions: { guichet: true, remise: true, registre: true, exports: true }
+    })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    const refus = await t.agent('GET', '/api/backup');
+    assert.equal(refus.status, 403, 'la sauvegarde est refusée à un agent');
+    assert.equal(refus.body.code, 'droit');
+    assert.ok(
+      !String(JSON.stringify(refus.body)).includes(envoi.body.record.pickupCode),
+      'et aucun code de retrait ne part avec le refus'
+    );
+
+    // Le responsable, lui, sauvegarde.
+    assert.equal((await t.patron('GET', '/api/backup')).status, 200);
+  });
+});
+
 test('un agent privé de domiciliation ne peut plus ouvrir de dossier', function () {
   return withServer(async function (t) {
     await t.patron('POST', '/api/auth/signup', PATRON);

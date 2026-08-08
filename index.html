@@ -904,6 +904,13 @@
   <div class="stamp"><span id="stampLabel">ENVOYÉ</span><small id="stampWho"></small></div>
 </div>
 
+<!-- Annonce discrète d'une modification faite depuis un autre poste du bureau.
+     aria-live="polite" : lu par un lecteur d'écran sans couper ce qui est en cours. -->
+<div class="maj-distante" id="majDistante" role="status" aria-live="polite" hidden>
+  <span class="maj-point" aria-hidden="true"></span>
+  Mis à jour depuis un autre poste
+</div>
+
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <!-- Recherche globale : Ctrl+K depuis n'importe quel onglet. -->

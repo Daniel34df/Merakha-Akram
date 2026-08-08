@@ -347,6 +347,11 @@
         if (state.mode !== 'serveur' || state.auth.required) return;
         try {
           await loadServerState();
+          /* Un écran qui change tout seul est déroutant si rien ne dit
+             pourquoi. On marque le coup : l'interface s'en sert pour signaler
+             que la modification vient d'un autre poste, pas d'un geste
+             qu'on aurait fait sans s'en rendre compte. */
+          state.majDistanteA = Date.now();
           emit();
         } catch (e) {
           /* Session fermée ou serveur reparti : la sonde et les appels

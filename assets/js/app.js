@@ -5120,7 +5120,43 @@
     });
   }
 
-  store.onChange(renderAll);
+  /* Une modification venue d'un autre poste change l'écran sans que personne
+     n'ait rien touché ici. Sans un signe, c'est déroutant — on croit avoir
+     cliqué quelque chose. On l'annonce brièvement, et on fait respirer une
+     fois les compteurs qui ont bougé : de quoi comprendre d'où ça vient, sans
+     interrompre ce qu'on est en train de faire. */
+  let derniereMajVue = 0;
+
+  function signalerMajDistante() {
+    const quand = S.majDistanteA || 0;
+    if (!quand || quand === derniereMajVue) return;
+    derniereMajVue = quand;
+
+    document.querySelectorAll('nav button[data-panel] .tab-count').forEach(function (n) {
+      n.classList.remove('vient-de-changer');
+      // Relire une propriété calculée relance l'animation sur un nœud déjà animé.
+      void n.offsetWidth;
+      n.classList.add('vient-de-changer');
+    });
+
+    const bandeau = $('majDistante');
+    if (!bandeau) return;
+    bandeau.hidden = false;
+    bandeau.classList.remove('sortie');
+    void bandeau.offsetWidth;
+    clearTimeout(bandeau._minuteur);
+    bandeau._minuteur = setTimeout(function () {
+      bandeau.classList.add('sortie');
+      setTimeout(function () {
+        bandeau.hidden = true;
+      }, 400);
+    }, 3200);
+  }
+
+  store.onChange(function () {
+    renderAll();
+    signalerMajDistante();
+  });
 
   document.addEventListener('keydown', function (e) {
     /* Ctrl+K (⌘K sur Mac) ouvre la recherche globale depuis n'importe où, y
