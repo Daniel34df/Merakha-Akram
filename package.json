@@ -1,6 +1,6 @@
 {
   "name": "bureau-du-courrier",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Registre des destinataires et notifications de courrier reçu — interface web et serveur d'envoi optionnel.",
   "license": "MIT",
   "private": true,

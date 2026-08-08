@@ -1,4 +1,4 @@
-<#
+﻿<#
   Bureau du Courrier — faire reconnaître le certificat du bureau (Windows).
 
   Lancé par confiance.cmd, SUR LES AUTRES POSTES — pas sur celui qui garde le

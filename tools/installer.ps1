@@ -1,4 +1,4 @@
-<#
+﻿<#
   Bureau du Courrier — installation complète, sans intervention (Windows).
 
   Lancé par installer.cmd. Dans l'ordre :
@@ -197,7 +197,7 @@ if (Test-Path (Join-Path $Racine 'node_modules\nodemailer')) {
     Info 'Module installé.'
   } else {
     Souci "Installation impossible (réseau ou dépôt npm). L'application fonctionne"
-    Souci 'sans lui : les messages s’ouvriront dans votre logiciel de courriel.'
+    Souci 'sans lui : les messages s''ouvriront dans votre logiciel de courriel.'
   }
 }
 
@@ -267,7 +267,7 @@ try {
 # ── 6. lancement ──────────────────────────────────────────────────────────────
 
 Titre 'Installation terminée.'
-Info 'Le serveur démarre, le navigateur va s’ouvrir sur http://localhost:3000'
+Info 'Le serveur démarre, le navigateur va s''ouvrir sur http://localhost:3000'
 Info 'Pour arrêter : fermez cette fenêtre, ou Ctrl+C.'
 Info 'Pour redémarrer plus tard : le raccourci du Bureau, ou demarrer.cmd.'
 Write-Host ''

@@ -813,6 +813,28 @@ portant sur la valeur envoyée (mot de passe actuel erroné, par exemple) répon
 
 ---
 
+## Modifier les scripts PowerShell
+
+Deux règles, et elles ne sont pas cosmétiques : les enfreindre empêche le
+script de **s'analyser**, donc de démarrer du tout, avec une avalanche
+d'erreurs rouges qui ne désigne jamais la vraie cause.
+
+1. **Enregistrez les `.ps1` en UTF-8 avec BOM.** Sans BOM, Windows PowerShell
+   5.1 — celui livré avec Windows — lit le fichier en Windows-1252. Le tiret
+   cadratin `—` s'y termine par l'octet `0x94`, qui vaut `”` : un guillemet,
+   qui ferme une chaîne en plein milieu.
+2. **Pas d'apostrophe typographique `’` dans le code.** PowerShell la traite
+   comme un délimiteur de chaîne, BOM ou pas. Écrivez une apostrophe droite,
+   doublée à l'intérieur d'une chaîne simple : `'s''ouvrir'`.
+
+Les `.cmd`, eux, ne prennent **pas** de BOM : `cmd.exe` l'afficherait à
+l'écran. Ils déclarent déjà `chcp 65001`.
+
+`test/powershell.test.js` vérifie les deux points sur chaque script, sans
+avoir besoin de Windows ni de PowerShell.
+
+---
+
 ## Développement
 
 ```

@@ -1,4 +1,4 @@
-<#
+﻿<#
   Bureau du Courrier — fabrique un certificat pour le réseau du bureau (Windows).
 
   Lancé par certificat.cmd, sur le poste qui garde le registre.

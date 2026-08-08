@@ -17,7 +17,7 @@ const domiciliation = require('../assets/js/domiciliation.js');
 const roles = require('../assets/js/roles.js');
 const reseau = require('./reseau.js');
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
 
 const MIME = {
