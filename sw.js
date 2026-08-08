@@ -17,7 +17,7 @@
    Changer CACHE_VERSION invalide l'ancien cache au prochain chargement. */
 'use strict';
 
-const CACHE_VERSION = 'bdc-v16';
+const CACHE_VERSION = 'bdc-v17';
 
 /** Le code doit toujours être cohérent avec lui-même : réseau d'abord. */
 function isCode(url) {
@@ -34,6 +34,7 @@ const SHELL = [
   './assets/js/attente.js',
   './assets/js/roles.js',
   './assets/js/domiciliation.js',
+  './assets/js/appels.js',
   './assets/js/xlsx.js',
   './assets/js/store.js',
   './assets/js/notify.js',

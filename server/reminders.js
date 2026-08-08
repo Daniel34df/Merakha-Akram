@@ -32,9 +32,8 @@ function joursEcoules(depuis, maintenant) {
 /* Un courrier compte comme en attente tant qu'il n'a été ni retiré ni classé.
    Un courrier classé est sorti du circuit — renvoyé, détruit, remis en main
    propre : il ne doit plus ni compter, ni être relancé, ni resurgir au dossier. */
-function enAttente(entree) {
-  return !entree.pickedUpAt && !entree.closedAt && entree.status !== 'échec';
-}
+// Définie dans assets/js/util.js : le serveur et l'écran doivent compter pareil.
+const enAttente = util.enAttente;
 
 /**
  * Courriers à relancer maintenant.

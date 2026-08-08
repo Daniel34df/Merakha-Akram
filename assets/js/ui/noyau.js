@@ -180,11 +180,11 @@
   /* ═════════════ lectures d'un courrier ═════════════
 
      Deux questions posées partout : ce courrier attend-il encore, et depuis
-     combien de jours ? Elles ne relèvent d'aucun écran en particulier. */
+     combien de jours ? Elles ne relèvent d'aucun écran en particulier — la
+     première vit dans util.js, que le serveur charge aussi, pour que les deux
+     côtés comptent le même courrier de la même façon. */
 
-  function enAttente(h) {
-    return !h.pickedUpAt && !h.closedAt && h.status !== 'échec';
-  }
+  const enAttente = util.enAttente;
 
   function joursDepuis(iso) {
     return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);

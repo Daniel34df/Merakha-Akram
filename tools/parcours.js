@@ -245,6 +245,27 @@ async function main() {
   verifie(resteAAppeler, 'Une fois l’appel noté, la personne sort de la liste.');
   dit('Sans ce geste, le guichet la rappellerait tous les matins.');
 
+  /* Mais sortir de la liste ne doit pas vouloir dire disparaître. On demande
+     directement à la règle ce qu'elle dira dans huit jours — plutôt que de
+     truquer l'horloge de la page, qui ne prouverait rien de plus. */
+  const dansUneSemaine = await agent.evaluate(() => {
+    const h = BC.store.state.history;
+    const plusTard = Date.now() + 8 * 86400000;
+    return {
+      demain: BC.appels.aRappeler(h, { maintenant: Date.now() + 86400000 }).length,
+      huitJours: BC.appels.aRappeler(h, { maintenant: plusTard }).map((x) => x.name)
+    };
+  });
+  verifie(dansUneSemaine.demain === 0, 'Appelée hier, on ne la rappelle pas dès demain.');
+  verifie(
+    dansUneSemaine.huitJours.length === 1,
+    'Mais si elle n’est pas venue, elle revient au bout d’une semaine, marquée « à rappeler ».'
+  );
+  dit(
+    'Sans ce retour, une personne sans courriel serait appelée une seule fois, ' +
+      'quand une personne joignable par écrit est relancée trois fois.'
+  );
+
   // ── 7 ──────────────────────────────────────────────────────────────────
   titre('Les personnes viennent chercher leur courrier');
   const codes = await page.evaluate(() =>

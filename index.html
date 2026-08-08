@@ -344,12 +344,17 @@
          le registre sans que personne ne sache qu'ils attendent. -->
     <div class="card" id="appelsCard" hidden>
       <div class="card-head">
-        <h2>À prévenir par téléphone (<span id="countAppels">0</span>)</h2>
+        <h2>Appels à passer (<span id="countAppels">0</span>)</h2>
+        <span class="hint" id="appelsResume"></span>
       </div>
       <p class="hint" style="margin-bottom:14px;">
         Ces personnes n'ont pas de courriel : leur courrier est là, elles ne le savent
         pas encore. Notez l'appel une fois passé — sinon elles resteront sur cette liste
         et le guichet les rappellera demain.
+        <br>
+        Celles qui ont déjà été prévenues mais qui ne sont pas venues reviennent au bout
+        d'une semaine, marquées <strong>à rappeler</strong> : sans cela, leur courrier
+        partirait au rebut sans que personne ne les ait relancées.
       </p>
       <div id="appelsTable"></div>
     </div>
@@ -1137,6 +1142,7 @@
 <script src="assets/js/attente.js"></script>
 <script src="assets/js/roles.js"></script>
 <script src="assets/js/domiciliation.js"></script>
+<script src="assets/js/appels.js"></script>
 <script src="assets/js/xlsx.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/notify.js"></script>

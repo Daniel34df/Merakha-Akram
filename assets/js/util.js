@@ -580,9 +580,19 @@
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) === dateStr;
   }
 
+  /* Un courrier attend tant qu'il n'a été ni retiré, ni classé, ni mis en
+     échec. La question se pose des deux côtés — le serveur pour les relances,
+     l'écran pour les listes — et la réponse doit être la même : deux
+     définitions qui divergeraient donneraient deux comptes différents du même
+     courrier. Elle vit donc ici, dans la base que tout le monde charge déjà. */
+  function enAttente(entree) {
+    return !entree.pickedUpAt && !entree.closedAt && entree.status !== 'échec';
+  }
+
   return {
     normalize: normalize,
     escapeHtml: escapeHtml,
+    enAttente: enAttente,
     isValidEmail: isValidEmail,
     extractEmail: extractEmail,
     isValidAddress: isValidAddress,

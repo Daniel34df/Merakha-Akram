@@ -1426,41 +1426,60 @@
      Le courrier des personnes sans adresse électronique. Il est arrivé, aucun
      message n'a pu partir, et sans cette liste il dormirait dans le registre
      sans que personne ne sache qu'il attend quelqu'un. */
-  function aPrevenirParTelephone() {
-    return S.history.filter(function (h) {
-      return enAttente(h) && deLAntenne(h) && !h.email && h.status !== 'prévenu';
-    });
+  function listeAppels() {
+    return BC.appels.listeDuJour(S.history.filter(deLAntenne));
   }
 
   function renderAppels() {
     const carte = $('appelsCard');
     if (!carte) return;
-    const liste = aPrevenirParTelephone();
+    const liste = listeAppels();
     carte.hidden = liste.length === 0;
     $('countAppels').textContent = liste.length;
     if (!liste.length) return;
+
+    /* Deux motifs dans la même liste, et il faut qu'ils se distinguent d'un
+       coup d'œil : « à prévenir » ne sait rien, « à rappeler » a déjà été
+       jointe et n'est pas venue. On ne dit pas la même chose au téléphone. */
+    const combien = function (motif) {
+      return liste.filter(function (l) {
+        return l.motif === motif;
+      }).length;
+    };
+    const rappels = combien('rappeler');
+    $('appelsResume').textContent = rappels
+      ? combien('prevenir') + ' à prévenir · ' + rappels + ' à rappeler'
+      : '';
 
     $('appelsTable').innerHTML =
       '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Téléphone</th>' +
       '<th>Boîte</th><th>Arrivé</th><th>Appels</th><th></th></tr></thead><tbody>' +
       liste
-        .map(function (h) {
+        .map(function (l) {
+          const h = l.entree;
           const c = S.contacts.find(function (x) {
             return x.id === h.contactId;
           });
           const tel = h.telephone || (c && c.telephone) || '';
-          const essais = (h.appels || []).length;
-          const jours = Math.floor((Date.now() - new Date(h.date).getTime()) / 86400000);
+          const jours = joursDepuis(h.date);
+          const rappel = l.motif === 'rappeler';
           return (
-            '<tr><td><strong>' + esc(h.name) + '</strong></td>' +
+            '<tr><td><strong>' + esc(h.name) + '</strong>' +
+            (rappel
+              ? '<span class="absence-tag">à rappeler — prévenue il y a ' + l.depuis + ' j</span>'
+              : '') +
+            '</td>' +
             // Le numéro en gros : c'est ce qu'on recopie sur le clavier.
             '<td class="tel-cell">' + (tel ? esc(tel) : '<em>aucun numéro</em>') + '</td>' +
             '<td class="box-cell">' + esc((c && c.box) || '—') + '</td>' +
             '<td class="attente-cell' + (jours >= 7 ? ' vieux' : '') + '">' +
             (jours === 0 ? 'aujourd’hui' : 'il y a ' + jours + ' j') + '</td>' +
-            '<td class="attente-cell">' + (essais ? essais + ' essai(s)' : '—') + '</td>' +
+            '<td class="attente-cell">' +
+            (l.tentatives ? l.tentatives + ' appel(s)' : '—') +
+            '</td>' +
             '<td class="actions">' +
-            '<button class="link-btn" data-appel-joint="' + esc(h.id) + '">Prévenue</button>' +
+            '<button class="link-btn" data-appel-joint="' + esc(h.id) + '">' +
+            (rappel ? 'Rappelée' : 'Prévenue') + '</button>' +
             '<button class="link-btn" data-appel-vain="' + esc(h.id) + '">Sans réponse</button>' +
             '</td></tr>'
           );
