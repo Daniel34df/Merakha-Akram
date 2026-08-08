@@ -327,6 +327,105 @@ async function main() {
   verifie(rapport.length > 0, 'Le rapport annuel est prêt pour la préfecture.');
   await capture(page, '07-rapport');
 
+  // ── 11 ─────────────────────────────────────────────────────────────────
+  titre('Une attestation arrive à échéance : on la renouvelle');
+  /* Une attestation vaut douze mois. Périmée, elle coupe l'accès aux droits —
+     souvent sans que personne ne s'en aperçoive avant le refus d'un guichet.
+     On avance la date d'élection d'un an pour rejouer ce moment. */
+  const echu = await page.evaluate(async () => {
+    const c = BC.store.state.contacts.find((x) => x.domicilie && !x.domiciliationCloseLe);
+    if (!c) return null;
+    const veille = new Date();
+    veille.setFullYear(veille.getFullYear() - 1);
+    const jour = veille.toISOString().slice(0, 10);
+    await BC.store.updateContact(c.id, {
+      domicilie: true,
+      domicilieDepuis: jour,
+      domicilieJusqua: jour
+    });
+    return { id: c.id, nom: c.name, avant: jour };
+  });
+  await page.waitForTimeout(900);
+  await page.click('nav button[data-panel="domiciliation"]');
+  await page.waitForTimeout(1000);
+
+  const signale = await page.evaluate(() => {
+    const t = document.getElementById('renouvelerTable');
+    return t ? t.innerText.replace(/\s+/g, ' ').slice(0, 120) : '';
+  });
+  dit('À renouveler : ' + signale);
+  verifie(
+    !!(echu && signale.includes(echu.nom.split(' ')[0])),
+    'L’écran signale l’attestation qui arrive à échéance.'
+  );
+
+  const bouton = page.locator('button[data-renouveler]').first();
+  verifie(await bouton.count(), 'Et propose de la renouveler sur place.');
+  if (await bouton.count()) {
+    await bouton.click();
+    await page.waitForTimeout(1300);
+    /* Le renouvellement propose l'attestation dans la foulée : la personne est
+       venue pour elle. Ici on décline, la 9e étape l'a déjà imprimée. */
+    if (await page.locator('#confirmDialog[open]').count()) {
+      await page.locator('#confirmDialog button[value=cancel]').click();
+      await page.waitForTimeout(500);
+    }
+  }
+  const apresR = await page.evaluate(
+    (id) => BC.store.state.contacts.find((x) => x.id === id) || {},
+    echu && echu.id
+  );
+  dit('Échéance reportée au ' + (apresR.domicilieJusqua || '—'));
+  verifie(
+    apresR.domicilieJusqua && apresR.domicilieJusqua !== (echu && echu.avant),
+    'L’échéance est reportée de douze mois.'
+  );
+  verifie(
+    apresR.domicilieDepuis === (echu && echu.avant),
+    'La date d’élection d’origine ne bouge pas : l’ancienneté compte.'
+  );
+  await capture(page, '08-renouvellement');
+  await pause(page);
+
+  // ── 12 ─────────────────────────────────────────────────────────────────
+  titre('La personne est relogée : la domiciliation se clôt');
+  const aClore = page.locator('button[data-clore]').first();
+  verifie(await aClore.count(), 'Chaque dossier en cours peut être clos depuis le registre.');
+  if (await aClore.count()) {
+    await aClore.click();
+    await page.waitForTimeout(700);
+    /* Le motif est choisi, pas deviné : c'est lui que le rapport annuel
+       ventile, et lui qui justifie la fin d'une adresse administrative. */
+    const motifs = await page.evaluate(() =>
+      [...document.querySelectorAll('#clotureMotif option')].map((o) => o.textContent.trim())
+    );
+    dit('Motifs proposés : ' + motifs.join(' · '));
+    verifie(motifs.length >= 4, 'Le motif est choisi dans la liste que le rapport annuel attend.');
+    await page.selectOption('#clotureMotif', 'relogée');
+    await page.click('#clotureDialog button[value=ok]');
+    await page.waitForTimeout(1500);
+  }
+
+  const close = await page.evaluate(
+    (id) => BC.store.state.contacts.find((x) => x.id === id) || {},
+    echu && echu.id
+  );
+  verifie(!!close.domiciliationCloseLe, 'Le dossier porte sa date de clôture.');
+  verifie(close.domiciliationMotif === 'relogée', 'Et son motif : ' + (close.domiciliationMotif || '—'));
+
+  await page.waitForTimeout(600);
+  const rapport2 = await page.evaluate(() => {
+    const c = document.getElementById('rapportCorps');
+    return c ? c.innerText.replace(/\s+/g, ' ') : '';
+  });
+  dit('Rapport annuel après clôture : ' + rapport2.slice(0, 140));
+  verifie(
+    /CLOSES DANS L’ANNÉE 1/i.test(rapport2) || /CLOSES DANS L'ANNÉE 1/i.test(rapport2),
+    'Le rapport annuel compte enfin la clôture — cette case affichait 0 pour toujours.'
+  );
+  await capture(page, '09-cloture');
+  dit('Une domiciliation close sort des dossiers en cours et n’imprime plus d’attestation.');
+
   // ── bilan ──────────────────────────────────────────────────────────────
   console.log('\n  ' + '─'.repeat(70));
   if (erreursJs.length) {

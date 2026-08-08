@@ -1783,7 +1783,10 @@ async function handleApi(req, res, ctx, pathname) {
   const contactMatch = pathname.match(/^\/api\/contacts\/([^/]+)$/);
   if (contactMatch) {
     const id = decodeURIComponent(contactMatch[1]);
-    const existing = db.data.contacts.find(function (c) {
+    /* Passer par le filtre d'antenne, comme la lecture : sans lui, un agent
+       rattaché à une antenne pouvait modifier — et surtout supprimer — la
+       fiche d'une autre, alors qu'il n'a pas le droit de la voir. */
+    const existing = pourSonAntenne(db.data.contacts).find(function (c) {
       return c.id === id;
     });
     if (!existing) throw Object.assign(new Error('Destinataire introuvable'), { status: 404 });
@@ -1796,6 +1799,20 @@ async function handleApi(req, res, ctx, pathname) {
         throw Object.assign(new Error('Ce courriel est déjà au registre sous « ' + clash.name + ' »'), { status: 409 });
       }
       const updated = Object.assign({}, existing, input, { updatedAt: new Date().toISOString() });
+
+      /* Un nom qui change laisse l'ancien dans le journal, sous « cible ». On
+         le garde ici — sur la fiche, donc effacé avec elle — pour que
+         l'effacement complet sache quoi chercher. Sans cette liste, corriger
+         une faute de frappe suffisait à rendre un effacement incomplet. */
+      if (util.normalize(updated.name) !== util.normalize(existing.name)) {
+        const anciens = (existing.nomsAnterieurs || []).slice();
+        if (!anciens.some(function (n) {
+          return util.normalize(n) === util.normalize(existing.name);
+        })) {
+          anciens.push(existing.name);
+        }
+        updated.nomsAnterieurs = anciens.slice(-10);
+      }
       await db.write(function (data) {
         const i = data.contacts.findIndex(function (c) {
           return c.id === id;
@@ -1811,17 +1828,112 @@ async function handleApi(req, res, ctx, pathname) {
     }
     if (method === 'DELETE') {
       exigerDroit(currentUser, 'registre');
+      const complet = new URL(req.url, 'http://localhost').searchParams.get('effacer') === 'complet';
+
+      /* Deux gestes différents, et il faut qu'ils le restent.
+
+         Supprimer sort quelqu'un du registre et laisse son courrier à
+         l'historique : c'est ce qu'on veut quand une personne s'en va mais que
+         les remises passées doivent rester justifiables.
+
+         Effacer ne laisse rien. Ce registre porte les noms, les dates de
+         naissance et les numéros de personnes sans domicile stable — parfois
+         de gens qui se cachent de quelqu'un. Quand l'une d'elles demande à
+         disparaître des fichiers, « sortie du registre mais toujours nommée
+         dans l'historique et le journal » n'est pas une réponse.
+
+         Ce qui subsiste, c'est l'acte : qui a effacé, quand, combien de
+         lignes. Sans cette trace, un effacement ne se distinguerait pas d'une
+         disparition — et c'est précisément ce qu'un contrôle doit pouvoir
+         départager. */
+      const sienne = function (h) {
+        if (h.contactId && existing.id) return h.contactId === existing.id;
+        // Sans courriel, pas de rapprochement possible : « '' === '' » aurait
+        // emporté le courrier de tous les autres destinataires sans adresse.
+        return !!existing.email && util.normalize(h.email) === util.normalize(existing.email);
+      };
+
+      /* Tout ce qui la désigne, pas seulement son nom courant.
+
+         Les noms d'abord : une correction de faute de frappe laisse l'ancien
+         au journal, sous « cible ». Puis le téléphone et le courriel — le
+         journal les inscrit en clair dans « details » quand un courrier est
+         annoncé par téléphone. Pour quelqu'un qui se cache de quelqu'un, un
+         numéro identifie autant qu'un nom : l'effacer à moitié ne l'efface
+         pas.
+
+         Le seuil de quatre caractères évite qu'une valeur trop courte ne
+         vienne mordre dans du texte qui ne la concerne pas. */
+      const sesTraces = [existing.name]
+        .concat(existing.nomsAnterieurs || [])
+        .concat([existing.telephone, existing.email])
+        .map(function (n) {
+          return String(n || '').trim();
+        })
+        .filter(function (n) {
+          return n.length >= 4;
+        });
+      const sesNoms = [existing.name]
+        .concat(existing.nomsAnterieurs || [])
+        .map(function (n) {
+          return String(n || '').trim();
+        })
+        .filter(Boolean);
+
+      let courriersEfface = 0;
+      let lignesAnonymisees = 0;
+
       await db.write(function (data) {
         data.contacts = data.contacts.filter(function (c) {
           return c.id !== id;
         });
+        if (!complet) return;
+
+        const avant = data.history.length;
+        data.history = data.history.filter(function (h) {
+          return !sienne(h);
+        });
+        courriersEfface = avant - data.history.length;
+
+        (data.journal || []).forEach(function (ligne) {
+          let touchee = false;
+          if (ligne.cible && sesNoms.some(function (n) {
+            return util.normalize(ligne.cible) === util.normalize(n);
+          })) {
+            ligne.cible = 'personne effacée';
+            touchee = true;
+          }
+          /* « details » est du texte libre — la note d'un appel, le numéro
+             composé, le nom du tiers venu retirer un courrier. Tout ce qui la
+             désigne s'y retire aussi, sinon l'anonymisation ne tient qu'à
+             moitié. */
+          if (ligne.details) {
+            sesTraces.forEach(function (n) {
+              if (ligne.details.includes(n)) {
+                ligne.details = ligne.details.split(n).join('personne effacée');
+                touchee = true;
+              }
+            });
+          }
+          if (touchee) lignesAnonymisees++;
+        });
       });
+
       await consigner(db, {
         qui: currentUser && currentUser.name,
-        action: 'destinataire supprimé',
-        cible: existing.name
+        action: complet ? 'destinataire effacé' : 'destinataire supprimé',
+        // Le nom n'a pas à revenir par la porte du journal qu'on vient de nettoyer.
+        cible: complet ? 'personne effacée' : existing.name,
+        details: complet
+          ? courriersEfface + ' courrier(s) effacé(s), ' + lignesAnonymisees + ' ligne(s) anonymisée(s)'
+          : ''
       });
-      return sendJson(res, 200, { deleted: id });
+      return sendJson(res, 200, {
+        deleted: id,
+        complet: complet,
+        courriersEfface: courriersEfface,
+        lignesAnonymisees: lignesAnonymisees
+      });
     }
   }
 
@@ -1851,8 +1963,12 @@ async function handleApi(req, res, ctx, pathname) {
         type: util.typeCourrier(body.type).id,
         pickupCode: String(body.pickupCode || '') || genererCodeRetrait(db.data.history)
       };
-      if (!record.name || !record.email) {
-        throw Object.assign(new Error('Nom et courriel requis'), { status: 400 });
+      /* Le nom suffit. Exiger un courriel ici refusait d'inscrire le courrier
+         d'une personne qui n'en a pas — le reste de l'application l'accepte
+         depuis qu'elle sait prévenir par téléphone, et le lien avec la fiche
+         se fait par « contactId », pas par l'adresse. */
+      if (!record.name) {
+        throw Object.assign(new Error('Nom requis'), { status: 400 });
       }
       await db.write(function (data) {
         data.history.unshift(record);

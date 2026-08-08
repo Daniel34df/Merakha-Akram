@@ -3331,7 +3331,11 @@
             '">Modifier</button>' +
             '<button class="link-btn danger" data-del="' +
             esc(c.id) +
-            '">Supprimer</button></td></tr>'
+            '">Sortir</button>' +
+            '<button class="link-btn danger" data-effacer="' +
+            esc(c.id) +
+            '" title="Efface la fiche, son courrier et son nom au journal">Effacer</button>' +
+            '</td></tr>'
           );
         })
         .join('') +
@@ -3402,10 +3406,14 @@
           return x.id === btn.dataset.del;
         });
         if (!c) return;
+        /* Le courriel entre parenthèses affichait « ( ) » pour une personne
+           sans adresse : on annonce ce par quoi on peut la joindre. */
+        const repere = c.email || c.telephone || 'sans courriel ni téléphone';
         const ok = await confirmDialog(
-          'Supprimer du registre',
-          'Retirer « ' + c.name + ' » (' + c.email + ') du registre ? L’historique des notifications est conservé.',
-          'Supprimer'
+          'Sortir du registre',
+          'Retirer « ' + c.name + ' » (' + repere + ') du registre ? ' +
+            'Son courrier passé reste à l’historique — ce n’est pas un effacement.',
+          'Sortir du registre'
         );
         if (!ok) return;
         try {
@@ -3413,6 +3421,44 @@
           toast('« ' + c.name + ' » retiré du registre.');
         } catch (err) {
           toast('Suppression impossible : ' + err.message, 'error');
+        }
+      });
+    });
+
+    /* Effacer, pour de bon. Ce registre porte les noms et les dates de
+       naissance de personnes sans domicile stable ; quand l'une d'elles
+       demande à disparaître des fichiers, il faut pouvoir le faire vraiment.
+       Deux confirmations, et la seconde dit ce qui part. */
+    box.querySelectorAll('button[data-effacer]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        const c = S.contacts.find(function (x) {
+          return x.id === btn.dataset.effacer;
+        });
+        if (!c) return;
+        const courriers = S.history.filter(function (h) {
+          return h.contactId === c.id || (c.email && util.normalize(h.email) === util.normalize(c.email));
+        }).length;
+
+        const ok = await confirmDialog(
+          'Effacer définitivement',
+          'Effacer « ' + c.name + ' » : la fiche, ' + courriers + ' courrier(s) de son historique, ' +
+            'et son nom dans le journal d’activité. Seule reste la trace de l’effacement — ' +
+            'qui l’a fait et quand. C’est irréversible.',
+          'Effacer définitivement'
+        );
+        if (!ok) return;
+        try {
+          const bilan = await store.removeContact(c.id, { complet: true });
+          toast(
+            'Effacé. ' +
+              (bilan
+                ? bilan.courriersEfface + ' courrier(s), ' + bilan.lignesAnonymisees + ' ligne(s) du journal.'
+                : ''),
+            'ok'
+          );
+          renderAll();
+        } catch (err) {
+          toast('Effacement impossible : ' + err.message, 'error');
         }
       });
     });

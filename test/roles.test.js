@@ -934,3 +934,237 @@ test('supprimer le responsable rouvre l’installation sans toucher au registre'
     assert.equal(t.db.data.contacts.length, 1, 'le registre n’est pas touché');
   });
 });
+
+/* ═══════════ effacer vraiment ═══════════
+
+   Supprimer un destinataire le sortait du registre et laissait tout le reste :
+   son courrier à l'historique — nom, objet, dates — et son nom au journal.
+   Pour un registre qui porte des personnes sans domicile stable, parfois des
+   gens qui se cachent de quelqu'un, « sortie du registre » n'est pas une
+   réponse à « effacez-moi de vos fichiers ». */
+
+async function avecUneFiche(t, extra) {
+  await t.patron('POST', '/api/auth/signup', PATRON);
+  const cree = await t.patron(
+    'POST', '/api/contacts',
+    Object.assign({ name: 'Amina Diallo', telephone: '06 12 34 56 78' }, extra || {})
+  );
+  assert.equal(cree.status, 201, JSON.stringify(cree.body));
+  return cree.body;
+}
+
+test('la suppression simple garde le courrier : c’est ce qui la distingue', function () {
+  return withServer(async function (t) {
+    const c = await avecUneFiche(t);
+    await t.patron('POST', '/api/notify', {
+      contactId: c.id, name: c.name, subject: 'Un courrier vous attend'
+    });
+    assert.equal(t.db.data.history.length, 1);
+
+    const sup = await t.patron('DELETE', '/api/contacts/' + c.id);
+    assert.equal(sup.status, 200);
+    assert.equal(sup.body.complet, false);
+    assert.equal(t.db.data.contacts.length, 0);
+    assert.equal(t.db.data.history.length, 1, 'l’historique est conservé');
+  });
+});
+
+test('l’effacement complet ne laisse aucune trace nominative', function () {
+  return withServer(async function (t) {
+    const c = await avecUneFiche(t);
+    await t.patron('POST', '/api/notify', {
+      contactId: c.id, name: c.name, subject: 'Un courrier vous attend'
+    });
+    await t.patron('POST', '/api/contacts/' + c.id + '/passage', { note: 'passée au guichet' });
+
+    const jav = JSON.stringify(t.db.data.journal);
+    assert.ok(jav.includes('Amina Diallo'), 'le journal la nomme avant l’effacement');
+
+    const eff = await t.patron('DELETE', '/api/contacts/' + c.id + '?effacer=complet');
+    assert.equal(eff.status, 200);
+    assert.equal(eff.body.complet, true);
+    assert.ok(eff.body.courriersEfface >= 1, 'le courrier est compté');
+
+    assert.equal(t.db.data.contacts.length, 0, 'la fiche est partie');
+    assert.equal(t.db.data.history.length, 0, 'son courrier aussi');
+
+    const reste = JSON.stringify(t.db.data);
+    assert.ok(!reste.includes('Amina Diallo'), 'plus aucune occurrence du nom : ' + reste.slice(0, 400));
+    assert.ok(!reste.includes('06 12 34 56 78'), 'ni du numéro de téléphone');
+  });
+});
+
+test('l’effacement garde la trace de l’acte : qui, quand, combien', function () {
+  return withServer(async function (t) {
+    const c = await avecUneFiche(t);
+    await t.patron('POST', '/api/notify', {
+      contactId: c.id, name: c.name, subject: 'Un courrier vous attend'
+    });
+    await t.patron('DELETE', '/api/contacts/' + c.id + '?effacer=complet');
+
+    const acte = t.db.data.journal.find(function (l) {
+      return l.action === 'destinataire effacé';
+    });
+    assert.ok(acte, 'l’effacement lui-même est consigné');
+    assert.equal(acte.qui, 'Akram', 'on sait qui a effacé');
+    assert.equal(acte.cible, 'personne effacée', 'sans renommer la personne');
+    assert.ok(acte.at, 'et quand');
+    assert.match(acte.details, /courrier\(s\) effacé\(s\)/);
+  });
+});
+
+test('un nom corrigé avant l’effacement ne reste pas au journal sous l’ancien', function () {
+  return withServer(async function (t) {
+    const c = await avecUneFiche(t);
+    await t.patron('POST', '/api/contacts/' + c.id + '/passage', { note: 'première visite' });
+
+    // La fiche est corrigée : le journal garde l'ancien nom sous « cible ».
+    const maj = await t.patron('PUT', '/api/contacts/' + c.id, {
+      name: 'Amina Diallo-Sow', telephone: '06 12 34 56 78'
+    });
+    assert.equal(maj.status, 200);
+    assert.deepEqual(maj.body.nomsAnterieurs, ['Amina Diallo']);
+    assert.ok(JSON.stringify(t.db.data.journal).includes('Amina Diallo'), 'l’ancien nom est bien là');
+
+    await t.patron('DELETE', '/api/contacts/' + c.id + '?effacer=complet');
+    const reste = JSON.stringify(t.db.data);
+    assert.ok(!reste.includes('Amina Diallo-Sow'), 'le nom courant est parti');
+    assert.ok(!reste.includes('Amina Diallo'), 'l’ancien nom aussi : ' + reste.slice(0, 400));
+  });
+});
+
+test('le nom glissé dans une note du journal part aussi', function () {
+  return withServer(async function (t) {
+    const c = await avecUneFiche(t);
+    await t.patron('POST', '/api/contacts/' + c.id + '/passage', {
+      note: 'Amina Diallo est passée avec sa fille'
+    });
+    assert.ok(JSON.stringify(t.db.data.journal).includes('est passée avec sa fille'));
+
+    await t.patron('DELETE', '/api/contacts/' + c.id + '?effacer=complet');
+    const reste = JSON.stringify(t.db.data);
+    assert.ok(!reste.includes('Amina Diallo'), 'le texte libre est nettoyé aussi');
+    assert.ok(reste.includes('est passée avec sa fille'), 'sans effacer le reste de la note');
+  });
+});
+
+test('effacer quelqu’un n’emporte pas le courrier des autres fiches sans courriel', function () {
+  return withServer(async function (t) {
+    const a = await avecUneFiche(t);
+    const b = await t.patron('POST', '/api/contacts', {
+      name: 'Omar Benali', telephone: '06 99 88 77 66'
+    });
+    assert.equal(b.status, 201);
+
+    await t.patron('POST', '/api/notify', { contactId: a.id, name: a.name, subject: 'Pour Amina' });
+    await t.patron('POST', '/api/notify', { contactId: b.body.id, name: b.body.name, subject: 'Pour Omar' });
+    assert.equal(t.db.data.history.length, 2);
+
+    await t.patron('DELETE', '/api/contacts/' + a.id + '?effacer=complet');
+
+    /* Les deux ont un courriel vide. « '' === '' » aurait emporté les deux
+       courriers — c'est exactement le piège déjà rencontré ailleurs. */
+    assert.equal(t.db.data.history.length, 1, 'seul le courrier d’Amina part');
+    assert.equal(t.db.data.history[0].name, 'Omar Benali');
+    assert.equal(t.db.data.contacts.length, 1);
+  });
+});
+
+test('effacer demande le droit registre', function () {
+  return withServer(async function (t) {
+    const c = await avecUneFiche(t);
+    const cree = await t.patron('POST', '/api/auth/agents', { name: 'Accueil' });
+    const entree = await t.agent('POST', '/api/auth/login-code', {
+      identifiant: cree.body.agent.identifiant, code: cree.body.code
+    });
+    assert.equal(entree.status, 200);
+
+    const refus = await t.agent('DELETE', '/api/contacts/' + c.id + '?effacer=complet');
+    assert.equal(refus.status, 403);
+    assert.equal(refus.body.code, 'droit');
+    assert.equal(t.db.data.contacts.length, 1, 'rien n’a bougé');
+  });
+});
+
+test('un courrier ancien, sans lien de fiche, ne rattache pas deux personnes sans courriel', function () {
+  return withServer(async function (t) {
+    const a = await avecUneFiche(t);
+    await t.patron('POST', '/api/contacts', { name: 'Omar Benali', telephone: '06 99 88 77 66' });
+
+    /* Les courriers d'avant portaient le nom et le courriel, pas l'identifiant
+       de la fiche. Quand les deux courriels sont vides, seul le garde-fou
+       empêche « '' === '' » de rattacher le courrier d'Omar à Amina. */
+    await t.db.write(function (data) {
+      data.history.push(
+        { id: 'h1', contactId: null, name: 'Amina Diallo', email: '', subject: 'Pour Amina',
+          date: new Date().toISOString(), status: 'envoyé' },
+        { id: 'h2', contactId: null, name: 'Omar Benali', email: '', subject: 'Pour Omar',
+          date: new Date().toISOString(), status: 'envoyé' }
+      );
+    });
+
+    await t.patron('DELETE', '/api/contacts/' + a.id + '?effacer=complet');
+
+    const restants = t.db.data.history.map(function (h) { return h.name; });
+    assert.ok(restants.includes('Omar Benali'), 'le courrier d’Omar reste : ' + JSON.stringify(restants));
+  });
+});
+
+test('une fiche d’une autre antenne ne se modifie ni ne s’efface', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [{ id: 'antenne-nord', nom: 'Antenne Nord' }, { id: 'antenne-sud', nom: 'Antenne Sud' }]
+    });
+    const nord = (await t.patron('POST', '/api/contacts', {
+      name: 'Nadia Nord', email: 'nadia@ex.com', box: 'N-01', antenneId: 'antenne-nord'
+    })).body;
+
+    const cree = (await t.patron('POST', '/api/auth/agents', {
+      name: 'Accueil Sud',
+      antenneId: 'antenne-sud',
+      permissions: { guichet: true, remise: true, registre: true }
+    })).body;
+    await t.agent('POST', '/api/auth/login-code', { identifiant: cree.agent.identifiant, code: cree.code });
+
+    /* La lecture filtrait déjà par antenne ; l'écriture, non. Un agent du Sud
+       avec le droit « registre » pouvait modifier — et surtout effacer — une
+       fiche du Nord qu'il n'a pas le droit de voir. */
+    const maj = await t.agent('PUT', '/api/contacts/' + nord.id, {
+      name: 'Autre nom', email: 'nadia@ex.com'
+    });
+    assert.equal(maj.status, 404, 'modifier une fiche d’une autre antenne : introuvable');
+
+    const sup = await t.agent('DELETE', '/api/contacts/' + nord.id);
+    assert.equal(sup.status, 404, 'la supprimer non plus');
+
+    const eff = await t.agent('DELETE', '/api/contacts/' + nord.id + '?effacer=complet');
+    assert.equal(eff.status, 404, 'l’effacer encore moins');
+
+    assert.equal(t.db.data.contacts.length, 1, 'la fiche du Nord est intacte');
+    assert.equal(t.db.data.contacts[0].name, 'Nadia Nord');
+
+    // Le responsable, lui, y accède : c'est un filtre d'antenne, pas une panne.
+    assert.equal((await t.patron('DELETE', '/api/contacts/' + nord.id)).status, 200);
+  });
+});
+
+test('un courrier s’inscrit pour une personne sans adresse électronique', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const c = (await t.patron('POST', '/api/contacts', {
+      name: 'Amina Diallo', telephone: '06 12 34 56 78'
+    })).body;
+
+    const pose = await t.patron('POST', '/api/history', {
+      contactId: c.id, name: c.name, email: '', subject: 'Un courrier vous attend'
+    });
+    assert.equal(pose.status, 201, JSON.stringify(pose.body));
+    assert.equal(pose.body.name, 'Amina Diallo');
+
+    // Le nom, lui, reste indispensable : sans lui la ligne ne désigne personne.
+    const sansNom = await t.patron('POST', '/api/history', { name: '', email: 'x@ex.com' });
+    assert.equal(sansNom.status, 400);
+  });
+});

@@ -1021,16 +1021,39 @@
     return state.contacts[idx];
   }
 
-  async function removeContact(id) {
+  /* Deux gestes distincts. Sortir du registre laisse le courrier à
+     l'historique ; effacer ne laisse rien — ni fiche, ni courrier, ni nom au
+     journal. Le second se demande explicitement : il ne doit jamais être le
+     résultat d'un clic de trop. */
+  async function removeContact(id, options) {
+    const complet = !!(options && options.complet);
+    const parti = state.contacts.find(function (c) {
+      return c.id === id;
+    });
     state.contacts = state.contacts.filter(function (c) {
       return c.id !== id;
     });
+
+    if (complet && parti) {
+      state.history = state.history.filter(function (h) {
+        if (h.contactId && parti.id) return h.contactId !== parti.id;
+        // Sans courriel, pas de rapprochement : sinon on emporterait le
+        // courrier de tous les autres destinataires sans adresse.
+        return !(parti.email && util.normalize(h.email) === util.normalize(parti.email));
+      });
+    }
+
+    let bilan = null;
     if (state.mode === 'serveur') {
-      await api('/contacts/' + encodeURIComponent(id), { method: 'DELETE' });
+      bilan = await api(
+        '/contacts/' + encodeURIComponent(id) + (complet ? '?effacer=complet' : ''),
+        { method: 'DELETE' }
+      );
     } else {
       persistLocal();
     }
     emit();
+    return bilan;
   }
 
   /* Sans courriel, il n'y a pas de doublon — même règle que « findDuplicate »
