@@ -1638,6 +1638,112 @@ async function handleApi(req, res, ctx, pathname) {
     });
   }
 
+  /* Renouveler ou clore une domiciliation.
+
+     Le modèle savait déjà porter ces deux états — le rapport annuel les compte
+     depuis le début — mais rien dans l'application ne permettait de les
+     produire. « Attestations à renouveler » signalait des gens sans qu'on
+     puisse rien en faire, et « Closes dans l'année » affichait invariablement
+     zéro. C'est le même métier d'accueil que l'ouverture d'un dossier : même
+     droit. */
+  const MOTIFS_CLOTURE = [
+    'relogée',
+    'partie sans laisser d’adresse',
+    'à sa demande',
+    'radiation après absence',
+    'autre'
+  ];
+
+  const domiActionMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/domiciliation$/);
+  if (domiActionMatch && method === 'POST') {
+    exigerDroit(currentUser, 'domiciliation');
+    const id = decodeURIComponent(domiActionMatch[1]);
+    const contact = pourSonAntenne(db.data.contacts || []).find(function (c) {
+      return c.id === id;
+    });
+    if (!contact) throw Object.assign(new Error('Destinataire introuvable'), { status: 404 });
+    if (!contact.domicilie) {
+      throw Object.assign(new Error('Cette personne n’est pas domiciliée ici'), { status: 400 });
+    }
+
+    const corps = await readBody(req);
+    const action = String((corps && corps.action) || '').trim();
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+
+    if (action === 'renouveler') {
+      if (contact.domiciliationCloseLe) {
+        throw Object.assign(
+          new Error('Domiciliation close le ' + contact.domiciliationCloseLe + ' — rouvrez un dossier'),
+          { status: 400 }
+        );
+      }
+      /* L'échéance repart d'aujourd'hui, mais la date d'élection d'origine ne
+         bouge pas : c'est elle qui dit depuis quand la personne est domiciliée,
+         et cette ancienneté compte pour ses droits. */
+      const options = {
+        validiteMois: Number(ctx.domiciliationMois) || undefined
+      };
+      const nouvelle = domiciliation.echeance(aujourdhui, options);
+      await db.write(function (data) {
+        const cible = data.contacts.find(function (c) {
+          return c.id === id;
+        });
+        if (!cible) return;
+        cible.domicilieJusqua = nouvelle;
+        cible.renouvellements = Array.isArray(cible.renouvellements) ? cible.renouvellements : [];
+        cible.renouvellements.unshift({
+          at: new Date().toISOString(),
+          par: currentUser ? currentUser.name : null,
+          jusqua: nouvelle
+        });
+        if (cible.renouvellements.length > 20) cible.renouvellements.length = 20;
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'domiciliation renouvelée',
+        cible: contact.name,
+        details: 'jusqu’au ' + nouvelle
+      });
+      return sendJson(res, 200, {
+        contact: db.data.contacts.find(function (c) {
+          return c.id === id;
+        })
+      });
+    }
+
+    if (action === 'clore') {
+      const motif = String((corps && corps.motif) || '').trim();
+      if (!MOTIFS_CLOTURE.includes(motif)) {
+        throw Object.assign(
+          new Error('Motif de clôture attendu : ' + MOTIFS_CLOTURE.join(', ')),
+          { status: 400 }
+        );
+      }
+      const note = String((corps && corps.note) || '').trim().slice(0, 200);
+      await db.write(function (data) {
+        const cible = data.contacts.find(function (c) {
+          return c.id === id;
+        });
+        if (!cible) return;
+        cible.domiciliationCloseLe = aujourdhui;
+        cible.domiciliationMotif = note ? motif + ' — ' + note : motif;
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'domiciliation close',
+        cible: contact.name,
+        details: motif + (note ? ' — ' + note : '')
+      });
+      return sendJson(res, 200, {
+        contact: db.data.contacts.find(function (c) {
+          return c.id === id;
+        })
+      });
+    }
+
+    throw Object.assign(new Error('Action attendue : renouveler ou clore'), { status: 400 });
+  }
+
   const passageMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/passage$/);
   if (passageMatch && method === 'POST') {
     const id = decodeURIComponent(passageMatch[1]);

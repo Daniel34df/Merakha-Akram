@@ -1000,11 +1000,104 @@
   <div class="fiche">
     <h3 id="ficheTitre">Destinataire</h3>
     <div id="ficheCorps"></div>
+
+    <!-- La ligne du registre ne permet de corriger que le nom, le courriel et
+         la boîte. Tout le reste — téléphone, langue, naissance, antenne, dates
+         de domiciliation — était définitif dès l'inscription. Ici, tout se
+         corrige, au même endroit et dans le même ordre que le formulaire. -->
+    <form id="ficheEdition" hidden style="margin-top:18px;">
+      <h4 class="sous-titre">Corriger la fiche</h4>
+      <div class="copies-grid">
+        <div>
+          <label for="fedNom">Nom</label>
+          <input type="text" id="fedNom" autocomplete="off">
+        </div>
+        <div>
+          <label for="fedBoite">Numéro de boîte</label>
+          <input type="text" id="fedBoite" autocomplete="off">
+        </div>
+      </div>
+      <div class="copies-grid">
+        <div>
+          <label for="fedCourriel">Courriel</label>
+          <input type="email" id="fedCourriel" autocomplete="off">
+        </div>
+        <div>
+          <label for="fedTelephone">Téléphone</label>
+          <input type="text" id="fedTelephone" autocomplete="off">
+        </div>
+      </div>
+      <div class="copies-grid">
+        <div>
+          <label for="fedNaissance">Date de naissance</label>
+          <input type="date" id="fedNaissance">
+        </div>
+        <div>
+          <label for="fedLangue">Langue de correspondance</label>
+          <select id="fedLangue" class="langue-select"></select>
+        </div>
+      </div>
+      <div id="fedAntenneBloc" hidden>
+        <label for="fedAntenne">Antenne</label>
+        <select id="fedAntenne" class="langue-select"></select>
+      </div>
+      <div id="fedDomiBloc" hidden>
+        <h4 class="sous-titre">Élection de domicile</h4>
+        <div class="copies-grid">
+          <div>
+            <label for="fedDepuis">Date d'élection</label>
+            <input type="date" id="fedDepuis">
+          </div>
+          <div>
+            <label for="fedJusqua">Échéance de l'attestation</label>
+            <input type="date" id="fedJusqua">
+            <p class="hint">Reportée automatiquement à chaque renouvellement.</p>
+          </div>
+        </div>
+      </div>
+      <label for="fedNotes">Observations</label>
+      <input type="text" id="fedNotes" autocomplete="off">
+      <div id="fedMsg"></div>
+    </form>
+
     <div class="row-actions end" style="margin-top:18px;">
+      <button class="btn ghost" id="ficheModifierBtn">Corriger</button>
+      <button class="btn" id="fedEnregistrerBtn" hidden>Enregistrer</button>
+      <button class="btn ghost" id="fedAnnulerBtn" hidden>Annuler</button>
       <button class="btn ghost" id="ficheAttestationBtn" hidden>Imprimer l'attestation</button>
       <button class="btn ghost" id="ficheFermer">Fermer</button>
     </div>
   </div>
+</dialog>
+
+<!-- Clore une domiciliation coupe l'adresse administrative de quelqu'un : ce
+     n'est pas un clic anodin, et le motif doit être choisi, pas deviné. Ce sont
+     ceux que le rapport annuel compte déjà. -->
+<dialog id="clotureDialog">
+  <form method="dialog">
+    <h3>Clore la domiciliation</h3>
+    <p id="clotureQui" class="verify-lead"></p>
+    <label for="clotureMotif">Motif</label>
+    <select id="clotureMotif" class="filter-input" style="width:100%;">
+      <option value="relogée">Relogée</option>
+      <!-- L'apostrophe est typographique, comme côté serveur : une apostrophe
+           droite ferait rejeter le motif. -->
+      <option value="partie sans laisser d&rsquo;adresse">Partie sans laisser d'adresse</option>
+      <option value="à sa demande">À sa demande</option>
+      <option value="radiation après absence">Radiation après absence</option>
+      <option value="autre">Autre</option>
+    </select>
+    <label for="clotureNote" style="margin-top:12px;">Précision (facultatif)</label>
+    <input type="text" id="clotureNote" autocomplete="off" placeholder="ex. relogée par le service social">
+    <p class="hint" style="margin-top:12px;">
+      La personne cesse d'être domiciliée ici : plus d'attestation, et elle sort du
+      registre des dossiers en cours. Son historique de courrier reste au registre.
+    </p>
+    <div class="row-actions end" style="margin-top:16px;">
+      <button class="btn ghost" value="cancel">Annuler</button>
+      <button class="btn rust" value="ok">Clore la domiciliation</button>
+    </div>
+  </form>
 </dialog>
 
 <dialog id="confirmDialog">

@@ -644,6 +644,132 @@ test('la sauvegarde complète est réservée à qui règle le bureau', function 
   });
 });
 
+/* ---------- renouveler et clore ----------
+
+   Le modèle portait ces deux états depuis le début et le rapport annuel les
+   comptait, mais rien dans l'application ne permettait de les produire :
+   « Closes dans l'année » affichait invariablement zéro. */
+
+test('renouveler reporte l’échéance sans toucher à la date d’élection', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const fiche = (
+      await t.patron('POST', '/api/contacts', {
+        name: 'Awa Diallo', email: 'awa@ex.com', domicilie: true, domicilieDepuis: '2025-01-15'
+      })
+    ).body;
+    assert.equal(fiche.domicilieJusqua, '2026-01-15', 'douze mois après l’élection');
+
+    const r = await t.patron('POST', '/api/contacts/' + fiche.id + '/domiciliation', {
+      action: 'renouveler'
+    });
+    assert.equal(r.status, 200, r.body && r.body.error);
+
+    const apres = r.body.contact;
+    assert.equal(apres.domicilieDepuis, '2025-01-15', 'l’ancienneté ne bouge pas : elle vaut des droits');
+    assert.ok(apres.domicilieJusqua > '2026-01-15', 'l’échéance repart d’aujourd’hui');
+    assert.equal(apres.renouvellements.length, 1, 'le renouvellement est tracé');
+    assert.ok(apres.renouvellements[0].par, 'avec qui l’a fait');
+  });
+});
+
+test('clore alimente le rapport annuel, qui affichait toujours zéro', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const annee = new Date().getFullYear();
+    const fiche = (
+      await t.patron('POST', '/api/contacts', {
+        name: 'Awa Diallo', email: 'awa@ex.com', domicilie: true,
+        domicilieDepuis: annee + '-01-15'
+      })
+    ).body;
+
+    const avant = (await t.patron('GET', '/api/domiciliation')).body;
+    assert.equal(avant.rapport.closesDansLAnnee, 0);
+    assert.equal(avant.actives.length, 1);
+
+    const r = await t.patron('POST', '/api/contacts/' + fiche.id + '/domiciliation', {
+      action: 'clore', motif: 'relogée', note: 'par le service social'
+    });
+    assert.equal(r.status, 200, r.body && r.body.error);
+    assert.match(r.body.contact.domiciliationMotif, /relogée/);
+
+    const apres = (await t.patron('GET', '/api/domiciliation')).body;
+    assert.equal(apres.closesDansLAnnee || apres.rapport.closesDansLAnnee, 1, 'le rapport compte enfin');
+    assert.equal(apres.actives.length, 0, 'et elle sort des dossiers en cours');
+    assert.ok(apres.rapport.motifs && Object.keys(apres.rapport.motifs).length > 0, 'le motif est ventilé');
+  });
+});
+
+test('un motif inventé est refusé', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const fiche = (
+      await t.patron('POST', '/api/contacts', {
+        name: 'Awa', email: 'awa@ex.com', domicilie: true, domicilieDepuis: '2026-01-15'
+      })
+    ).body;
+    const r = await t.patron('POST', '/api/contacts/' + fiche.id + '/domiciliation', {
+      action: 'clore', motif: 'parce que'
+    });
+    assert.equal(r.status, 400);
+    assert.match(r.body.error, /Motif de clôture attendu/);
+  });
+});
+
+test('une domiciliation close ne se renouvelle pas', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const fiche = (
+      await t.patron('POST', '/api/contacts', {
+        name: 'Awa', email: 'awa@ex.com', domicilie: true, domicilieDepuis: '2026-01-15'
+      })
+    ).body;
+    await t.patron('POST', '/api/contacts/' + fiche.id + '/domiciliation', {
+      action: 'clore', motif: 'à sa demande'
+    });
+    const r = await t.patron('POST', '/api/contacts/' + fiche.id + '/domiciliation', {
+      action: 'renouveler'
+    });
+    assert.equal(r.status, 400);
+    assert.match(r.body.error, /close/i);
+  });
+});
+
+test('modifier une fiche ne doit pas annuler un renouvellement', function () {
+  /* Piège : cleanContact recalcule l'échéance depuis la date d'élection quand
+     la requête ne la porte pas. Une modification de fiche après renouvellement
+     ramènerait donc l'échéance douze mois après l'élection d'origine — le
+     renouvellement serait effacé sans que personne ne le voie. */
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const fiche = (
+      await t.patron('POST', '/api/contacts', {
+        name: 'Awa', email: 'awa@ex.com', domicilie: true, domicilieDepuis: '2025-01-15'
+      })
+    ).body;
+    const renouvelee = (
+      await t.patron('POST', '/api/contacts/' + fiche.id + '/domiciliation', { action: 'renouveler' })
+    ).body.contact;
+
+    // L'interface doit renvoyer l'échéance courante avec la modification.
+    const modifiee = await t.patron('PUT', '/api/contacts/' + fiche.id, {
+      name: 'Awa Diallo',
+      email: 'awa@ex.com',
+      domicilie: true,
+      domicilieDepuis: renouvelee.domicilieDepuis,
+      domicilieJusqua: renouvelee.domicilieJusqua
+    });
+    assert.equal(modifiee.status, 200, modifiee.body && modifiee.body.error);
+    assert.equal(
+      modifiee.body.domicilieJusqua,
+      renouvelee.domicilieJusqua,
+      'le renouvellement survit à une correction de fiche'
+    );
+    assert.equal(modifiee.body.renouvellements.length, 1, 'et sa trace aussi');
+  });
+});
+
 test('un agent privé de domiciliation ne peut plus ouvrir de dossier', function () {
   return withServer(async function (t) {
     await t.patron('POST', '/api/auth/signup', PATRON);

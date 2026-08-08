@@ -7,12 +7,32 @@
      3. « mémoire »  : rien ne persiste (page ouverte dans un contexte verrouillé).
 
    Toutes les méthodes sont asynchrones et ne lèvent jamais d'exception de stockage :
-   en cas d'échec d'écriture, on rétrograde le mode et on prévient l'interface. */
-(function (root) {
-  'use strict';
+   en cas d'échec d'écriture, on rétrograde le mode et on prévient l'interface.
 
-  const util = root.BC.util;
-  const attente = root.BC.attente;
+   Ce module se charge des deux côtés, comme util.js, attente.js, roles.js,
+   domiciliation.js et reseau.js : window.BC.store dans le navigateur,
+   module.exports sous Node. Il l'est devenu tard, et pour une raison précise —
+   « updateContact » perdait silencieusement le téléphone d'un destinataire et
+   aucune suite de tests ne pouvait s'en apercevoir, faute de pouvoir charger ce
+   fichier. Tout ce qui touche au navigateur (localStorage, EventSource,
+   location) passe par « root », jamais par un global direct : sous Node, ces
+   chemins ne sont simplement pas empruntés. */
+(function (root, factory) {
+  const enNode = typeof module === 'object' && module.exports;
+  const api = factory(
+    root,
+    enNode ? require('./util.js') : root.BC.util,
+    enNode ? require('./attente.js') : root.BC.attente,
+    enNode ? require('./domiciliation.js') : root.BC.domiciliation
+  );
+  if (enNode) {
+    module.exports = api;
+  } else {
+    root.BC = root.BC || {};
+    root.BC.store = api;
+  }
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, util, attente, domiciliation) {
+  'use strict';
 
   const CONTACTS_KEY = 'courrier-contacts';
   const HISTORY_KEY = 'courrier-history';
@@ -719,6 +739,18 @@
     return api('/reseau');
   }
 
+  /** Renouveler l'attestation, ou clore la domiciliation avec son motif. */
+  async function actionDomiciliation(id, action, options) {
+    const opts = options || {};
+    const result = await api('/contacts/' + encodeURIComponent(id) + '/domiciliation', {
+      method: 'POST',
+      body: JSON.stringify({ action: action, motif: opts.motif || '', note: opts.note || '' })
+    });
+    await loadServerState();
+    emit();
+    return result;
+  }
+
   /** L'agent a appelé la personne qui n'a pas d'adresse électronique. */
   async function noterAppel(id, options) {
     const opts = options || {};
@@ -910,7 +942,7 @@
     };
     // Hors ligne, l'échéance se calcule ici : le serveur ne la fournira qu'au rejeu.
     if (contact.domicilie && contact.domicilieDepuis && !contact.domicilieJusqua) {
-      contact.domicilieJusqua = root.BC.domiciliation.echeance(contact.domicilieDepuis);
+      contact.domicilieJusqua = domiciliation.echeance(contact.domicilieDepuis);
     }
     if (state.mode === 'serveur') {
       const saved = await api('/contacts', {
@@ -949,31 +981,28 @@
       return c.id === id;
     });
     if (idx === -1) return null;
-    const updated = Object.assign({}, state.contacts[idx], {
-      name: patch.name.trim(),
-      email: patch.email.trim(),
-      box: (patch.box || '').trim(),
-      absentUntil: patch.absentUntil !== undefined ? patch.absentUntil : state.contacts[idx].absentUntil || '',
-      departed: patch.departed !== undefined ? !!patch.departed : !!state.contacts[idx].departed,
-      substituteId: patch.substituteId !== undefined ? patch.substituteId : state.contacts[idx].substituteId || null,
-      langue: util.langue(patch.langue !== undefined ? patch.langue : state.contacts[idx].langue).id,
-      antenneId: patch.antenneId !== undefined ? patch.antenneId : state.contacts[idx].antenneId || '',
-      /* Domiciliation : ce que la modification ne mentionne pas est conservé.
-         Une correction de nom ne doit pas effacer une élection de domicile. */
-      domicilie: patch.domicilie !== undefined ? !!patch.domicilie : !!state.contacts[idx].domicilie,
-      domicilieDepuis:
-        patch.domicilieDepuis !== undefined ? patch.domicilieDepuis : state.contacts[idx].domicilieDepuis || '',
-      domicilieJusqua:
-        patch.domicilieJusqua !== undefined ? patch.domicilieJusqua : state.contacts[idx].domicilieJusqua || '',
-      domiciliationCloseLe:
-        patch.domiciliationCloseLe !== undefined
-          ? patch.domiciliationCloseLe
-          : state.contacts[idx].domiciliationCloseLe || '',
-      domiciliationMotif:
-        patch.domiciliationMotif !== undefined
-          ? patch.domiciliationMotif
-          : state.contacts[idx].domiciliationMotif || ''
-    });
+
+    /* Ce que la modification ne mentionne pas est conservé : une correction de
+       nom ne doit pas effacer une élection de domicile, ni un numéro de
+       téléphone.
+
+       Cette fusion remplace une énumération champ par champ. Elle listait ce
+       qu'une fiche contient — donc il fallait penser à l'allonger chaque fois
+       que le serveur apprenait un champ de plus. Le téléphone, la date de
+       naissance et les observations y ont été oubliés : corriger un numéro le
+       renvoyait inchangé, sans le moindre message. Le serveur reste l'autorité
+       sur ce qu'une fiche contient (« cleanContact ») ; tenir ici une seconde
+       liste de mémoire ne pouvait que dériver à nouveau. */
+    const base = state.contacts[idx];
+    const updated = Object.assign({}, base, patch);
+    updated.name = String(updated.name || '').trim();
+    updated.email = String(updated.email || '').trim();
+    updated.box = String(updated.box || '').trim();
+    updated.telephone = String(updated.telephone || '').trim();
+    updated.langue = util.langue(updated.langue).id;
+    updated.departed = !!updated.departed;
+    updated.domicilie = !!updated.domicilie;
+    updated.substituteId = updated.substituteId || null;
     if (state.mode === 'serveur') {
       state.contacts[idx] = await api('/contacts/' + encodeURIComponent(id), {
         method: 'PUT',
@@ -1004,10 +1033,18 @@
     emit();
   }
 
+  /* Sans courriel, il n'y a pas de doublon — même règle que « findDuplicate »
+     côté serveur. « '' === '' » aurait désigné la première fiche sans adresse
+     venue : à l'import, deux personnes sans courriel étaient prises l'une pour
+     l'autre, et la seconde refusée comme déjà présente. */
   function findByEmail(email) {
-    return state.contacts.find(function (c) {
-      return util.normalize(c.email) === util.normalize(email);
-    }) || null;
+    const cherche = util.normalize(email);
+    if (!cherche) return null;
+    return (
+      state.contacts.find(function (c) {
+        return util.normalize(c.email) === cherche;
+      }) || null
+    );
   }
 
   /* ---------- historique ---------- */
@@ -1125,7 +1162,7 @@
     return result;
   }
 
-  root.BC.store = {
+  return {
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     state: state,
     onChange: function (fn) {
@@ -1163,6 +1200,7 @@
     loadDomiciliation: loadDomiciliation,
     loadReseau: loadReseau,
     noterAppel: noterAppel,
+    actionDomiciliation: actionDomiciliation,
     enregistrerPassage: enregistrerPassage,
     loadJournal: loadJournal,
     changePassword: changePassword,
@@ -1182,4 +1220,4 @@
       return attente.resume(state.file);
     }
   };
-})(window);
+});

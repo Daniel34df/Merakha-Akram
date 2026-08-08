@@ -1758,16 +1758,136 @@
        fiche de quelqu'un qui n'est pas domicilié, le bouton n'aurait aucun
        sens. */
     const boutonAttestation = $('ficheAttestationBtn');
-    boutonAttestation.hidden = !(c.domicilie && !c.domiciliationCloseLe);
+    /* Le drapeau reste sur le bouton : quand on sort du mode correction, il
+       faut savoir s'il avait le droit d'être là avant, et « hidden » seul ne
+       le dit plus. */
+    boutonAttestation.dataset.possible = c.domicilie && !c.domiciliationCloseLe ? 'oui' : 'non';
     boutonAttestation.dataset.contact = c.id;
 
+    /* Corriger touche au registre. Sans compte, tout est ouvert ; avec un
+       compte limité, on ne propose pas un geste que le serveur refusera. */
+    $('ficheModifierBtn').dataset.possible =
+      !S.auth.user || roles.peut(S.auth.user, 'registre') ? 'oui' : 'non';
+
+    // Toute fiche s'ouvre en lecture, même si la précédente était en correction.
+    modeEditionFiche(false);
+
     const dlg = $('ficheDialog');
+    dlg.dataset.contact = c.id;
     if (typeof dlg.showModal === 'function') dlg.showModal();
   }
 
   $('ficheAttestationBtn').addEventListener('click', function (e) {
     $('ficheDialog').close();
     imprimerAttestation(e.currentTarget.dataset.contact);
+  });
+
+  /* ── corriger une fiche ──────────────────────────────────────────────
+     La ligne du registre ne laissait corriger que le nom, le courriel et la
+     boîte. Une faute de frappe sur une date de naissance, un numéro qui
+     change : c'était définitif. Ici tout se reprend. */
+  remplirLangues($('fedLangue'), 'fr');
+
+  function modeEditionFiche(actif) {
+    $('ficheEdition').hidden = !actif;
+    $('ficheCorps').hidden = actif;
+    $('fedEnregistrerBtn').hidden = !actif;
+    $('fedAnnulerBtn').hidden = !actif;
+    $('ficheModifierBtn').hidden = actif || $('ficheModifierBtn').dataset.possible !== 'oui';
+    $('ficheAttestationBtn').hidden = actif || $('ficheAttestationBtn').dataset.possible !== 'oui';
+  }
+
+  function remplirEditionFiche(c) {
+    $('fedNom').value = c.name || '';
+    $('fedBoite').value = c.box || '';
+    $('fedCourriel').value = c.email || '';
+    $('fedTelephone').value = c.telephone || '';
+    $('fedNaissance').value = c.naissance || '';
+    $('fedLangue').value = util.langue(c.langue).id;
+    $('fedNotes').value = c.notes || '';
+
+    const liste = antennes();
+    $('fedAntenneBloc').hidden = liste.length === 0;
+    if (liste.length) {
+      $('fedAntenne').innerHTML =
+        '<option value="">—</option>' +
+        liste
+          .map(function (a) {
+            return '<option value="' + esc(a.id) + '">' + esc(a.nom) + '</option>';
+          })
+          .join('');
+      $('fedAntenne').value = c.antenneId || '';
+    }
+
+    $('fedDomiBloc').hidden = !c.domicilie;
+    $('fedDepuis').value = c.domicilieDepuis || '';
+    $('fedJusqua').value = c.domicilieJusqua || '';
+    setMsg('fedMsg', '', '');
+  }
+
+  $('ficheModifierBtn').addEventListener('click', function () {
+    const c = S.contacts.find(function (x) {
+      return x.id === $('ficheDialog').dataset.contact;
+    });
+    if (!c) return;
+    remplirEditionFiche(c);
+    modeEditionFiche(true);
+    $('fedNom').focus();
+  });
+
+  $('fedAnnulerBtn').addEventListener('click', function () {
+    modeEditionFiche(false);
+  });
+
+  $('fedEnregistrerBtn').addEventListener('click', async function () {
+    const id = $('ficheDialog').dataset.contact;
+    const c = S.contacts.find(function (x) {
+      return x.id === id;
+    });
+    if (!c) return;
+
+    const nom = $('fedNom').value.trim();
+    const courriel = $('fedCourriel').value.trim();
+    const tel = $('fedTelephone').value.trim();
+
+    if (!nom) return setMsg('fedMsg', 'error', 'Le nom ne peut pas être vide.');
+    if (courriel && !util.isValidEmail(courriel)) {
+      return setMsg('fedMsg', 'error', 'Cette adresse électronique n’est pas valide.');
+    }
+    if (!courriel && !tel) {
+      return setMsg('fedMsg', 'error', 'Gardez au moins un courriel ou un téléphone.');
+    }
+
+    const btn = $('fedEnregistrerBtn');
+    btn.disabled = true;
+    try {
+      await store.updateContact(id, {
+        name: nom,
+        email: courriel,
+        telephone: tel,
+        box: $('fedBoite').value.trim(),
+        naissance: $('fedNaissance').value,
+        langue: $('fedLangue').value,
+        antenneId: antennes().length ? $('fedAntenne').value : '',
+        notes: $('fedNotes').value.trim(),
+        domicilie: !!c.domicilie,
+        domicilieDepuis: c.domicilie ? $('fedDepuis').value : '',
+        /* L'échéance courante voyage avec la modification : sans elle, le
+           serveur la recalculerait depuis la date d'élection et annulerait
+           silencieusement le dernier renouvellement. */
+        domicilieJusqua: c.domicilie ? $('fedJusqua').value : '',
+        domiciliationCloseLe: c.domiciliationCloseLe || '',
+        domiciliationMotif: c.domiciliationMotif || '',
+        absentUntil: c.absentUntil || ''
+      });
+      toast('Fiche de ' + nom + ' corrigée.', 'ok');
+      $('ficheDialog').close();
+      renderAll();
+    } catch (err) {
+      setMsg('fedMsg', 'error', esc(err.message));
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   $('ficheFermer').addEventListener('click', function () {
@@ -2411,7 +2531,9 @@
             '<td class="actions">' +
             '<button class="link-btn" data-domifiche="' + esc(l.id) + '">Fiche</button>' +
             '<button class="link-btn" data-attestation="' + esc(l.id) + '">Attestation</button>' +
+            '<button class="link-btn" data-renouveler="' + esc(l.id) + '">Renouveler</button>' +
             '<button class="link-btn" data-passage="' + esc(l.id) + '">Noter un passage</button>' +
+            '<button class="link-btn danger" data-clore="' + esc(l.id) + '">Clore</button>' +
             '</td></tr>'
           );
         })
@@ -2467,7 +2589,83 @@
     if (attestation) return imprimerAttestation(attestation.dataset.attestation);
     const passage = e.target.closest('button[data-passage]');
     if (passage) return noterPassage(passage.dataset.passage, passage);
+    const renouveler = e.target.closest('button[data-renouveler]');
+    if (renouveler) return renouvelerDomiciliation(renouveler.dataset.renouveler, renouveler);
+    const clore = e.target.closest('button[data-clore]');
+    if (clore) return clturerDomiciliation(clore.dataset.clore);
   });
+
+  /* Renouveler : l'échéance repart d'aujourd'hui, la date d'élection d'origine
+     ne bouge pas — c'est elle qui dit depuis quand la personne est domiciliée,
+     et cette ancienneté compte pour ses droits. */
+  async function renouvelerDomiciliation(id, bouton) {
+    const c = S.contacts.find(function (x) {
+      return x.id === id;
+    });
+    if (!c) return;
+    if (bouton) bouton.disabled = true;
+    try {
+      const r = await store.actionDomiciliation(id, 'renouveler');
+      const jusqua = (r && r.contact && r.contact.domicilieJusqua) || '';
+      toast(
+        'Attestation de ' + c.name + ' renouvelée' +
+          (jusqua ? ' jusqu’au ' + util.formatJour(jusqua) : '') + '.',
+        'ok'
+      );
+      await renderDomiciliation();
+      /* La personne est venue chercher son attestation : on la propose tout de
+         suite plutôt que de la faire revenir. */
+      const encore = await confirmDialog(
+        'Imprimer l’attestation ?',
+        'L’attestation de ' + c.name + ' est renouvelée' +
+          (jusqua ? ' jusqu’au ' + util.formatJour(jusqua) : '') +
+          '. Voulez-vous l’imprimer maintenant ?',
+        'Imprimer'
+      );
+      if (encore) imprimerAttestation(id);
+    } catch (err) {
+      toast('Renouvellement impossible : ' + err.message, 'error');
+      if (bouton) bouton.disabled = false;
+    }
+  }
+
+  /* Clore : le motif est choisi, pas deviné — c'est lui que le rapport annuel
+     ventile, et c'est lui qui justifie la fin d'une adresse administrative. */
+  async function clturerDomiciliation(id) {
+    const c = S.contacts.find(function (x) {
+      return x.id === id;
+    });
+    if (!c) return;
+    const dlg = $('clotureDialog');
+    $('clotureQui').textContent = c.name + (c.box ? ' — boîte ' + c.box : '');
+    $('clotureNote').value = '';
+    if (typeof dlg.showModal !== 'function') {
+      toast('Ce navigateur ne sait pas ouvrir la fenêtre de clôture.', 'error');
+      return;
+    }
+    const choix = await new Promise(function (resolve) {
+      dlg.addEventListener(
+        'close',
+        function () {
+          resolve(dlg.returnValue === 'ok');
+        },
+        { once: true }
+      );
+      dlg.showModal();
+    });
+    if (!choix) return;
+
+    try {
+      await store.actionDomiciliation(id, 'clore', {
+        motif: $('clotureMotif').value,
+        note: $('clotureNote').value.trim()
+      });
+      toast('Domiciliation de ' + c.name + ' close.', 'ok');
+      await renderDomiciliation();
+    } catch (err) {
+      toast('Clôture impossible : ' + err.message, 'error');
+    }
+  }
 
 
   /* Noter un passage sans courrier : c'est ce qui empêche de croire disparue
@@ -3044,7 +3242,12 @@
     }
 
     box.innerHTML =
-      '<div class="table-scroll"><table><thead><tr><th>N° boîte</th><th>Nom</th><th>Courriel</th><th></th></tr></thead><tbody>' +
+      /* Le téléphone a sa colonne : pour une bonne part du public, c'est le
+         seul moyen de joindre quelqu'un, et le registre ne le montrait nulle
+         part — il fallait ouvrir la fiche pour savoir si la personne était
+         joignable du tout. */
+      '<div class="table-scroll"><table><thead><tr><th>N° boîte</th><th>Nom</th><th>Courriel</th>' +
+      '<th>Téléphone</th><th></th></tr></thead><tbody>' +
       list
         .map(function (c) {
           if (c.id === view.editingId) {
@@ -3061,6 +3264,9 @@
               '<td><input type="email" class="edit-email" value="' +
               esc(c.email) +
               '"></td>' +
+              '<td><input type="text" class="edit-telephone" value="' +
+              esc(c.telephone || '') +
+              '"></td>' +
               '<td class="actions">' +
               '<button class="link-btn" data-save="' +
               esc(c.id) +
@@ -3068,7 +3274,7 @@
               '<button class="link-btn" data-cancel="1">Annuler</button></td></tr>' +
               '<tr data-absence="' +
               esc(c.id) +
-              '"><td colspan="4" class="absence-edit">' +
+              '"><td colspan="5" class="absence-edit">' +
               '<label>Absent·e jusqu’au</label>' +
               '<input type="date" class="edit-absent" value="' +
               esc(c.absentUntil || '') +
@@ -3109,7 +3315,9 @@
               ? '<span class="absence-tag">' + esc(util.presence(c).message) + '</span>'
               : '') +
             '</td><td>' +
-            esc(c.email) +
+            (c.email ? esc(c.email) : '<span class="hint">—</span>') +
+            '</td><td>' +
+            (c.telephone ? esc(c.telephone) : '<span class="hint">—</span>') +
             '</td>' +
             '<td class="actions">' +
             '<button class="link-btn" data-fiche="' +
@@ -3151,9 +3359,23 @@
         // Surtout pas « box » ici : le conteneur du tableau porte déjà ce nom,
         // et la redéclaration le rendait inaccessible dès la première ligne.
         const boite = row.querySelector('.edit-box').value.trim();
+        const telephone = row.querySelector('.edit-telephone').value.trim();
         const absence = lireAbsence(btn.dataset.save);
-        if (!name || !util.isValidEmail(email)) {
-          toast('Nom ou courriel invalide.', 'error');
+
+        /* La même règle qu'à l'inscription : un courriel OU un téléphone.
+           Exiger le courriel ici rendait toute personne sans adresse
+           définitivement incorrigible — et c'est justement le public que ce
+           bureau reçoit. */
+        if (!name) {
+          toast('Le nom ne peut pas être vide.', 'error');
+          return;
+        }
+        if (email && !util.isValidEmail(email)) {
+          toast('Cette adresse électronique n’est pas valide.', 'error');
+          return;
+        }
+        if (!email && !telephone) {
+          toast('Gardez au moins un courriel ou un téléphone pour la joindre.', 'error');
           return;
         }
         const clash = store.findByEmail(email);
@@ -3164,7 +3386,7 @@
         try {
           await store.updateContact(
             btn.dataset.save,
-            Object.assign({ name: name, email: email, box: boite }, absence)
+            Object.assign({ name: name, email: email, box: boite, telephone: telephone }, absence)
           );
           view.editingId = null;
           renderContacts();
