@@ -724,6 +724,17 @@ registre, au premier démarrage.
 > que ce que vaut sa confidentialité. Les tentatives sont freinées, et chaque
 > usage est inscrit au journal.
 
+**Tant que le code n'a pas été changé, la reprise n'est acceptée que depuis le
+poste qui fait tourner le serveur.** Les autres postes du bureau reçoivent un
+refus expliquant quoi faire. C'est le garde-fou qui rend le code d'origine
+inoffensif sur le réseau local : le freinage des tentatives ne protège de rien
+quand le code est publié — il n'y a rien à deviner. Dès que `MASTER_CODE` porte
+une valeur à vous, la reprise redevient possible depuis n'importe quel poste.
+
+Le responsable voit un avertissement dans **Réglages → Les accès** tant que le
+code d'origine est en place. Les agents ne le voient pas : le signaler
+reviendrait à indiquer la porte.
+
 ---
 
 ## Comptes du bureau

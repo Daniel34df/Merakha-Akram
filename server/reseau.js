@@ -42,6 +42,23 @@ function estPrivee(adresse, famille) {
   return false;
 }
 
+/* La machine elle-même, et personne d'autre.
+
+   Sert à réserver la reprise par code maître au poste qui tient le serveur,
+   tant que ce code est celui du dépôt. « ::ffff:127.0.0.1 » est la forme que
+   prend une connexion IPv4 sur une écoute IPv6 : l'oublier reviendrait à
+   refuser la machine locale à elle-même, donc à condamner la reprise.
+
+   On ne se fie qu'à l'adresse de la connexion (« req.socket.remoteAddress »),
+   jamais à un en-tête : « X-Forwarded-For » s'écrit à la main. */
+function estLocale(adresse) {
+  const a = String(adresse || '').trim().toLowerCase();
+  if (!a) return false;
+  if (a === '::1' || a === '::ffff:127.0.0.1') return true;
+  // Toute la boucle locale 127.0.0.0/8, y compris sous forme IPv4-mappée.
+  return /^(::ffff:)?127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(a);
+}
+
 /* Le lien-local ne se tape pas dans un navigateur : en IPv6 il exige un
    identifiant de zone, et en IPv4 (169.254.x.x) il signale justement que la
    machine n'a **pas** obtenu d'adresse — le wifi n'a pas abouti. */
@@ -174,6 +191,7 @@ function aChange(avant, maintenant) {
 module.exports = {
   estPrivee: estPrivee,
   estLienLocal: estLienLocal,
+  estLocale: estLocale,
   ecouteFermee: ecouteFermee,
   typeCarte: typeCarte,
   nomUtilisable: nomUtilisable,

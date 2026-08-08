@@ -193,6 +193,22 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
   margin-bottom:20px;
   position:relative;
 }
+/* Une carte qui signale un risque, pas un réglage. Le filet à gauche la
+   distingue au premier coup d'œil dans une colonne de cartes identiques —
+   sans clignoter ni réclamer un clic pour disparaître : elle doit rester là
+   tant que la cause est là. Les deux teintes existent en clair et en sombre. */
+.alerte-securite{
+  border-color:var(--rust);
+  border-left:4px solid var(--rust);
+  background:var(--danger-wash);
+}
+.alerte-securite h2{color:var(--rust);}
+.alerte-securite code{
+  font-family:var(--typewriter);
+  font-weight:600;
+  white-space:nowrap;
+}
+
 .card h2{
   font-family:var(--typewriter);
   font-size:15px;

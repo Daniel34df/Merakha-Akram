@@ -217,10 +217,18 @@ test('/api/state ne divulgue ni comptes ni sessions', function () {
   return withServer(async function (t) {
     await t.call('POST', '/api/auth/signup', COMPTE);
     const state = await t.call('GET', '/api/state');
-    assert.deepEqual(Object.keys(state.body).sort(), ['contacts', 'history', 'settings', 'suivi']);
+    assert.deepEqual(
+      Object.keys(state.body).sort(),
+      ['codeMaitreParDefaut', 'contacts', 'history', 'settings', 'suivi']
+    );
     assert.equal(state.body.users, undefined);
     assert.equal(state.body.sessions, undefined);
     assert.equal(state.body.pending, undefined);
+
+    /* Le drapeau du code maître dit « il n'a pas été changé », jamais sa
+       valeur : un booléen, et rien qui ressemble au code lui-même. */
+    assert.equal(typeof state.body.codeMaitreParDefaut, 'boolean');
+    assert.ok(!JSON.stringify(state.body).includes('26366686806'), 'le code lui-même ne circule pas');
   });
 });
 

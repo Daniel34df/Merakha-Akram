@@ -167,10 +167,47 @@ async function withServer(run) {
   const patron = session();
   const agent = session();
 
+  /* Rejouer un appel venu d'un autre poste du bureau.
+
+     Les tests se connectent forcément par la boucle locale : sans cela, on ne
+     pourrait jamais vérifier ce que voit le serveur d'une machine voisine — or
+     c'est précisément la distinction dont dépend la protection du code maître.
+     On remplace donc l'adresse du pair sur la connexion, juste avant que la
+     requête ne soit traitée. Rien n'est touché côté serveur.
+
+     « Connection: close » évite que la connexion truquée soit recyclée pour un
+     appel suivant, qui hériterait alors d'une fausse adresse. */
+  let adresseSimulee = null;
+  server.prependListener('request', function (req) {
+    if (!adresseSimulee || !req.socket) return;
+    Object.defineProperty(req.socket, 'remoteAddress', {
+      value: adresseSimulee,
+      configurable: true
+    });
+  });
+
+  const appelDistant = async function (ip, body, chemin, methode) {
+    adresseSimulee = ip;
+    try {
+      const res = await fetch(base + (chemin || '/api/auth/master'), {
+        method: methode || 'POST',
+        headers: { 'Content-Type': 'application/json', Connection: 'close' },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const texte = await res.text();
+      let json;
+      try { json = JSON.parse(texte); } catch (e) { json = texte; }
+      return { status: res.status, body: json };
+    } finally {
+      adresseSimulee = null;
+    }
+  };
+
   try {
     await run({
       patron: patron,
       agent: agent,
+      appelDistant: appelDistant,
       cookiePatron: function () { return patron.jar.cookie; },
       cookieAgent: function () { return agent.jar.cookie; },
       db: db,
@@ -1166,5 +1203,97 @@ test('un courrier s’inscrit pour une personne sans adresse électronique', fun
     // Le nom, lui, reste indispensable : sans lui la ligne ne désigne personne.
     const sansNom = await t.patron('POST', '/api/history', { name: '', email: 'x@ex.com' });
     assert.equal(sansNom.status, 400);
+  });
+});
+
+/* ═══════════ le code maître ═══════════
+
+   Il est publié avec le code source. Tant qu'il n'a pas été remplacé, il ouvre
+   le compte du responsable à quiconque atteint le serveur — et depuis que le
+   bureau écoute pour les autres postes, cela veut dire tout le réseau local.
+   La reprise reste donc réservée à la machine du serveur jusqu'à ce qu'un vrai
+   code soit posé. */
+
+test('le code d’origine n’ouvre la reprise que depuis le poste du serveur', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+
+    // Depuis la machine elle-même : la reprise fonctionne, c'est son rôle.
+    const local = await fetch(t.base + '/api/auth/master', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: authSrv.MASTER_CODE_DEFAUT, action: 'voir' })
+    });
+    assert.equal(local.status, 200, 'depuis le poste du serveur, la reprise reste possible');
+  });
+});
+
+test('le code d’origine est refusé depuis un autre poste, sans rien révéler', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+
+    /* On rejoue ce que fait un poste voisin : la connexion vient d'une adresse
+       du réseau local, pas de la boucle locale. */
+    const distant = await t.appelDistant('192.168.1.42', {
+      code: authSrv.MASTER_CODE_DEFAUT, action: 'voir'
+    });
+    assert.equal(distant.status, 403);
+    assert.equal(distant.body.code, 'maitre-distant');
+    assert.ok(!JSON.stringify(distant.body).includes(PATRON.email), 'l’adresse du responsable ne fuit pas');
+    assert.match(distant.body.error, /MASTER_CODE/, 'le refus dit quoi faire');
+  });
+});
+
+test('un poste voisin ne peut pas supprimer le compte responsable avec le code publié', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('POST', '/api/contacts', { name: 'Amina', telephone: '06 12 34 56 78' });
+
+    const attaque = await t.appelDistant('192.168.1.42', {
+      code: authSrv.MASTER_CODE_DEFAUT, action: 'supprimer'
+    });
+    assert.equal(attaque.status, 403);
+    assert.equal(t.db.data.users.length, 1, 'le responsable est toujours là');
+    assert.equal(t.db.data.contacts.length, 1, 'et le registre avec lui');
+  });
+});
+
+test('un vrai code maître rend la reprise possible depuis les autres postes', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    // Ce que fait MASTER_CODE au démarrage : poser l'empreinte d'un autre code.
+    await t.db.write(function (data) {
+      data.masterCodeHash = authSrv.empreinteCodeMaitre('un-code-propre-au-bureau');
+    });
+
+    const bon = await t.appelDistant('192.168.1.42', {
+      code: 'un-code-propre-au-bureau', action: 'voir'
+    });
+    assert.equal(bon.status, 200, 'un code qui n’est plus celui du dépôt vaut de n’importe où');
+    assert.equal(bon.body.responsable.email, PATRON.email);
+
+    // Et l'ancien code ne vaut plus rien, de nulle part.
+    const ancien = await t.appelDistant('192.168.1.42', {
+      code: authSrv.MASTER_CODE_DEFAUT, action: 'voir'
+    });
+    assert.equal(ancien.status, 401);
+  });
+});
+
+test('un agent n’apprend pas que le code maître est celui d’origine', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const cree = (await t.patron('POST', '/api/auth/agents', { name: 'Accueil' })).body;
+    await t.agent('POST', '/api/auth/login-code', {
+      identifiant: cree.agent.identifiant, code: cree.code
+    });
+
+    // Le responsable, lui, doit le savoir : c'est lui qui peut le changer.
+    const vuPatron = await t.patron('GET', '/api/state');
+    assert.equal(vuPatron.body.codeMaitreParDefaut, true);
+
+    /* À un agent, l'annoncer reviendrait à indiquer la porte — le code est
+       publié, il suffirait de s'asseoir au poste du serveur. */
+    const vuAgent = await t.agent('GET', '/api/state');
+    assert.equal(vuAgent.body.codeMaitreParDefaut, false);
   });
 });

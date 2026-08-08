@@ -170,6 +170,31 @@ function verifierCodeMaitre(db, code) {
   return verifyPassword(String(code || ''), stocke);
 }
 
+/* Le code maître est-il encore celui du dépôt ?
+
+   La question n'est pas rhétorique : ce code est publié avec le code source.
+   Tant qu'il n'a pas été remplacé, il n'ouvre rien qu'un inconnu ne puisse
+   ouvrir aussi — et il ouvre le compte du responsable. On le détecte en
+   vérifiant la valeur d'origine contre l'empreinte enregistrée, ce qui marche
+   quelle que soit la façon dont le code a été posé.
+
+   Sert à deux choses : restreindre la reprise à la machine du serveur, et le
+   dire à l'écran. Jamais à transmettre le code. */
+let memoCodeMaitre = { empreinte: null, defaut: false };
+
+function estCodeMaitreDefaut(db) {
+  const stocke = db.data.masterCodeHash;
+  if (!stocke) return true;
+  /* scrypt coûte cher — c'est tout son intérêt. Or l'interface pose la
+     question à chaque rafraîchissement de l'état. On retient la réponse pour
+     une empreinte donnée : elle ne change qu'au redémarrage, quand
+     MASTER_CODE change. */
+  if (memoCodeMaitre.empreinte !== stocke) {
+    memoCodeMaitre = { empreinte: stocke, defaut: verifyPassword(MASTER_CODE_DEFAUT, stocke) };
+  }
+  return memoCodeMaitre.defaut;
+}
+
 /* ---------- cookies ---------- */
 
 function parseCookies(header) {
@@ -322,6 +347,7 @@ module.exports = {
   MASTER_CODE_DEFAUT: MASTER_CODE_DEFAUT,
   empreinteCodeMaitre: empreinteCodeMaitre,
   verifierCodeMaitre: verifierCodeMaitre,
+  estCodeMaitreDefaut: estCodeMaitreDefaut,
   generateCode: generateCode,
   newPendingSignup: newPendingSignup,
   newPendingReset: newPendingReset,

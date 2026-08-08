@@ -61,6 +61,8 @@
   const state = {
     mode: 'mémoire',
     smtp: false,
+    // Vrai tant que le code de reprise est celui publié avec l'application.
+    codeMaitreParDefaut: false,
     contacts: [],
     history: [],
     settings: Object.assign({}, DEFAULT_SETTINGS),
@@ -581,6 +583,9 @@
     state.history = data.history || [];
     state.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || {});
     state.suivi = data.suivi || state.suivi;
+    /* Le serveur ne le signale qu'au responsable : pour tous les autres, il
+       vaut faux, et la carte d'alerte reste fermée. */
+    state.codeMaitreParDefaut = !!data.codeMaitreParDefaut;
     emit();
     return state;
   }

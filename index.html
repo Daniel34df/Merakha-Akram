@@ -825,6 +825,28 @@
     </div>
 
     <div class="reglages-groupe" data-groupe="acces" hidden>
+      <!-- Le code maître ouvre le compte du responsable. Tant qu'il est celui
+           publié avec l'application, il faut le dire là où on peut agir. -->
+      <div class="card alerte-securite" id="codeMaitreCard" hidden>
+        <h2>Le code de reprise doit être changé</h2>
+        <p>
+          Le code de reprise livré avec l'application est <strong>public</strong> : il est écrit
+          dans le code source, que tout le monde peut lire. Il permet de changer le mot de passe
+          du responsable, ou de supprimer son compte — donc de reprendre le registre.
+        </p>
+        <p>
+          En attendant, la reprise n'est acceptée que <strong>depuis ce poste</strong>, celui qui
+          garde le registre. Les autres postes du bureau se voient refuser l'accès. C'est une
+          protection de secours, pas une solution&nbsp;: choisissez un code propre au bureau.
+        </p>
+        <p class="hint">
+          Sur le poste qui tient le registre, ouvrez le fichier de démarrage et donnez une valeur
+          à <code>MASTER_CODE</code>, puis redémarrez l'application. Notez ce code sur papier et
+          rangez-le&nbsp;: personne ne peut le retrouver s'il est perdu — il n'est conservé que
+          sous forme d'empreinte.
+        </p>
+      </div>
+
       <div class="card" id="accountsCard" hidden>
         <h2>Comptes</h2>
 

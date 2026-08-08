@@ -1085,6 +1085,32 @@ async function handleAuth(req, res, ctx, pathname) {
         { status: 429 }
       );
     }
+    /* Un code publié n'est pas un secret.
+
+       Le code maître par défaut est écrit dans le code source, donc lisible par
+       quiconque. Il ouvre pourtant le compte du responsable : lire son adresse,
+       changer son mot de passe, supprimer son compte — ce qui rouvre
+       l'installation et livre le registre. Le freinage des tentatives ne
+       protège de rien ici : il n'y a rien à deviner.
+
+       Tant que ce code est celui d'origine, la reprise reste donc réservée à la
+       machine qui fait tourner le serveur — celle devant laquelle il faut
+       physiquement s'asseoir. Poser un vrai MASTER_CODE en fait un secret, et
+       rend la reprise possible depuis n'importe quel poste du bureau.
+
+       La vérification passe avant celle du code : un refus ne doit pas dépendre
+       de la valeur envoyée, sans quoi il dirait qu'on a tapé juste. */
+    if (auth.estCodeMaitreDefaut(db) && !reseau.estLocale(req.socket && req.socket.remoteAddress)) {
+      throw Object.assign(
+        new Error(
+          'La reprise par code maître n’est possible que depuis le poste qui tient le registre, ' +
+            'tant que le code d’origine n’a pas été remplacé. Installez un code propre au bureau ' +
+            '(variable MASTER_CODE) pour pouvoir l’utiliser depuis les autres postes.'
+        ),
+        { status: 403, code: 'maitre-distant' }
+      );
+    }
+
     if (!auth.verifierCodeMaitre(db, corps.code)) {
       throttle.fail(cle);
       throw Object.assign(new Error('Code incorrect'), { status: 401 });
@@ -1547,7 +1573,11 @@ async function handleApi(req, res, ctx, pathname) {
       // un onglet de développeur suffirait à lire ce que l'interface masque.
       history: roles.masquerCodes(history, currentUser),
       settings: db.data.settings,
-      suivi: reminders.resume(history)
+      suivi: reminders.resume(history),
+      /* Le code maître ouvre le compte du responsable. Tant qu'il est celui du
+         dépôt, l'écran doit le dire — mais seulement à la personne qui peut le
+         changer. L'annoncer à tout le monde reviendrait à indiquer la porte. */
+      codeMaitreParDefaut: roles.estResponsable(currentUser) ? auth.estCodeMaitreDefaut(db) : false
     });
   }
 

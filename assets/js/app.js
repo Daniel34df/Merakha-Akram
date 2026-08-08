@@ -4400,7 +4400,18 @@
 
   /* ═════════════ comptes ═════════════ */
 
+  /* Le code de reprise livré avec l'application est public. Tant qu'il n'a pas
+     été remplacé, on le dit à l'endroit où on peut agir — pas seulement dans
+     une console de démarrage que plus personne ne relit après l'installation.
+     Le serveur ne le signale qu'au responsable : l'annoncer à un agent
+     reviendrait à indiquer la porte. */
+  function renderCodeMaitre() {
+    const carte = $('codeMaitreCard');
+    if (carte) carte.hidden = !S.codeMaitreParDefaut;
+  }
+
   async function renderAccounts() {
+    renderCodeMaitre();
     const carte = $('accountsCard');
     carte.hidden = !S.auth.user;
     if (!S.auth.user) return;
