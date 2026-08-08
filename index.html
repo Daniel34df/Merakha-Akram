@@ -338,6 +338,22 @@
       <div id="pickupDetail" aria-live="polite"></div>
     </div>
 
+    <!-- Les personnes sans adresse électronique. Leur courrier est arrivé et
+         aucun message n'a pu partir : c'est ici qu'on voit qui appeler, avec le
+         numéro sous les yeux. Sans cette liste, ces courriers dormiraient dans
+         le registre sans que personne ne sache qu'ils attendent. -->
+    <div class="card" id="appelsCard" hidden>
+      <div class="card-head">
+        <h2>À prévenir par téléphone (<span id="countAppels">0</span>)</h2>
+      </div>
+      <p class="hint" style="margin-bottom:14px;">
+        Ces personnes n'ont pas de courriel : leur courrier est là, elles ne le savent
+        pas encore. Notez l'appel une fois passé — sinon elles resteront sur cette liste
+        et le guichet les rappellera demain.
+      </p>
+      <div id="appelsTable"></div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <h2>Courriers en attente (<span id="countAttente">0</span>)</h2>
@@ -366,6 +382,12 @@
         <div>
           <label for="newEmail">Courriel</label>
           <input type="email" id="newEmail" placeholder="marie@exemple.com" autocomplete="off">
+        </div>
+        <div>
+          <!-- Un courriel OU un téléphone suffit : une partie du public n'a pas
+               d'adresse électronique, et l'exiger revenait à le refuser. -->
+          <label for="newTelephone">Téléphone</label>
+          <input type="text" id="newTelephone" placeholder="06 12 34 56 78" autocomplete="off">
         </div>
         <div>
           <label for="newLangue">Langue</label>

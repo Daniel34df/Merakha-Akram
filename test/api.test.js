@@ -317,6 +317,91 @@ test('l’interface statique est servie et le parcours de répertoire bloqué', 
   });
 });
 
+/* ---------- les personnes sans adresse électronique ----------
+
+   Une bonne partie du public d'un bureau de domiciliation n'a pas de courriel :
+   c'est souvent la raison même pour laquelle ces personnes viennent. L'exiger
+   revenait à les refuser à l'entrée — la fiche était rejetée, donc le courrier
+   ne pouvait pas être enregistré, donc personne ne pouvait le leur remettre. */
+
+test('une fiche avec un téléphone et sans courriel est acceptée', function () {
+  return withServer(async function (t) {
+    const res = await t.call('POST', '/api/contacts', {
+      name: 'Awa Diallo',
+      telephone: '06 11 22 33 44',
+      box: 'D-07'
+    });
+    assert.equal(res.status, 201, res.body && res.body.error);
+    assert.equal(res.body.email, '');
+    assert.equal(res.body.telephone, '06 11 22 33 44');
+  });
+});
+
+test('une fiche sans courriel ni téléphone est refusée, en disant quoi corriger', function () {
+  return withServer(async function (t) {
+    const res = await t.call('POST', '/api/contacts', { name: 'Sans Moyen' });
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /courriel ou un téléphone/i);
+  });
+});
+
+test('un courriel fourni reste vérifié', function () {
+  return withServer(async function (t) {
+    const res = await t.call('POST', '/api/contacts', { name: 'X', email: 'pas-une-adresse' });
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /Courriel invalide/);
+  });
+});
+
+test('deux personnes sans courriel ne sont pas prises pour un doublon', function () {
+  /* « '' === '' » les aurait confondues : la deuxième inscription du jour
+     aurait été refusée au motif qu'elle existait déjà. */
+  return withServer(async function (t) {
+    assert.equal((await t.call('POST', '/api/contacts', { name: 'Awa', telephone: '06 11' })).status, 201);
+    const seconde = await t.call('POST', '/api/contacts', { name: 'Omar', telephone: '06 22' });
+    assert.equal(seconde.status, 201, seconde.body && seconde.body.error);
+  });
+});
+
+test('le courrier d’une personne sans courriel s’enregistre, à prévenir par téléphone', function () {
+  return withServer(async function (t) {
+    const fiche = (await t.call('POST', '/api/contacts', {
+      name: 'Awa Diallo', telephone: '06 11 22 33 44', box: 'D-07'
+    })).body;
+
+    const envoi = await t.call('POST', '/api/notify', { name: 'Awa Diallo', contactId: fiche.id });
+    assert.equal(envoi.status, 200, envoi.body && envoi.body.error);
+    assert.equal(envoi.body.sent, false, 'aucun message n’est parti');
+    assert.equal(envoi.body.aPrevenir, true);
+
+    const r = envoi.body.record;
+    assert.equal(r.status, 'à prévenir');
+    assert.equal(r.method, 'telephone');
+    assert.match(String(r.pickupCode), /^\d{4}$/, 'le code de retrait existe quand même');
+    assert.equal(r.telephone, '06 11 22 33 44', 'le numéro voyage avec le courrier');
+    assert.equal(t.mailer.sent.length, 0, 'rien n’a été envoyé');
+
+    // Et le courrier est bien au registre, donc remettable.
+    const hist = (await t.call('GET', '/api/history')).body;
+    assert.equal(hist.length, 1);
+    assert.equal(hist[0].name, 'Awa Diallo');
+  });
+});
+
+test('sans serveur de courriel, le courrier à annoncer par téléphone passe quand même', function () {
+  /* Le chemin téléphone ne doit dépendre d'aucun réglage SMTP : il n'envoie
+     rien. Refuser ici bloquerait les bureaux qui n'ont pas de courriel du tout. */
+  return withServer(
+    async function (t) {
+      const fiche = (await t.call('POST', '/api/contacts', { name: 'Awa', telephone: '06 11' })).body;
+      const envoi = await t.call('POST', '/api/notify', { name: 'Awa', contactId: fiche.id });
+      assert.equal(envoi.status, 200, envoi.body && envoi.body.error);
+      assert.equal(envoi.body.record.status, 'à prévenir');
+    },
+    { MAIL_DRY_RUN: 'false', SMTP_HOST: '', MAIL_FROM: '' }
+  );
+});
+
 test('une route API inconnue renvoie 404 JSON', function () {
   return withServer(async function (t) {
     const res = await t.call('GET', '/api/inconnu');

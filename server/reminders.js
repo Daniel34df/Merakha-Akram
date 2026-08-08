@@ -52,6 +52,11 @@ function aRelancer(history, options) {
 
   return (history || []).filter(function (entree) {
     if (!enAttente(entree)) return false;
+    /* Pas d'adresse, pas de relance automatique : il n'y a rien où écrire.
+       Ces courriers sont suivis à la main, dans la liste des appels à passer.
+       Les laisser ici ferait échouer un envoi par jour et par personne, et
+       remplirait le journal d'erreurs qui ne veulent rien dire. */
+    if (!entree.email) return false;
     if ((entree.reminderCount || 0) >= maxRelances) return false;
     if (joursEcoules(entree.date, maintenant) < delaiPour(entree, delai)) return false;
     // Une relance récente suffit : on ne réécrit pas tous les jours.

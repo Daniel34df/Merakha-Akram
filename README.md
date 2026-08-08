@@ -537,6 +537,51 @@ de dégâts qu'un message en français.
 
 ---
 
+## Les personnes sans adresse électronique
+
+Une bonne partie du public d'un bureau de domiciliation n'a pas de courriel —
+c'est souvent la raison même pour laquelle ces personnes viennent. **Une fiche
+est valable avec un courriel *ou* un téléphone.**
+
+Ce qui change dans le parcours :
+
+- le courrier s'enregistre normalement, avec son **code de retrait**, même
+  quand aucun message ne peut partir ;
+- il apparaît dans **Remise → À prévenir par téléphone**, avec le numéro en
+  gros, la boîte et depuis combien de temps il attend ;
+- l'agent note l'appel : **Prévenue** si la personne a répondu, **Sans réponse**
+  sinon. Une tentative n'est pas une notification : le courrier reste à
+  annoncer tant que personne n'a été joint ;
+- le **téléphone s'affiche sur la fiche de remise**, à la place du courriel —
+  c'est là que l'agent en a besoin ;
+- les **relances automatiques ignorent** ces courriers : il n'y a pas d'adresse
+  où écrire. Ils se suivent à la main, par la liste des appels.
+
+> Avant, le serveur refusait toute fiche sans courriel valide. La fiche était
+> rejetée, donc le courrier ne pouvait pas être enregistré, donc personne ne
+> pouvait le remettre. Le formulaire de domiciliation, lui, promettait
+> « courriel **ou** téléphone » — il promettait ce que l'application refusait.
+
+## Vérifier le parcours complet
+
+```bash
+npm install -D playwright
+node tools/parcours.js              # sur http://localhost:3000
+PORT=8080 node tools/parcours.js    # ailleurs
+CAPTURES=./captures node tools/parcours.js
+```
+
+Le script joue tout le chemin dans un vrai navigateur : installation, identité
+du bureau, accès agent, **deux domiciliations — l'une avec courriel, l'autre
+avec seulement un téléphone**, arrivée du courrier, appel, retrait, passage
+sans courrier, attestation, rapport annuel.
+
+Sa sortie est numérotée et se lit sans connaître le code : **imprimez-la et
+affichez-la au guichet**, elle forme une remplaçante. Il rend un code d'erreur
+non nul si une étape casse, ce qui permet de l'enchaîner après les tests.
+
+---
+
 ## Plusieurs postes dans le bureau
 
 Quatre ordinateurs à l'accueil, reliés par le même wifi ou le même câble.
@@ -791,6 +836,7 @@ autre interface ou un import automatisé.
 | `GET` `POST` | `/api/contacts` | lister / ajouter un destinataire |
 | `PUT` `DELETE` | `/api/contacts/:id` | modifier / supprimer |
 | `POST` | `/api/contacts/:id/passage` | la personne s'est présentée |
+| `POST` | `/api/history/:id/appel` | appel passé à une personne sans courriel |
 | `GET` | `/api/domiciliation` | échéances, absences, rapport annuel |
 | `GET` `POST` `DELETE` | `/api/history` | historique : lire, ajouter, vider |
 | `GET` | `/api/history/by-code/:code` | fiche du courrier, sans rien modifier |

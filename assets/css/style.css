@@ -1246,6 +1246,17 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 .feuille-casier td.b{font-family:var(--mono);font-weight:600;}
 .feuille-casier td.case{width:70px;border:1px solid var(--navy);}
 
+/* Le numéro à appeler : c'est ce qu'on recopie sur un clavier, il doit se lire
+   sans se pencher, et sans confondre un 0 et un O. */
+.tel-cell{
+  font-family:var(--mono);
+  font-size:15px;
+  font-weight:600;
+  color:var(--navy);
+  white-space:nowrap;
+}
+.tel-cell em{font-family:var(--serif);font-weight:400;color:var(--slate);font-size:13px;}
+
 /* ---------- guichet : le repli des options secondaires ----------
    L'écran le plus utilisé de la journée ne garde déplié que ce qui sert à
    chaque courrier. Le reste tient sous une entrée, à un clic. */

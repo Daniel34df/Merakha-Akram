@@ -17,7 +17,7 @@ const domiciliation = require('../assets/js/domiciliation.js');
 const roles = require('../assets/js/roles.js');
 const reseau = require('./reseau.js');
 
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
 
 const MIME = {
@@ -169,8 +169,30 @@ function cleanContact(input) {
   const email = String((input && input.email) || '').trim();
   // Le numéro de boîte est libre et facultatif : « B-12 », « 142 », « Casier 7 ».
   const box = String((input && input.box) || '').trim().slice(0, 40);
+  const telephone = String((input && input.telephone) || '').trim().slice(0, 40);
+
   if (!name) throw Object.assign(new Error('Nom manquant'), { status: 400 });
-  if (!util.isValidEmail(email)) throw Object.assign(new Error('Courriel invalide'), { status: 400 });
+
+  /* Un courriel OU un téléphone, pas forcément les deux.
+
+     Une bonne partie des personnes qu'un bureau de domiciliation reçoit n'a
+     pas d'adresse électronique — c'est souvent la raison même pour laquelle
+     elles viennent. Exiger un courriel revenait à les refuser à l'entrée : la
+     fiche était rejetée, donc le courrier ne pouvait pas être enregistré, donc
+     personne ne pouvait le leur remettre.
+
+     Ce qu'il faut vraiment, c'est un moyen de les prévenir. Le téléphone en
+     est un. */
+  if (!email && !telephone) {
+    throw Object.assign(
+      new Error('Indiquez un courriel ou un téléphone : sans l’un des deux, personne ne pourra la prévenir'),
+      { status: 400 }
+    );
+  }
+  // Un courriel donné reste vérifié : une adresse fausse ne vaut pas mieux que rien.
+  if (email && !util.isValidEmail(email)) {
+    throw Object.assign(new Error('Courriel invalide'), { status: 400 });
+  }
 
   const absentUntil = String((input && input.absentUntil) || '').trim();
   if (absentUntil && !/^\d{4}-\d{2}-\d{2}$/.test(absentUntil)) {
@@ -211,7 +233,7 @@ function cleanContact(input) {
     antenneId: String((input && input.antenneId) || '').trim().slice(0, 40),
     /* Renseignements du formulaire de domiciliation. Le téléphone compte
        autant que le courriel : une partie du public n'a pas d'adresse. */
-    telephone: String((input && input.telephone) || '').trim().slice(0, 40),
+    telephone: telephone,
     naissance: jourValide(input && input.naissance, 'Date de naissance'),
     notes: String((input && input.notes) || '').trim().slice(0, 300),
     domicilie: domicilie,
@@ -222,10 +244,18 @@ function cleanContact(input) {
   };
 }
 
+/* Deux fiches font doublon quand elles partagent une adresse électronique.
+
+   Sans courriel, il n'y a pas de doublon : deux personnes sans adresse ne sont
+   pas la même personne, et « '' === '' » les aurait confondues — la deuxième
+   inscription du jour aurait été refusée au motif qu'elle existe déjà. Les
+   homonymes se règlent au guichet, à la voix, pas par un refus du serveur. */
 function findDuplicate(contacts, email, exceptId) {
+  const cherche = util.normalize(email);
+  if (!cherche) return null;
   return (
     contacts.find(function (c) {
-      return util.normalize(c.email) === util.normalize(email) && c.id !== exceptId;
+      return util.normalize(c.email) === cherche && c.id !== exceptId;
     }) || null
   );
 }
@@ -1556,6 +1586,58 @@ async function handleApi(req, res, ctx, pathname) {
   /* Passage sans courrier : la personne s'est présentée, il n'y avait rien pour
      elle. Sans cette trace, le registre la croirait absente depuis des mois et
      la ferait apparaître sur la liste des radiations à venir. */
+  /* L'agent a passé l'appel. Sans cette trace, la personne resterait
+     éternellement « à prévenir » : le guichet la rappellerait chaque matin, et
+     rien ne dirait qu'elle a déjà été jointe. Noter l'appel vaut notification. */
+  const appelMatch = pathname.match(/^\/api\/history\/([^/]+)\/appel$/);
+  if (appelMatch && method === 'POST') {
+    exigerDroit(currentUser, 'guichet');
+    const id = decodeURIComponent(appelMatch[1]);
+    const entree = pourSonAntenne(db.data.history || []).find(function (h) {
+      return h.id === id;
+    });
+    if (!entree) throw Object.assign(new Error('Courrier introuvable'), { status: 404 });
+
+    const corps = await readBody(req);
+    const note = String((corps && corps.note) || '').trim().slice(0, 200);
+    // « joint » : on a eu la personne. « sans réponse » : on a essayé.
+    const joint = corps && corps.joint === false ? false : true;
+
+    await db.write(function (data) {
+      const cible = data.history.find(function (h) {
+        return h.id === id;
+      });
+      if (!cible) return;
+      cible.appels = Array.isArray(cible.appels) ? cible.appels : [];
+      cible.appels.unshift({
+        at: new Date().toISOString(),
+        par: currentUser ? currentUser.name : null,
+        joint: joint,
+        note: note
+      });
+      if (cible.appels.length > 20) cible.appels.length = 20;
+      /* Le statut ne bascule que si la personne a été jointe. Un appel sans
+         réponse est une tentative, pas une notification — le courrier reste
+         à annoncer. */
+      if (joint) {
+        cible.status = 'prévenu';
+        cible.appeleA = new Date().toISOString();
+      }
+    });
+
+    await consigner(db, {
+      qui: currentUser && currentUser.name,
+      action: joint ? 'personne prévenue par téléphone' : 'appel sans réponse',
+      cible: entree.name,
+      details: note
+    });
+    return sendJson(res, 200, {
+      record: db.data.history.find(function (h) {
+        return h.id === id;
+      })
+    });
+  }
+
   const passageMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/passage$/);
   if (passageMatch && method === 'POST') {
     const id = decodeURIComponent(passageMatch[1]);
@@ -2084,14 +2166,29 @@ async function handleApi(req, res, ctx, pathname) {
     const body = await readBody(req);
     const to = String(body.email || '').trim();
     const name = String(body.name || '').trim();
-    if (!util.isValidEmail(to)) throw Object.assign(new Error('Courriel invalide'), { status: 400 });
+    if (!name) throw Object.assign(new Error('Nom manquant'), { status: 400 });
+    if (to && !util.isValidEmail(to)) {
+      throw Object.assign(new Error('Courriel invalide'), { status: 400 });
+    }
+
+    /* Sans adresse, aucun message ne peut partir — mais le courrier existe
+       quand même, et il faut pouvoir le remettre. On l'enregistre avec son
+       code de retrait et on le marque « à prévenir » : l'agent verra la
+       personne dans la liste des appels à passer.
+
+       Refuser ici, comme le faisait l'application, revenait à dire que le
+       courrier n'était pas arrivé. */
+    const parTelephone = !to;
 
     /* La boîte de la personne connectée passe avant le compte du serveur : si
        elle a autorisé l'application, le courriel part de son adresse, et les
        réponses lui reviennent. */
     let sender = mailer;
     let senderLabel = 'serveur';
-    if (currentUser && currentUser.mailbox) {
+    // Rien à envoyer : inutile d'exiger un serveur de courriel configuré.
+    if (parTelephone) {
+      senderLabel = 'téléphone';
+    } else if (currentUser && currentUser.mailbox) {
       const secret = ctx.vault.open(currentUser.mailboxSecret);
       if (secret === null) {
         throw Object.assign(
@@ -2127,8 +2224,14 @@ async function handleApi(req, res, ctx, pathname) {
     // fournit explicitement l'emporte sur les deux.
     /* La langue vient du destinataire, pas de la requête : c'est une propriété
        de la personne, pas de l'envoi. */
+    /* Rapprochement par identifiant d'abord, par adresse ensuite — et
+       seulement si une adresse a été fournie : sans elle, « '' === '' »
+       désignerait la première fiche sans courriel du registre, c'est-à-dire
+       n'importe qui. */
+    const viseParCourriel = util.normalize(to);
     const contactVise = (db.data.contacts || []).find(function (c) {
-      return c.id === body.contactId || util.normalize(c.email) === util.normalize(to);
+      if (body.contactId) return c.id === body.contactId;
+      return !!viseParCourriel && util.normalize(c.email) === viseParCourriel;
     });
     const langueVisee = util.langue(body.langue || (contactVise && contactVise.langue)).id;
     const gabarit = util.gabaritPour(settings, type.id, langueVisee);
@@ -2169,8 +2272,13 @@ async function handleApi(req, res, ctx, pathname) {
       cc: ccList,
       bcc: bccList,
       date: new Date().toISOString(),
-      method: 'auto',
-      status: 'envoyé',
+      method: parTelephone ? 'telephone' : 'auto',
+      /* « à prévenir » : le courrier est là, la personne ne le sait pas encore.
+         Il quitte cet état dès que l'agent note l'appel. */
+      status: parTelephone ? 'à prévenir' : 'envoyé',
+      // Le numéro voyage avec le courrier : l'agent doit l'avoir sous les yeux
+      // au moment d'appeler, sans aller le chercher dans une autre fiche.
+      telephone: (contactVise && contactVise.telephone) || '',
       sentBy: senderLabel,
       operator: currentUser ? currentUser.name : null,
       // Suivi : le courrier reste dû tant que personne ne l'a marqué retiré.
@@ -2181,6 +2289,19 @@ async function handleApi(req, res, ctx, pathname) {
       type: type.id,
       pickupCode: code
     };
+
+    if (parTelephone) {
+      await db.write(function (data) {
+        data.history.unshift(record);
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'courrier à annoncer par téléphone',
+        cible: name,
+        details: record.telephone || 'aucun numéro au dossier'
+      });
+      return sendJson(res, 200, { sent: false, aPrevenir: true, record: record });
+    }
 
     try {
       await sender.send({ to: to, from: from, cc: ccList, bcc: bccList, subject: subject, text: text });

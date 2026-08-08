@@ -719,6 +719,18 @@
     return api('/reseau');
   }
 
+  /** L'agent a appelé la personne qui n'a pas d'adresse électronique. */
+  async function noterAppel(id, options) {
+    const opts = options || {};
+    const result = await api('/history/' + encodeURIComponent(id) + '/appel', {
+      method: 'POST',
+      body: JSON.stringify({ joint: opts.joint !== false, note: opts.note || '' })
+    });
+    await loadServerState();
+    emit();
+    return result;
+  }
+
   /** La personne s'est présentée, avec ou sans courrier pour elle. */
   async function enregistrerPassage(id, note) {
     const result = await api('/contacts/' + encodeURIComponent(id) + '/passage', {
@@ -878,7 +890,9 @@
     const contact = {
       id: state.enLigne ? util.uuid() : attente.nouvelIdLocal(util.uuid),
       name: input.name.trim(),
-      email: input.email.trim(),
+      // Le courriel est facultatif depuis qu'une fiche peut n'avoir qu'un
+      // téléphone : ne pas supposer qu'il est là.
+      email: (input.email || '').trim(),
       box: (input.box || '').trim(),
       langue: util.langue(input.langue).id,
       antenneId: input.antenneId || '',
@@ -1048,7 +1062,12 @@
    * l'appelant retombe alors sur le lien mailto.
    */
   async function sendViaServer(contact, message) {
-    if (!canSendAutomatically()) {
+    /* Sans adresse électronique, il n'y a rien à envoyer : le serveur inscrit
+       le courrier et le marque « à prévenir ». Ce chemin ne dépend donc
+       d'aucun réglage SMTP — exiger un serveur de courriel pour enregistrer un
+       courrier qu'on annoncera au téléphone n'aurait aucun sens. */
+    const sansCourriel = state.mode === 'serveur' && !(contact.email || '').trim();
+    if (!sansCourriel && !canSendAutomatically()) {
       throw new Error('Envoi automatique indisponible');
     }
     /* Hors ligne, le courriel ne peut pas partir : il partira au rejeu. Le
@@ -1143,6 +1162,7 @@
     loadStats: loadStats,
     loadDomiciliation: loadDomiciliation,
     loadReseau: loadReseau,
+    noterAppel: noterAppel,
     enregistrerPassage: enregistrerPassage,
     loadJournal: loadJournal,
     changePassword: changePassword,

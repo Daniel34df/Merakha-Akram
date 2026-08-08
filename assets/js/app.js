@@ -719,7 +719,17 @@
         util.formatDateTime(record.date) +
           (jours === 0 ? ' (aujourd’hui)' : ' (' + jours + ' jour' + (jours > 1 ? 's' : '') + ')')
       ),
-      ligneFiche('Courriel prévenu', record.email),
+      /* Comment la personne a été prévenue — ou pas encore. Sans adresse, on
+         montre le numéro : c'est ce dont l'agent a besoin sous les yeux, au
+         moment précis où il a la fiche devant lui. */
+      record.email
+        ? ligneFiche('Courriel prévenu', record.email)
+        : ligneFiche(
+            'Téléphone',
+            (record.telephone || (contact && contact.telephone) || 'aucun numéro au dossier') +
+              (record.status === 'prévenu' ? ' — prévenue' : ' — à prévenir'),
+            'tel-cell'
+          ),
       ligneFiche(
         'Relances',
         record.reminderCount > 0
@@ -1097,6 +1107,10 @@
           '<input type="text" id="quickBox" placeholder="B-12" autocomplete="off"></div>') +
       '<div><label for="quickEmail">Courriel</label>' +
       '<input type="email" id="quickEmail" placeholder="courriel@exemple.com" autocomplete="off"></div>' +
+      // Un courriel OU un téléphone : la personne devant le guichet n'a pas
+      // forcément d'adresse, et c'est ici qu'on l'inscrit.
+      '<div><label for="quickTel">Téléphone</label>' +
+      '<input type="text" id="quickTel" placeholder="06 12 34 56 78" autocomplete="off"></div>' +
       '</div>' +
       '<div class="row-actions"><button class="btn" id="quickAddBtn">Ajouter et notifier</button>' +
       '<button class="btn ghost" id="quickRegistreBtn">Ouvrir le registre</button></div>' +
@@ -1138,18 +1152,23 @@
         setMsg('quickMsg', 'error', 'Indiquez le nom du destinataire.');
         return;
       }
-      if (!util.isValidEmail(email)) {
+      const tel = ($('quickTel').value || '').trim();
+      if (email && !util.isValidEmail(email)) {
         emailField.classList.add('invalid');
-        setMsg('quickMsg', 'error', 'Veuillez entrer un courriel valide.');
+        setMsg('quickMsg', 'error', 'Cette adresse électronique n’est pas valide.');
         return;
       }
-      const existing = store.findByEmail(email);
+      if (!email && !tel) {
+        setMsg('quickMsg', 'error', 'Indiquez un courriel ou un téléphone : sans cela, personne ne pourra la prévenir.');
+        return;
+      }
+      const existing = email ? store.findByEmail(email) : null;
       if (existing) {
         setMsg('quickMsg', 'error', 'Ce courriel est déjà au registre sous « ' + esc(existing.name) + ' ».');
         return;
       }
       try {
-        const contact = await store.addContact({ name: nom, email: email, box: boite });
+        const contact = await store.addContact({ name: nom, email: email, telephone: tel, box: boite });
         toast('« ' + contact.name + ' » ajouté au registre.', 'ok');
         await sendNotification(contact);
       } catch (err) {
@@ -1178,7 +1197,25 @@
 
     let auto = false;
     let failure = null;
-    if (store.canSendAutomatically()) {
+    /* Personne sans adresse : on n'ouvre surtout pas un client de messagerie
+       sur un destinataire vide. Le serveur inscrit le courrier et le range
+       dans la liste des appels à passer. */
+    const sansCourriel = !(contact.email || '').trim();
+    if (sansCourriel && S.mode === 'serveur') {
+      try {
+        await store.sendViaServer(contact, message);
+        if (!opts.silencieux) {
+          toast(
+            'Courrier inscrit. ' + contact.name + ' n’a pas de courriel : à prévenir par téléphone.',
+            'ok'
+          );
+        }
+        auto = true;
+      } catch (err) {
+        failure = err.message;
+        toast('Enregistrement impossible : ' + err.message, 'error');
+      }
+    } else if (store.canSendAutomatically()) {
       try {
         await store.sendViaServer(contact, message);
         auto = true;
@@ -1187,7 +1224,9 @@
       }
     }
 
-    if (!auto) {
+    // Sans adresse, aucun client de messagerie à ouvrir : l'échec éventuel a
+    // déjà été signalé, et un mailto vide ne mènerait nulle part.
+    if (!auto && !sansCourriel) {
       notify.openMailClient(mailto);
       await store.addHistory({
         contactId: contact.id,
@@ -1484,6 +1523,70 @@
 
   /* ═════════════ courriers en attente ═════════════ */
 
+  /* ═════════════ à prévenir par téléphone ═════════════
+
+     Le courrier des personnes sans adresse électronique. Il est arrivé, aucun
+     message n'a pu partir, et sans cette liste il dormirait dans le registre
+     sans que personne ne sache qu'il attend quelqu'un. */
+  function aPrevenirParTelephone() {
+    return S.history.filter(function (h) {
+      return enAttente(h) && deLAntenne(h) && !h.email && h.status !== 'prévenu';
+    });
+  }
+
+  function renderAppels() {
+    const carte = $('appelsCard');
+    if (!carte) return;
+    const liste = aPrevenirParTelephone();
+    carte.hidden = liste.length === 0;
+    $('countAppels').textContent = liste.length;
+    if (!liste.length) return;
+
+    $('appelsTable').innerHTML =
+      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Téléphone</th>' +
+      '<th>Boîte</th><th>Arrivé</th><th>Appels</th><th></th></tr></thead><tbody>' +
+      liste
+        .map(function (h) {
+          const c = S.contacts.find(function (x) {
+            return x.id === h.contactId;
+          });
+          const tel = h.telephone || (c && c.telephone) || '';
+          const essais = (h.appels || []).length;
+          const jours = Math.floor((Date.now() - new Date(h.date).getTime()) / 86400000);
+          return (
+            '<tr><td><strong>' + esc(h.name) + '</strong></td>' +
+            // Le numéro en gros : c'est ce qu'on recopie sur le clavier.
+            '<td class="tel-cell">' + (tel ? esc(tel) : '<em>aucun numéro</em>') + '</td>' +
+            '<td class="box-cell">' + esc((c && c.box) || '—') + '</td>' +
+            '<td class="attente-cell' + (jours >= 7 ? ' vieux' : '') + '">' +
+            (jours === 0 ? 'aujourd’hui' : 'il y a ' + jours + ' j') + '</td>' +
+            '<td class="attente-cell">' + (essais ? essais + ' essai(s)' : '—') + '</td>' +
+            '<td class="actions">' +
+            '<button class="link-btn" data-appel-joint="' + esc(h.id) + '">Prévenue</button>' +
+            '<button class="link-btn" data-appel-vain="' + esc(h.id) + '">Sans réponse</button>' +
+            '</td></tr>'
+          );
+        })
+        .join('') +
+      '</tbody></table></div>';
+  }
+
+  $('appelsCard').addEventListener('click', async function (e) {
+    const joint = e.target.closest('button[data-appel-joint]');
+    const vain = e.target.closest('button[data-appel-vain]');
+    const b = joint || vain;
+    if (!b) return;
+    b.disabled = true;
+    try {
+      await store.noterAppel(b.dataset.appelJoint || b.dataset.appelVain, { joint: !!joint });
+      toast(joint ? 'Appel noté : la personne est prévenue.' : 'Tentative notée — le courrier reste à annoncer.', 'ok');
+      renderAll();
+    } catch (err) {
+      toast('Enregistrement impossible : ' + err.message, 'error');
+      b.disabled = false;
+    }
+  });
+
   function renderPending() {
     const box = $('pendingCard');
     const attente = S.history.filter(function (h) {
@@ -1589,7 +1692,8 @@
       '<dl class="status-list">' +
       [
         ['Numéro de boîte', c.box || '—'],
-        ['Courriel', c.email],
+        ['Courriel', c.email || '— sans adresse électronique'],
+        ['Téléphone', c.telephone || '—'],
         ['Courriers reçus', String(courriers.length)],
         ['Retirés', String(retires.length)],
         ['En attente', String(courriers.filter(enAttente).length)],
@@ -2832,13 +2936,25 @@
     const email = emailField.value.trim();
     const box = $('newBox').value.trim();
 
+    const telephone = $('newTelephone').value.trim();
+
     nameField.classList.toggle('invalid', !name);
-    emailField.classList.toggle('invalid', !util.isValidEmail(email));
-    if (!name || !util.isValidEmail(email)) {
-      setMsg('addMsg', 'error', 'Veuillez entrer un nom et un courriel valide.');
+    emailField.classList.toggle('invalid', !!email && !util.isValidEmail(email));
+    if (!name) {
+      setMsg('addMsg', 'error', 'Indiquez le nom du destinataire.');
       return;
     }
-    const existing = store.findByEmail(email);
+    if (email && !util.isValidEmail(email)) {
+      setMsg('addMsg', 'error', 'Cette adresse électronique n’est pas valide.');
+      return;
+    }
+    /* Un moyen de joindre la personne, au choix. Sans l'un des deux, le
+       courrier arriverait et personne ne pourrait le lui dire. */
+    if (!email && !telephone) {
+      setMsg('addMsg', 'error', 'Indiquez un courriel ou un téléphone : sans cela, personne ne pourra la prévenir.');
+      return;
+    }
+    const existing = email ? store.findByEmail(email) : null;
     if (existing) {
       setMsg('addMsg', 'error', 'Ce courriel est déjà au registre sous « ' + esc(existing.name) + ' ».');
       return;
@@ -2854,6 +2970,7 @@
       await store.addContact({
         name: name,
         email: email,
+        telephone: telephone,
         box: box,
         langue: $('newLangue').value,
         antenneId: antennes().length ? $('newAntenne').value : '',
@@ -2862,6 +2979,7 @@
       });
       nameField.value = '';
       emailField.value = '';
+      $('newTelephone').value = '';
       $('newBox').value = '';
       $('newLangue').value = 'fr';
       $('newDomicilie').checked = false;
@@ -5193,6 +5311,7 @@
     renderStatus();
     renderMailbox();
     renderPending();
+    renderAppels();
     renderDossier();
     renderAccounts();
     renderStats();
