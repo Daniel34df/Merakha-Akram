@@ -61,3 +61,54 @@ test('sans antenne déclarée, tout le monde passe le filtre', function () {
   assert.equal(ui.deLAntenne({ antenneId: '' }), true);
   assert.equal(ui.deLAntenne({ antenneId: 'antenne-nord' }), true);
 });
+
+/* ═══════════ borner l'affichage ═══════════
+
+   Mesuré avant correctif : dessiner tout l'historique coûtait 300 ms à
+   2 000 courriers, 1,5 s à 10 000 — à chaque écriture faite sur un autre
+   poste, puisque la moindre mise à jour distante redessine tout. */
+
+test('une liste courte n’est pas tronquée', function () {
+  const b = ui.borner([1, 2, 3], 200);
+  assert.deepEqual(b.lignes, [1, 2, 3]);
+  assert.equal(b.total, 3);
+  assert.equal(b.tronque, false, 'pas de bandeau pour rien');
+});
+
+test('une liste longue est coupée, et le total reste dit', function () {
+  const longue = Array.from({ length: 5000 }, function (_, i) { return i; });
+  const b = ui.borner(longue, 200);
+  assert.equal(b.lignes.length, 200);
+  assert.equal(b.total, 5000, 'l’écran doit pouvoir annoncer combien il y en a');
+  assert.equal(b.tronque, true);
+  assert.equal(b.lignes[0], 0, 'les plus récents d’abord : on garde le début de la liste');
+});
+
+test('« afficher tout » lève la borne', function () {
+  const longue = Array.from({ length: 500 }, function (_, i) { return i; });
+  const b = ui.borner(longue, 200, true);
+  assert.equal(b.lignes.length, 500);
+  assert.equal(b.tronque, false);
+});
+
+test('la borne ne perd rien : elle s’applique après le filtre', function () {
+  /* C'est la propriété qui empêche la borne de devenir une perte de données à
+     l'écran. Le filtre porte sur la totalité ; on ne borne que ce qui reste. */
+  const tout = Array.from({ length: 5000 }, function (_, i) {
+    return { nom: i === 4999 ? 'Amina Diallo' : 'Quelqu’un ' + i };
+  });
+  const filtre = tout.filter(function (x) { return x.nom === 'Amina Diallo'; });
+  const b = ui.borner(filtre, 200);
+
+  assert.equal(b.lignes.length, 1, 'la dernière ligne des 5 000 reste trouvable');
+  assert.equal(b.lignes[0].nom, 'Amina Diallo');
+  assert.equal(b.tronque, false);
+});
+
+test('une borne absente ou absurde n’ampute rien', function () {
+  const l = [1, 2, 3];
+  assert.equal(ui.borner(l, 0).lignes.length, 3);
+  assert.equal(ui.borner(l, -5).lignes.length, 3);
+  assert.equal(ui.borner(l).lignes.length, 3);
+  assert.deepEqual(ui.borner(undefined, 200).lignes, []);
+});

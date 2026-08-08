@@ -207,3 +207,81 @@ test('un réglage absent ne doit pas annuler le seuil par défaut', function () 
   assert.equal(e.absenceDepassee, true);
   assert.equal(dom.sansPassage([c], [], { now: MAINTENANT, absenceMois: undefined }).length, 1);
 });
+
+/* ═══════════ un appel de la personne compte ═══════════
+
+   La loi parle de « présentée **ou manifestée** ». Le registre ne comptait que
+   les venues sur place et les courriers retirés : quelqu'un qui téléphonait
+   tous les mois sans pouvoir se déplacer — parce qu'il travaille, parce qu'il
+   est hospitalisé, parce qu'il n'a pas de quoi payer le transport — apparaissait
+   absent depuis trois mois et arrivait sur la liste des radiations. */
+
+const domicilieDepuis = jourIlYA(400);
+
+function dossier(passages) {
+  return {
+    id: 'c1',
+    name: 'Amina Diallo',
+    email: '',
+    domicilie: true,
+    domicilieDepuis: domicilieDepuis,
+    domicilieJusqua: jourIlYA(-200),
+    passages: passages || []
+  };
+}
+
+test('un appel de la personne repousse le risque de radiation', function () {
+  // Jamais venue depuis l'ouverture du dossier : elle est en risque.
+  const muette = dossier([]);
+  const avant = dom.etat(muette, [], { now: MAINTENANT });
+  assert.equal(avant.risqueRadiation, true, 'sans aucun signe de vie, le risque est signalé');
+
+  // Elle a appelé le mois dernier : c'est une manifestation.
+  const appelante = dossier([{ at: ilYA(30), moyen: 'telephone', par: 'Agent' }]);
+  const apres = dom.etat(appelante, [], { now: MAINTENANT });
+  assert.equal(apres.risqueRadiation, false, 'c’est tout l’objet du correctif');
+  assert.equal(apres.joursSansPassage, 30);
+  assert.equal(apres.dernierMoyen, 'telephone');
+});
+
+test('elle sort de la liste des radiations à venir', function () {
+  const muette = dossier([]);
+  const appelante = Object.assign(dossier([{ at: ilYA(30), moyen: 'telephone' }]), { id: 'c2' });
+  const liste = dom.sansPassage([muette, appelante], [], { now: MAINTENANT });
+  assert.deepEqual(liste.map(function (d) { return d.contact.id; }), ['c1']);
+});
+
+test('le canal est rendu, pour que l’équipe fasse la différence', function () {
+  /* Le décompte ne distingue pas ; l'équipe si. Quelqu'un qu'on n'a pas vu
+     depuis trois mois mais qui téléphone n'est pas dans la même situation que
+     quelqu'un qui a disparu. */
+  const surPlace = dom.derniereManifestation(dossier([{ at: ilYA(5) }]), []);
+  assert.equal(surPlace.moyen, 'place', 'un passage sans « moyen » reste une venue');
+
+  const parTelephone = dom.derniereManifestation(dossier([{ at: ilYA(5), moyen: 'telephone' }]), []);
+  assert.equal(parTelephone.moyen, 'telephone');
+
+  const retrait = dom.derniereManifestation(dossier([]), [
+    { contactId: 'c1', pickedUpAt: ilYA(3) }
+  ]);
+  assert.equal(retrait.moyen, 'retrait');
+
+  const rien = dom.derniereManifestation(dossier([]), []);
+  assert.equal(rien.moyen, 'ouverture', 'à défaut, l’ouverture du dossier fait foi');
+});
+
+test('c’est la manifestation la plus récente qui compte, quel que soit le canal', function () {
+  const c = dossier([{ at: ilYA(40), moyen: 'telephone' }, { at: ilYA(60) }]);
+  const recent = dom.derniereManifestation(c, [{ contactId: 'c1', pickedUpAt: ilYA(10) }]);
+  assert.equal(recent.moyen, 'retrait', 'le retrait est plus récent que l’appel');
+
+  const inverse = dom.derniereManifestation(c, [{ contactId: 'c1', pickedUpAt: ilYA(90) }]);
+  assert.equal(inverse.moyen, 'telephone', 'ici c’est l’appel le plus récent');
+});
+
+test('dernierPassage rend toujours une date, comme avant', function () {
+  // La fonction d'origine reste : tout ce qui l'appelait continue de marcher.
+  const c = dossier([{ at: ilYA(5), moyen: 'telephone' }]);
+  assert.equal(dom.dernierPassage(c, []), ilYA(5));
+  assert.equal(typeof dom.dernierPassage(c, []), 'string');
+});

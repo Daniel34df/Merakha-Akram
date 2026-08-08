@@ -207,6 +207,8 @@ async function withServer(run) {
     await run({
       patron: patron,
       agent: agent,
+      // De quoi ouvrir un troisième accès quand un test oppose deux agents.
+      session: session,
       appelDistant: appelDistant,
       cookiePatron: function () { return patron.jar.cookie; },
       cookieAgent: function () { return agent.jar.cookie; },
@@ -1295,5 +1297,90 @@ test('un agent n’apprend pas que le code maître est celui d’origine', funct
        publié, il suffirait de s'asseoir au poste du serveur. */
     const vuAgent = await t.agent('GET', '/api/state');
     assert.equal(vuAgent.body.codeMaitreParDefaut, false);
+  });
+});
+
+/* ═══════════ noter un appel de la personne ═══════════ */
+
+test('un appel de la personne s’inscrit comme manifestation', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const c = (await t.patron('POST', '/api/contacts', {
+      name: 'Amina Diallo', telephone: '06 12 34 56 78',
+      domicilie: true, domicilieDepuis: '2026-01-10'
+    })).body;
+
+    const r = await t.patron('POST', '/api/contacts/' + c.id + '/passage', {
+      moyen: 'telephone', note: 'demande si elle a du courrier'
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.contact.passages[0].moyen, 'telephone');
+
+    // Le journal distingue les deux gestes : on doit pouvoir les relire.
+    const acte = t.db.data.journal.find(function (l) {
+      return l.action === 'appel de la personne';
+    });
+    assert.ok(acte, 'le journal dit que c’est elle qui a appelé');
+    assert.equal(acte.cible, 'Amina Diallo');
+  });
+});
+
+test('un passage sur place reste le comportement par défaut', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const c = (await t.patron('POST', '/api/contacts', {
+      name: 'Amina Diallo', telephone: '06 12 34 56 78'
+    })).body;
+
+    const r = await t.patron('POST', '/api/contacts/' + c.id + '/passage', { note: 'passée' });
+    assert.equal(r.body.contact.passages[0].moyen, 'place');
+    assert.ok(t.db.data.journal.some(function (l) { return l.action === 'passage enregistré'; }));
+
+    // Un moyen inventé ne doit pas ouvrir une troisième catégorie.
+    const bizarre = await t.patron('POST', '/api/contacts/' + c.id + '/passage', { moyen: 'pigeon' });
+    assert.equal(bizarre.body.contact.passages[0].moyen, 'place');
+  });
+});
+
+test('inscrire un passage demande un droit, et respecte l’antenne', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [{ id: 'antenne-nord', nom: 'Nord' }, { id: 'antenne-sud', nom: 'Sud' }]
+    });
+    const nord = (await t.patron('POST', '/api/contacts', {
+      name: 'Nadia Nord', email: 'nadia@ex.com', antenneId: 'antenne-nord'
+    })).body;
+
+    /* Un agent sans droit sur le registre ni sur la domiciliation : inscrire
+       une manifestation repousse une échéance de radiation, ce n'est pas un
+       geste anodin. La domiciliation étant ouverte par défaut — c'est le
+       travail d'accueil — il faut la refuser explicitement pour obtenir un
+       accès aussi restreint. */
+    const sansDroit = (await t.patron('POST', '/api/auth/agents', {
+      name: 'Guichet seul',
+      permissions: { guichet: true, remise: true, registre: false, domiciliation: false }
+    })).body;
+    await t.agent('POST', '/api/auth/login-code', {
+      identifiant: sansDroit.agent.identifiant, code: sansDroit.code
+    });
+    const refus = await t.agent('POST', '/api/contacts/' + nord.id + '/passage', {});
+    assert.equal(refus.status, 403);
+    assert.equal(refus.body.code, 'droit');
+
+    // Avec le droit, mais dans une autre antenne : la fiche reste introuvable.
+    const duSud = (await t.patron('POST', '/api/auth/agents', {
+      name: 'Accueil Sud', antenneId: 'antenne-sud',
+      permissions: { guichet: true, domiciliation: true }
+    })).body;
+    const sud = t.session();
+    await sud('POST', '/api/auth/login-code', {
+      identifiant: duSud.agent.identifiant, code: duSud.code
+    });
+    const horsAntenne = await sud('POST', '/api/contacts/' + nord.id + '/passage', {});
+    assert.equal(horsAntenne.status, 404);
+
+    assert.equal((t.db.data.contacts[0].passages || []).length, 0, 'rien n’a été inscrit');
   });
 });

@@ -1776,14 +1776,33 @@ async function handleApi(req, res, ctx, pathname) {
 
   const passageMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/passage$/);
   if (passageMatch && method === 'POST') {
+    /* Inscrire une manifestation, c'est repousser une échéance de radiation :
+       le même métier que d'ouvrir un dossier. La route ne demandait aucun
+       droit et ignorait le filtre d'antenne — n'importe quel compte pouvait
+       écrire sur la fiche de n'importe quelle antenne. */
+    exigerUnDesDroits(currentUser, ['registre', 'domiciliation']);
     const id = decodeURIComponent(passageMatch[1]);
-    const contact = (db.data.contacts || []).find(function (c) {
+    const contact = pourSonAntenne(db.data.contacts || []).find(function (c) {
       return c.id === id;
     });
     if (!contact) throw Object.assign(new Error('Destinataire introuvable'), { status: 404 });
 
     const corps = await readBody(req);
     const note = String((corps && corps.note) || '').trim().slice(0, 200);
+
+    /* Se présenter **ou se manifester** : la loi met les deux sur le même
+       plan, et un appel de la personne en est une. Sans ce champ, quelqu'un
+       qui téléphone tous les mois sans pouvoir se déplacer — parce qu'il
+       travaille, parce qu'il est hospitalisé, parce qu'il n'a pas de quoi
+       payer le transport — était compté absent depuis trois mois et poussé
+       vers la radiation. Perdre sa domiciliation, c'est perdre l'adresse qui
+       ouvre la CAF, France Travail, l'assurance maladie.
+
+       Le moyen ne change pas le décompte : « dernierPassage » lit la date,
+       pas le canal. Il change ce qu'on peut en dire à l'écran et au journal —
+       et l'équipe, elle, doit faire la différence. */
+    const moyen = corps && corps.moyen === 'telephone' ? 'telephone' : 'place';
+
     await db.write(function (data) {
       const cible = data.contacts.find(function (c) {
         return c.id === id;
@@ -1792,6 +1811,7 @@ async function handleApi(req, res, ctx, pathname) {
       cible.passages.unshift({
         at: new Date().toISOString(),
         par: currentUser ? currentUser.name : null,
+        moyen: moyen,
         note: note
       });
       // Seuls les passages récents servent au calcul : on borne la liste.
@@ -1799,7 +1819,7 @@ async function handleApi(req, res, ctx, pathname) {
     });
     await consigner(db, {
       qui: currentUser && currentUser.name,
-      action: 'passage enregistré',
+      action: moyen === 'telephone' ? 'appel de la personne' : 'passage enregistré',
       cible: contact.name,
       details: note
     });

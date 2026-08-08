@@ -307,6 +307,43 @@ async function main() {
   verifie(avantPassage > 0, 'Une visite sans courrier s’enregistre depuis le registre des domiciliés.');
   dit('Sans cette trace, la personne paraîtrait disparue après trois mois — et risquerait la radiation.');
 
+  /* Et quand elle ne peut pas venir mais qu'elle téléphone : c'est aussi une
+     manifestation. La loi dit « présentée **ou manifestée** » ; le registre ne
+     comptait que les venues, et poussait vers la radiation ceux qui appellent
+     sans pouvoir se déplacer. */
+  await agent.click('nav button[data-panel="remise"]');
+  await agent.waitForTimeout(800);
+  const carteAppel = await agent.evaluate(() => {
+    const c = document.getElementById('appelEntrantCard');
+    return c ? !c.hidden : false;
+  });
+  verifie(carteAppel, 'Et si elle téléphone au lieu de venir, l’appel se note depuis la Remise.');
+  if (carteAppel) {
+    const qui = await agent.evaluate(
+      () => (document.querySelector('#domicilieListe option') || {}).value || ''
+    );
+    await agent.fill('#appelEntrantNom', qui);
+    await agent.click('#appelEntrantBtn');
+    await agent.waitForTimeout(1500);
+    const bilan = await agent.evaluate(() =>
+      document.getElementById('appelEntrantMsg').innerText.replace(/\s+/g, ' ')
+    );
+    dit(bilan);
+    const compte = await agent.evaluate((nom) => {
+      const c = BC.store.state.contacts.find((x) => x.name === nom);
+      const e = BC.domiciliation.etat(c, BC.store.state.history);
+      return { jours: e.joursSansPassage, moyen: e.dernierMoyen };
+    }, qui);
+    verifie(
+      compte.jours === 0 && compte.moyen === 'telephone',
+      'Son appel repart le compteur des trois mois, et le registre retient que c’était un appel.'
+    );
+    dit('Un appel compte autant qu’une venue : c’est la loi, et c’est souvent tout ce qui est possible.');
+  }
+  // On revient au registre des domiciliés : la suite s'y déroule.
+  await agent.click('nav button[data-panel="domiciliation"]');
+  await agent.waitForTimeout(900);
+
   // ── 9 ──────────────────────────────────────────────────────────────────
   titre('L’attestation d’élection de domicile s’imprime');
   await agent.click('#activesTable button[data-attestation]');

@@ -64,6 +64,8 @@
     // Recherche au guichet : 'nom' ou 'boite'.
     searchMode: 'nom',
     historyState: 'tous',
+    // Historique : l'affichage est borné, sauf demande explicite.
+    historyTout: false,
     attenteFilter: '',
     pile: [],
     typeCourrier: 'lettre',
@@ -190,6 +192,29 @@
     return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   }
 
+  /* ═════════════ borner un tableau ═════════════
+
+     L'historique ne s'efface jamais tout seul — la conservation vaut zéro par
+     défaut — et un bureau qui reçoit du courrier tous les jours dépasse les dix
+     mille lignes en deux ans. Tout peindre coûtait une seconde et demie, à
+     chaque écriture faite sur le poste d'à côté : le guichet se figeait sous
+     les doigts de quelqu'un en train de taper.
+
+     On borne donc ce qu'on peint. La règle qui compte, et que le test garde :
+     **le filtre s'applique avant**, sur la totalité. Ce qui n'est pas affiché
+     reste trouvable en tapant un nom — sans quoi la borne deviendrait une
+     perte de données à l'écran. */
+  function borner(liste, plafond, tout) {
+    const source = liste || [];
+    const max = Number(plafond) > 0 ? Number(plafond) : source.length;
+    const tronque = !tout && source.length > max;
+    return {
+      lignes: tronque ? source.slice(0, max) : source,
+      total: source.length,
+      tronque: tronque
+    };
+  }
+
   /* ═════════════ antennes ═════════════
 
      Un bureau peut tenir plusieurs points d'accueil. Quand il n'y en a qu'un —
@@ -223,6 +248,7 @@
     stampSuffix: stampSuffix,
     enAttente: enAttente,
     joursDepuis: joursDepuis,
+    borner: borner,
     antennes: antennes,
     antenneImposee: antenneImposee,
     deLAntenne: deLAntenne

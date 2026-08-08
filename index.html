@@ -359,6 +359,30 @@
       <div id="appelsTable"></div>
     </div>
 
+    <!-- L'inverse de la carte précédente : ce n'est pas nous qui appelons,
+         c'est la personne qui téléphone pour savoir si elle a du courrier.
+         Ce geste compte : la domiciliation prend fin après trois mois sans
+         que la personne se soit présentée **ou manifestée**, et un appel est
+         une manifestation. Sans ce bouton, quelqu'un qui téléphone tous les
+         mois sans pouvoir se déplacer glissait vers la radiation. -->
+    <div class="card" id="appelEntrantCard" hidden>
+      <div class="card-head">
+        <h2>La personne appelle</h2>
+      </div>
+      <p class="hint" style="margin-bottom:14px;">
+        Elle téléphone pour savoir si elle a du courrier. Notez son appel : il compte
+        comme un passage pour le suivi de sa domiciliation, et lui évite d'être comptée
+        absente.
+      </p>
+      <div class="retrait-row">
+        <input type="text" id="appelEntrantNom" class="filter-input" list="domicilieListe"
+               placeholder="Nom ou numéro de boîte…" autocomplete="off" style="flex:1;">
+        <datalist id="domicilieListe"></datalist>
+        <button class="btn" id="appelEntrantBtn">Noter son appel</button>
+      </div>
+      <div id="appelEntrantMsg"></div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <h2>Courriers en attente (<span id="countAttente">0</span>)</h2>

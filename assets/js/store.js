@@ -768,14 +768,22 @@
     return result;
   }
 
-  /** La personne s'est présentée, avec ou sans courrier pour elle. */
-  async function enregistrerPassage(id, note) {
+  /**
+   * La personne s'est manifestée. Sur place par défaut ; « telephone » quand
+   * c'est elle qui a appelé — la loi met les deux sur le même plan, et le
+   * décompte des trois mois avant radiation aussi.
+   * @param {string} id
+   * @param {string} [note]
+   * @param {{moyen?: 'place'|'telephone'}} [options]
+   */
+  async function enregistrerPassage(id, note, options) {
+    const moyen = options && options.moyen === 'telephone' ? 'telephone' : 'place';
     const result = await api('/contacts/' + encodeURIComponent(id) + '/passage', {
       method: 'POST',
-      body: JSON.stringify({ note: note || '' }),
+      body: JSON.stringify({ note: note || '', moyen: moyen }),
       horsLigne: {
         op: 'passage',
-        description: 'Passage enregistré',
+        description: moyen === 'telephone' ? 'Appel de la personne' : 'Passage enregistré',
         optimiste: { enAttente: true }
       }
     });

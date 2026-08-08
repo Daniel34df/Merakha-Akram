@@ -1488,6 +1488,109 @@
       '</tbody></table></div>';
   }
 
+  /* ── quand c'est la personne qui appelle ──────────────────────────────
+     L'inverse de la carte précédente. Elle téléphone pour savoir si elle a du
+     courrier ; c'est une manifestation au sens du décompte des trois mois, et
+     rien ne permettait de l'inscrire. */
+  /* Vu, ou seulement entendu : le décompte ne fait pas la différence, l'équipe
+     si. Quelqu'un qu'on n'a pas vu depuis trois mois mais qui téléphone n'est
+     pas dans la même situation que quelqu'un qui a disparu. */
+  const MOYEN_LIBELLE = {
+    place: 'passage',
+    telephone: 'appel de sa part',
+    retrait: 'courrier retiré',
+    ouverture: 'ouverture du dossier'
+  };
+
+  function libelleMoyen(moyen) {
+    return MOYEN_LIBELLE[moyen] || '';
+  }
+
+  function domicilieVises() {
+    return S.contacts.filter(function (c) {
+      return c.domicilie && !c.domiciliationCloseLe && deLAntenne(c);
+    });
+  }
+
+  function renderAppelEntrant() {
+    const carte = $('appelEntrantCard');
+    if (!carte) return;
+    const liste = domicilieVises();
+    // Sans domiciliation, la notion de manifestation n'a pas d'objet.
+    carte.hidden = liste.length === 0;
+    if (carte.hidden) return;
+
+    $('domicilieListe').innerHTML = util
+      .sortByName(liste)
+      .map(function (c) {
+        // Le nom seul dans la valeur : c'est lui qu'on retape au téléphone.
+        return '<option value="' + esc(c.name) + '">' + esc(c.box ? 'boîte ' + c.box : '') + '</option>';
+      })
+      .join('');
+  }
+
+  /** Retrouve la personne à partir de ce qui a été tapé : nom, ou numéro de boîte. */
+  function contactAppelant(saisie) {
+    const q = util.normalize(saisie);
+    if (!q) return null;
+    const liste = domicilieVises();
+    return (
+      liste.find(function (c) {
+        return util.normalize(c.name) === q;
+      }) ||
+      liste.find(function (c) {
+        return c.box && util.normalize(c.box) === q;
+      }) ||
+      null
+    );
+  }
+
+  $('appelEntrantBtn').addEventListener('click', async function () {
+    const champ = $('appelEntrantNom');
+    const c = contactAppelant(champ.value);
+    if (!c) {
+      setMsg('appelEntrantMsg', 'error', 'Personne domiciliée introuvable sous ce nom ou cette boîte.');
+      return;
+    }
+
+    /* Son courrier en attente : elle vient précisément d'apprendre qu'il est
+       là. La laisser sur la liste des appels à passer reviendrait à la
+       rappeler demain pour lui dire ce qu'elle sait déjà. */
+    const siens = S.history.filter(function (h) {
+      return enAttente(h) && h.contactId === c.id && !h.email && h.status !== 'prévenu';
+    });
+
+    const btn = $('appelEntrantBtn');
+    btn.disabled = true;
+    try {
+      await store.enregistrerPassage(c.id, '', { moyen: 'telephone' });
+      for (const h of siens) {
+        await store.noterAppel(h.id, { joint: true, note: 'a appelé le bureau' });
+      }
+      champ.value = '';
+      setMsg(
+        'appelEntrantMsg',
+        'ok',
+        'Appel de ' + esc(c.name) + ' noté.' +
+          (siens.length
+            ? ' ' + siens.length + ' courrier(s) marqué(s) annoncé(s) : elle sait qu’ils l’attendent.'
+            : ' Aucun courrier ne l’attend pour l’instant.')
+      );
+      renderAll();
+    } catch (err) {
+      setMsg('appelEntrantMsg', 'error', esc(err.message));
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('appelEntrantNom').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      $('appelEntrantBtn').click();
+    }
+  });
+
   $('appelsCard').addEventListener('click', async function (e) {
     const joint = e.target.closest('button[data-appel-joint]');
     const vain = e.target.closest('button[data-appel-vain]');
@@ -1999,10 +2102,11 @@
         e.debut ? util.formatJour(e.debut) : '—'
       ]);
       lignes.push([
-        'Dernier passage',
+        'Dernier signe de vie',
         e.dernierPassage
           ? util.formatJour(e.dernierPassage.slice(0, 10)) +
             ' (' + e.joursSansPassage + ' j)' +
+            (libelleMoyen(e.dernierMoyen) ? ' — ' + libelleMoyen(e.dernierMoyen) : '') +
             (e.absenceDepassee ? ' — seuil de ' + e.seuilAbsenceJours + ' j dépassé' : '')
           : '—'
       ]);
@@ -2300,6 +2404,9 @@
                 '</td><td><span class="status-pill ' + pill[0] + '">' + pill[1] + '</span></td>'
               : '<td class="attente-cell">' +
                 (e.dernierPassage ? esc(util.formatJour(e.dernierPassage.slice(0, 10))) : '—') +
+                (libelleMoyen(e.dernierMoyen)
+                  ? '<span class="absence-tag">' + esc(libelleMoyen(e.dernierMoyen)) + '</span>'
+                  : '') +
                 '</td><td class="attente-cell' + (e.absenceDepassee ? ' vieux' : '') + '">' +
                 (e.joursSansPassage === null ? '—' : e.joursSansPassage + ' j') +
                 (e.absenceDepassee ? ' — seuil dépassé' : '') +
@@ -3277,6 +3384,10 @@
     renderHistory();
   });
 
+  /* Deux cents lignes : de quoi couvrir plusieurs semaines de courrier sans
+     jamais peindre un tableau qui fige le poste. */
+  const LIGNES_HISTORIQUE = 200;
+
   const ETAT_PILL = {
     signale: ['failed', 'À traiter', 'Non retiré après la relance : voir l’onglet Dossier.'],
     clos: ['manual', 'Classé', 'Sorti du circuit sans avoir été retiré.'],
@@ -3306,9 +3417,29 @@
       return;
     }
 
+    /* L'historique ne s'efface jamais tout seul : la conservation est à zéro
+       par défaut, et un bureau qui reçoit du courrier tous les jours dépasse
+       les dix mille lignes en deux ans. Tout dessiner coûtait alors une
+       seconde et demie — à chaque saisie faite sur le poste d'à côté, puisque
+       la moindre mise à jour distante redessine tout. Le guichet se figeait
+       sous les doigts de quelqu'un en train de taper.
+
+       On borne donc ce qu'on peint, pas ce qu'on cherche : les filtres
+       s'appliquent avant, sur la totalité. Ce qui n'est pas affiché reste
+       trouvable en tapant un nom. */
+    const borne = ui.borner(list, LIGNES_HISTORIQUE, view.historyTout);
+    const dessinees = borne.lignes;
+
     box.innerHTML =
+      (borne.tronque
+        ? '<p class="hint historique-tronque">' +
+          LIGNES_HISTORIQUE + ' courriers les plus récents sur ' + borne.total +
+          '. Cherchez un nom pour retrouver les autres, ou ' +
+          '<button class="link-btn" id="historyToutBtn">affichez tout</button> — ' +
+          'l’affichage sera plus lent.</p>'
+        : '') +
       '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Type</th><th>Date</th><th>Attente</th><th>Suivi</th><th></th></tr></thead><tbody>' +
-      list
+      dessinees
         .map(function (h) {
           const pill = ETAT_PILL[etatCourrier(h)] || STATUS_PILL[h.status] || STATUS_PILL['envoyé'];
           const copies = [];
@@ -3352,6 +3483,18 @@
         })
         .join('') +
       '</tbody></table></div>';
+
+    /* Voir tout ce qui est là, quand on le demande vraiment. Le choix ne dure
+       que le temps de la visite : au prochain chargement, l'affichage repart
+       borné, sinon le poste hériterait d'une lenteur que personne n'a choisie
+       ce jour-là. */
+    const tout = $('historyToutBtn');
+    if (tout) {
+      tout.addEventListener('click', function () {
+        view.historyTout = true;
+        renderHistory();
+      });
+    }
     brancherSuivi(box);
   }
 
@@ -5252,6 +5395,7 @@
     renderMailbox();
     renderPending();
     renderAppels();
+    renderAppelEntrant();
     renderDossier();
     renderAccounts();
     renderStats();

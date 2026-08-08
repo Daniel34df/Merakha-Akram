@@ -463,6 +463,19 @@ un passage**, sur la fiche comme dans la liste, l'enregistre en un clic. Sans ce
 geste, quelqu'un qui vient régulièrement mais n'a jamais de courrier
 apparaîtrait comme disparu.
 
+**Un appel de la personne compte aussi.** La règle dit « présentée **ou
+manifestée** » : téléphoner pour savoir si on a du courrier en est une. La carte
+**La personne appelle**, dans l'onglet Remise, note cet appel — il repart le
+décompte des trois mois, exactement comme une venue, et marque au passage son
+courrier comme annoncé puisqu'elle vient de l'apprendre. Sans cela, quelqu'un
+qui téléphone tous les mois sans pouvoir se déplacer — parce qu'il travaille,
+parce qu'il est hospitalisé, parce qu'il n'a pas de quoi payer le transport —
+arrivait sur la liste des radiations.
+
+Le registre garde la distinction : la fiche dit « passage », « appel de sa
+part » ou « courrier retiré ». Le décompte ne fait pas la différence ;
+l'équipe, elle, doit pouvoir la faire.
+
 Une attestation valable n'empêche pas d'être menacé de radiation, et
 inversement : ce sont deux problèmes distincts, et un dossier peut figurer sur
 les deux listes.
@@ -846,7 +859,7 @@ autre interface ou un import automatisé.
 | `GET` | `/api/reseau` | adresse de ce serveur, postes reliés en ce moment |
 | `GET` `POST` | `/api/contacts` | lister / ajouter un destinataire |
 | `PUT` `DELETE` | `/api/contacts/:id` | modifier / supprimer |
-| `POST` | `/api/contacts/:id/passage` | la personne s'est présentée |
+| `POST` | `/api/contacts/:id/passage` | la personne s'est manifestée — sur place, ou par téléphone (`moyen`) |
 | `POST` | `/api/history/:id/appel` | appel passé à une personne sans courriel |
 | `GET` | `/api/domiciliation` | échéances, absences, rapport annuel |
 | `GET` `POST` `DELETE` | `/api/history` | historique : lire, ajouter, vider |

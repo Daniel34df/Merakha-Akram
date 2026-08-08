@@ -92,31 +92,52 @@
     return Math.round((d.getTime() - jusquaMs) / JOUR);
   }
 
-  /* Dernière fois que la personne s'est manifestée. La loi parle de « présentée
-     ou manifestée » : un retrait de courrier compte, une visite sans courrier
-     aussi — d'où les passages saisis à la main. */
-  function dernierPassage(contact, history, now) {
+  /**
+   * Le dernier signe de vie, et par quel canal.
+   *
+   * « Se présenter **ou se manifester** » : la loi met les deux sur le même
+   * plan, et le décompte des trois mois aussi. Un appel de la personne compte
+   * donc autant qu'une venue — c'est la même ligne dans `passages`, avec un
+   * `moyen` différent. Le canal ne change rien au calcul ; il change ce que
+   * l'écran peut en dire, et l'équipe, elle, doit faire la différence entre
+   * quelqu'un qu'on a vu et quelqu'un qu'on a seulement entendu.
+   *
+   * @returns {{at: string|null, moyen: 'place'|'telephone'|'retrait'|'ouverture'|null}}
+   */
+  function derniereManifestation(contact, history, now) {
     const maintenant = now === undefined ? Date.now() : now;
     let dernier = null;
-    const retenir = function (iso) {
+    let moyen = null;
+    const retenir = function (iso, quoi) {
       if (!iso) return;
       const t = new Date(iso).getTime();
       if (isNaN(t) || t > maintenant) return;
-      if (dernier === null || t > dernier) dernier = t;
+      if (dernier === null || t > dernier) {
+        dernier = t;
+        moyen = quoi;
+      }
     };
 
     (contact.passages || []).forEach(function (p) {
-      retenir(p && p.at);
+      // Les passages d'avant cette distinction sont des venues sur place.
+      retenir(p && p.at, p && p.moyen === 'telephone' ? 'telephone' : 'place');
     });
     (history || []).forEach(function (h) {
       const sien =
         h.contactId === contact.id ||
         (contact.email && util.normalize(h.email) === util.normalize(contact.email));
-      if (sien) retenir(h.pickedUpAt);
+      if (sien) retenir(h.pickedUpAt, 'retrait');
     });
     // À défaut de tout signe de vie, l'ouverture du dossier fait foi.
-    if (dernier === null) retenir(contact.domicilieDepuis);
-    return dernier === null ? null : new Date(dernier).toISOString();
+    if (dernier === null) retenir(contact.domicilieDepuis, 'ouverture');
+    return {
+      at: dernier === null ? null : new Date(dernier).toISOString(),
+      moyen: moyen
+    };
+  }
+
+  function dernierPassage(contact, history, now) {
+    return derniereManifestation(contact, history, now).at;
   }
 
   /* État complet d'un dossier de domiciliation. Un seul objet, pour que
@@ -141,7 +162,8 @@
     const fin = c.domicilieJusqua || echeance(debut, opts);
     const joursRestants = fin ? joursEntre(fin, maintenant) : null;
 
-    const passage = dernierPassage(c, history, maintenant);
+    const manif = derniereManifestation(c, history, maintenant);
+    const passage = manif.at;
     const joursSansPassage =
       passage === null ? null : Math.floor((maintenant - new Date(passage).getTime()) / JOUR);
     const seuilAbsence = Math.round(opts.absenceMois * 30.4375);
@@ -169,6 +191,8 @@
       echeance: fin,
       joursRestants: joursRestants,
       dernierPassage: passage,
+      // Par quel canal : « place », « telephone », « retrait », « ouverture ».
+      dernierMoyen: manif.moyen,
       joursSansPassage: joursSansPassage,
       seuilAbsenceJours: seuilAbsence,
       risqueRadiation: risque,
@@ -267,6 +291,7 @@
   return {
     DEFAUTS: DEFAUTS,
     echeance: echeance,
+    derniereManifestation: derniereManifestation,
     dernierPassage: dernierPassage,
     etat: etat,
     aRenouveler: aRenouveler,
