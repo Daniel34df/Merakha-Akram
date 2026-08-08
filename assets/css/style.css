@@ -1246,6 +1246,46 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 .feuille-casier td.b{font-family:var(--mono);font-weight:600;}
 .feuille-casier td.case{width:70px;border:1px solid var(--navy);}
 
+/* ---------- guichet : le repli des options secondaires ----------
+   L'écran le plus utilisé de la journée ne garde déplié que ce qui sert à
+   chaque courrier. Le reste tient sous une entrée, à un clic. */
+.guichet-plus{
+  border-top:1px solid var(--line);
+  margin-top:18px;
+  padding-top:4px;
+}
+.guichet-plus > summary{
+  cursor:pointer;
+  padding:10px 0;
+  font-family:var(--mono);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:var(--slate);
+  list-style:none;
+}
+.guichet-plus > summary::-webkit-details-marker{display:none;}
+.guichet-plus > summary::before{content:'▸ ';display:inline-block;transition:transform .18s ease;}
+.guichet-plus[open] > summary::before{transform:rotate(90deg);}
+.guichet-plus > summary:hover{color:var(--navy);}
+.guichet-plus[open] > summary{color:var(--navy);}
+.guichet-plus .pile,
+.guichet-plus .copies{margin-top:6px;}
+
+/* ---------- sections des réglages ----------
+   Onze cartes à la suite, c'est un mur : on ne sait plus où chercher. La barre
+   reprend le motif segmenté du guichet — même vocabulaire visuel, rien de
+   nouveau à apprendre — et n'affiche qu'un groupe à la fois. */
+.reglages-sections{max-width:none;flex-wrap:wrap;margin-bottom:20px;}
+.reglages-sections button{flex:0 1 auto;}
+.reglages-groupe[hidden]{display:none;}
+.reglages-groupe > .card{animation:cardIn .3s cubic-bezier(.2,.8,.3,1) both;}
+
+@media (max-width:640px){
+  .reglages-sections{gap:4px;}
+  .reglages-sections button{font-size:11px;padding:8px 10px;}
+}
+
 /* ---------- postes du bureau ----------
    L'adresse à recopier sur le poste d'à côté : c'est la seule chose qu'on
    vient chercher ici, elle doit se lire de loin et se copier d'un clic. */

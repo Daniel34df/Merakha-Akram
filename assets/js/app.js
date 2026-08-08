@@ -16,6 +16,10 @@
 
   /* Filtres d'affichage, purement locaux à l'interface. */
   const view = {
+    // Section ouverte dans les Réglages, parmi les cinq groupes.
+    sectionReglages: 'bureau',
+    // Section ouverte dans le Suivi : à traiter, historique, statistiques.
+    sectionSuivi: 'traiter',
     contactFilter: '',
     historyFilter: '',
     historyDate: '',
@@ -162,7 +166,10 @@
        autre poste déclencherait un appel pour une carte que personne ne
        regarde. Il faut donc la remplir en ouvrant l'onglet : rien d'autre ne
        le fera, et elle resterait vide. */
-    if (name === 'reglages' && typeof renderPostes === 'function') renderPostes(true);
+    if (name === 'reglages') {
+      renderSectionsReglages();
+      if (view.sectionReglages === 'bureau') renderPostes(true);
+    }
   }
 
   document.querySelectorAll('nav button').forEach(function (btn) {
@@ -473,6 +480,29 @@
     renderCopiesState();
   }
 
+  /* Ce que le repli « Autres options » cache d'actif. Une case « urgent »
+     laissée cochée et invisible enverrait des relances sous deux jours à tout
+     le monde sans que personne ne comprenne pourquoi : le repli ne doit jamais
+     dissimuler un réglage en vigueur. */
+  function renderGuichetPlusState() {
+    const actifs = [];
+    if ($('courrierUrgent').checked) actifs.push('urgent');
+    if ($('modeSerie').checked) actifs.push('série');
+    const copies = util.parseAddressList($('sendCc').value).entries.length +
+      util.parseAddressList($('sendBcc').value).entries.length;
+    if (copies) actifs.push(copies + (copies > 1 ? ' copies' : ' copie'));
+    const badge = $('guichetPlusState');
+    if (badge) badge.textContent = actifs.length ? '· ' + actifs.join(' · ') : '';
+    // Un réglage actif mérite d'être vu : on déplie plutôt que de se taire.
+    const plus = $('guichetPlus');
+    if (plus && actifs.length && !plus.open) plus.open = true;
+  }
+
+  ['courrierUrgent', 'modeSerie'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', renderGuichetPlusState);
+  });
+
   function renderCopiesState() {
     const cc = util.parseAddressList($('sendCc').value);
     const bcc = util.parseAddressList($('sendBcc').value);
@@ -481,6 +511,7 @@
     if (total) parts.push('· ' + total + (total > 1 ? ' adresses' : ' adresse'));
     if (view.copiesTouched) parts.push('· modifié');
     $('copiesState').textContent = parts.join(' ');
+    renderGuichetPlusState();
     setMsg('copiesMsg', '', '');
     if (cc.errors.length || bcc.errors.length) {
       setMsg(
@@ -3205,8 +3236,10 @@
   };
 
   function renderHistory() {
+    /* Un seul compteur sur l'onglet « Suivi », celui des courriers à traiter :
+       le total de l'historique ne demande aucune action et ne mérite pas une
+       pastille. Il reste affiché en tête de sa propre carte. */
     $('countHistory').textContent = S.history.length;
-    $('tabCountHistory').textContent = S.history.length;
     const box = $('historyTable');
     const list = visibleHistory();
 
@@ -3613,6 +3646,9 @@
     btn.disabled = true;
     try {
       await store.saveSettings({
+        // Le nom du bureau a rejoint sa carte d'identité : il se range avec
+        // l'adresse, pas avec le modèle de message.
+        officeName: $('setOffice').value.trim() || store.DEFAULT_SETTINGS.officeName,
         officeAdresse: $('setAdresse').value.trim(),
         officeVille: $('setVille').value.trim(),
         officeAgrement: $('setAgrement').value.trim()
@@ -4488,6 +4524,106 @@
     );
   }
 
+  /* ═════════════ sections des réglages ═════════════
+
+     Onze cartes empilées, c'est un mur : on ne sait plus où chercher, et le
+     réglage qu'on utilise une fois par an occupe autant de place que celui
+     qu'on touche chaque semaine. On les range par la question qu'on se pose en
+     arrivant, et on n'en montre qu'un groupe à la fois.
+
+     Aucune carte ne disparaît et aucune ne change de nom : elles changent
+     seulement de voisinage. */
+  const SECTIONS_REGLAGES = [
+    { id: 'bureau', label: 'Le bureau' },
+    { id: 'messages', label: 'Les messages' },
+    { id: 'acces', label: 'Les accès' },
+    { id: 'registre', label: 'Le registre' },
+    { id: 'controle', label: 'Contrôle' }
+  ];
+
+  const SECTIONS_SUIVI = [
+    { id: 'traiter', label: 'À traiter' },
+    { id: 'journalier', label: 'Historique' },
+    { id: 'chiffres', label: 'Statistiques' }
+  ];
+
+  /* Une seule mécanique de sous-sections pour tout le monde : une barre
+     segmentée, des groupes de cartes, un seul groupe visible. Elle sert aux
+     Réglages et au Suivi — en écrire deux versions garantirait qu'elles
+     divergent au premier correctif. */
+  function groupeDe(panneau, id) {
+    return document.querySelector('#' + panneau + ' [data-groupe="' + id + '"]');
+  }
+
+  /* Un groupe dont toutes les cartes sont masquées par les droits ne doit pas
+     s'afficher vide : mieux vaut retirer l'onglet que proposer une page morte. */
+  function groupeHabite(panneau, id) {
+    const g = groupeDe(panneau, id);
+    if (!g) return false;
+    return Array.prototype.some.call(g.querySelectorAll(':scope > .card'), function (c) {
+      return !c.hidden;
+    });
+  }
+
+  function renderSections(panneau, barreId, sections, choisie, choisir) {
+    const barre = $(barreId);
+    if (!barre) return;
+    const ouvertes = sections.filter(function (s) {
+      return groupeHabite(panneau, s.id);
+    });
+    if (!ouvertes.length) {
+      barre.innerHTML = '';
+      return;
+    }
+    /* Si la section retenue s'est refermée entre-temps — un droit retiré, un
+       accès changé — on retombe sur la première ouverte plutôt que sur rien. */
+    if (!ouvertes.some(function (s) { return s.id === choisie; })) {
+      choisie = ouvertes[0].id;
+      choisir(choisie);
+    }
+    barre.innerHTML = ouvertes
+      .map(function (s) {
+        return (
+          '<button type="button" role="tab" data-section="' + esc(s.id) + '"' +
+          (s.id === choisie ? ' class="active" aria-selected="true"' : ' aria-selected="false"') +
+          '>' + esc(s.label) + '</button>'
+        );
+      })
+      .join('');
+    sections.forEach(function (s) {
+      const g = groupeDe(panneau, s.id);
+      if (g) g.hidden = s.id !== choisie;
+    });
+  }
+
+  function renderSectionsReglages() {
+    renderSections('panel-reglages', 'reglagesSections', SECTIONS_REGLAGES, view.sectionReglages, function (id) {
+      view.sectionReglages = id;
+    });
+  }
+
+  function renderSectionsSuivi() {
+    renderSections('panel-suivi', 'suiviSections', SECTIONS_SUIVI, view.sectionSuivi, function (id) {
+      view.sectionSuivi = id;
+    });
+  }
+
+  $('reglagesSections').addEventListener('click', function (e) {
+    const b = e.target.closest('button[data-section]');
+    if (!b) return;
+    view.sectionReglages = b.dataset.section;
+    renderSectionsReglages();
+    // « Postes du bureau » interroge le serveur : elle ne se charge qu'affichée.
+    if (view.sectionReglages === 'bureau') renderPostes(true);
+  });
+
+  $('suiviSections').addEventListener('click', function (e) {
+    const b = e.target.closest('button[data-section]');
+    if (!b) return;
+    view.sectionSuivi = b.dataset.section;
+    renderSectionsSuivi();
+  });
+
   async function renderPostes(force) {
     const carte = $('postesCard');
     /* Sans serveur, il n'y a pas de poste à relier : le registre tient dans ce
@@ -4500,7 +4636,12 @@
        provoque un à chaque écriture des autres postes. Interroger le serveur à
        chaque fois ferait un appel par écriture et par poste, pour une carte que
        personne ne regarde. On ne la charge que si elle est à l'écran. */
-    const visible = document.getElementById('panel-reglages').classList.contains('active');
+    /* Deux conditions maintenant : le panneau des réglages doit être à l'écran,
+       *et* la section « Le bureau » ouverte — sinon on interrogerait le serveur
+       pour une carte rangée derrière un autre onglet. */
+    const visible =
+      document.getElementById('panel-reglages').classList.contains('active') &&
+      view.sectionReglages === 'bureau';
     if (!visible && !force) return;
 
     let vue;
@@ -5062,6 +5203,10 @@
     renderCarteAntennes();
     renderPostes();
     appliquerDroits();
+    /* Après appliquerDroits : c'est lui qui masque les cartes, et les sections
+       se calculent d'après ce qui reste visible. */
+    renderSectionsReglages();
+    renderSectionsSuivi();
   }
 
   /* L'interface masque ce qui n'est pas ouvert. Le serveur refuse de toute
@@ -5194,7 +5339,15 @@
     });
 
     const hash = (root.location.hash || '').replace('#', '');
-    if (['guichet', 'remise', 'registre', 'dossier', 'historique', 'reglages'].includes(hash)) showPanel(hash);
+    /* « dossier » et « historique » sont conservés : un signet ou un lien
+       enregistré avant la fusion doit continuer d'aboutir quelque part, et le
+       Suivi est bien l'endroit où ils menaient. */
+    const ANCIENS = { dossier: 'suivi', historique: 'suivi' };
+    const vers = ANCIENS[hash] || hash;
+    if (['guichet', 'remise', 'registre', 'suivi', 'domiciliation', 'reglages'].includes(vers)) {
+      if (ANCIENS[hash]) view.sectionSuivi = hash === 'historique' ? 'journalier' : 'traiter';
+      showPanel(vers);
+    }
 
     try {
       await store.init();

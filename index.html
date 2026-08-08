@@ -229,8 +229,9 @@
     <button class="active" data-panel="guichet" accesskey="1">Guichet</button>
     <button data-panel="remise" accesskey="2">Remise <span class="tab-count" id="tabCountAttente">0</span></button>
     <button data-panel="registre" accesskey="3">Registre <span class="tab-count" id="tabCountContacts">0</span></button>
-    <button data-panel="dossier" accesskey="4">Dossier <span class="tab-count" id="tabCountDossier">0</span></button>
-    <button data-panel="historique" accesskey="5">Historique <span class="tab-count" id="tabCountHistory">0</span></button>
+    <!-- Le compteur garde exactement le sens qu'il avait sur « Dossier » : le
+         nombre de courriers qui demandent une action. -->
+    <button data-panel="suivi" accesskey="4">Suivi <span class="tab-count" id="tabCountDossier">0</span></button>
     <button data-panel="domiciliation" accesskey="6">Domiciliation <span class="tab-count" id="tabCountDomiciliation">0</span></button>
     <button data-panel="reglages" accesskey="7">Réglages</button>
   </nav>
@@ -258,17 +259,28 @@
         <span class="hint">Entrée pour valider · ↑↓ pour parcourir les suggestions</span>
       </div>
 
-      <div class="guichet-options">
-        <label class="check-row">
-          <input type="checkbox" id="courrierUrgent">
-          Courrier urgent — relance sous deux jours
-        </label>
-        <label class="check-row">
-          <input type="checkbox" id="modeSerie">
-          Saisie en série — enchaîner sans quitter le champ
-        </label>
-      </div>
+      <!-- Le bilan de la saisie en série reste dehors : il rend compte de ce
+           qui vient d'être fait, il n'a pas à se replier. -->
       <div id="serieBilan" hidden></div>
+
+      <!-- Trois réglages sur quatre ne servent pas au courrier ordinaire, mais
+           occupaient l'écran en permanence. Ils sont repliés sous une seule
+           entrée — tout reste à un clic, sur le même écran. La pastille
+           prévient quand l'un d'eux est actif : une case « urgent » oubliée
+           derrière un repli ferait des dégâts silencieux. -->
+      <details class="guichet-plus" id="guichetPlus">
+        <summary>Autres options <span class="copies-state" id="guichetPlusState"></span></summary>
+
+        <div class="guichet-options">
+          <label class="check-row">
+            <input type="checkbox" id="courrierUrgent">
+            Courrier urgent — relance sous deux jours
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="modeSerie">
+            Saisie en série — enchaîner sans quitter le champ
+          </label>
+        </div>
 
       <details class="pile" id="pileBox">
         <summary>Traiter une pile de courrier <span class="copies-state" id="pileState"></span></summary>
@@ -301,6 +313,7 @@
           <span class="hint">Plusieurs adresses : séparez-les par des virgules.</span>
         </div>
         <div id="copiesMsg"></div>
+      </details>
       </details>
     </div>
 
@@ -393,61 +406,71 @@
   </section>
 
   <!-- ═══════════════ DOSSIER ═══════════════ -->
-  <section class="panel" id="panel-dossier" aria-label="Dossier des courriers signalés">
-    <div class="card">
-      <div class="card-head">
-        <h2>Ce que la relance a donné</h2>
-        <div class="toolbar">
-          <button class="btn ghost small" id="feuilleCasierBtn">Feuille de casier</button>
+  <!-- « Dossier » et « Historique » regardaient tous deux le courrier passé :
+       ce qui bloque d'un côté, tout le reste de l'autre. Ils ne font plus qu'un
+       onglet, avec la même barre de sections que les Réglages. Rien n'a été
+       retiré : les quatre cartes du Dossier et celle de l'Historique sont
+       toutes là, rangées derrière trois entrées. -->
+  <section class="panel" id="panel-suivi" aria-label="Suivi du courrier">
+    <div class="search-modes reglages-sections" id="suiviSections" role="tablist" aria-label="Sections du suivi"></div>
+
+    <div class="reglages-groupe" data-groupe="traiter" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Courriers à traiter (<span id="countDossier">0</span>)</h2>
+          <div class="toolbar">
+            <button class="btn ghost small" id="exportDossierXlsxBtn">Exporter Excel</button>
+          </div>
         </div>
+        <p class="hint" id="dossierExplication"></p>
+        <div id="dossierTable"><div class="empty">Chargement…</div></div>
       </div>
-      <dl class="status-list" id="relanceBilan"></dl>
-    </div>
 
-    <div class="card">
-      <h2>Statistiques</h2>
-      <div id="statsCorps"><div class="empty">Chargement…</div></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <h2>Courriers à traiter (<span id="countDossier">0</span>)</h2>
-        <div class="toolbar">
-          <button class="btn ghost small" id="exportDossierXlsxBtn">Exporter Excel</button>
+      <div class="card">
+        <div class="card-head">
+          <h2>Ce que la relance a donné</h2>
+          <div class="toolbar">
+            <button class="btn ghost small" id="feuilleCasierBtn">Feuille de casier</button>
+          </div>
         </div>
+        <dl class="status-list" id="relanceBilan"></dl>
       </div>
-      <p class="hint" id="dossierExplication"></p>
-      <div id="dossierTable"><div class="empty">Chargement…</div></div>
+
+      <div class="card">
+        <h2>Classés sans retrait</h2>
+        <div id="closedTable"><div class="empty">Aucun courrier classé.</div></div>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>Classés sans retrait</h2>
-      <div id="closedTable"><div class="empty">Aucun courrier classé.</div></div>
-    </div>
-  </section>
-
-  <!-- ═══════════════ HISTORIQUE ═══════════════ -->
-  <section class="panel" id="panel-historique" aria-label="Historique">
-    <div class="card">
-      <div class="card-head">
-        <h2>Notifications envoyées (<span id="countHistory">0</span>)</h2>
-        <div class="toolbar">
-          <input type="text" id="historyFilter" class="filter-input" placeholder="Filtrer…" autocomplete="off">
-          <input type="date" id="historyDate" class="filter-input">
-          <select id="historyState" class="filter-input">
-            <option value="attente">En attente</option>
-            <option value="relance">Relancés</option>
-            <option value="signale">Signalés</option>
-            <option value="recupere">Récupérés</option>
-            <option value="clos">Classés</option>
-            <option value="tous" selected>Tous</option>
-          </select>
-          <button class="btn ghost small" id="exportHistoryXlsxBtn">Exporter Excel</button>
-          <button class="btn ghost small" id="exportHistoryBtn">CSV</button>
-          <button class="btn ghost small danger" id="clearHistoryBtn">Vider</button>
+    <div class="reglages-groupe" data-groupe="journalier" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Notifications envoyées (<span id="countHistory">0</span>)</h2>
+          <div class="toolbar">
+            <input type="text" id="historyFilter" class="filter-input" placeholder="Filtrer…" autocomplete="off">
+            <input type="date" id="historyDate" class="filter-input">
+            <select id="historyState" class="filter-input">
+              <option value="attente">En attente</option>
+              <option value="relance">Relancés</option>
+              <option value="signale">Signalés</option>
+              <option value="recupere">Récupérés</option>
+              <option value="clos">Classés</option>
+              <option value="tous" selected>Tous</option>
+            </select>
+            <button class="btn ghost small" id="exportHistoryXlsxBtn">Exporter Excel</button>
+            <button class="btn ghost small" id="exportHistoryBtn">CSV</button>
+            <button class="btn ghost small danger" id="clearHistoryBtn">Vider</button>
+          </div>
         </div>
+        <div id="historyTable"><div class="empty">Chargement…</div></div>
       </div>
-      <div id="historyTable"><div class="empty">Chargement…</div></div>
+    </div>
+
+    <div class="reglages-groupe" data-groupe="chiffres" hidden>
+      <div class="card">
+        <h2>Statistiques</h2>
+        <div id="statsCorps"><div class="empty">Chargement…</div></div>
+      </div>
     </div>
   </section>
 
@@ -580,320 +603,332 @@
 
   <!-- ═══════════════ RÉGLAGES ═══════════════ -->
   <section class="panel" id="panel-reglages" aria-label="Réglages">
-    <div class="card">
-      <h2>Message envoyé aux destinataires</h2>
-      <label for="setOffice">Nom du bureau</label>
-      <input type="text" id="setOffice" placeholder="Bureau du Courrier">
-      <label for="setFrom">De — expéditeur</label>
-      <input type="text" id="setFrom" placeholder="Bureau du Courrier &lt;courrier@exemple.com&gt;">
-      <p class="hint" style="margin:-10px 0 16px;">
-        Utilisé pour l'envoi automatique. Laissé vide, c'est <code>MAIL_FROM</code> du serveur qui
-        s'applique. Sans envoi automatique, l'expéditeur reste celui du logiciel de courriel.
-      </p>
+    <!-- Les réglages se rangent par la question qu'on se pose en arrivant, pas
+         par l'ordre où ils ont été ajoutés. La barre reprend le motif segmenté
+         déjà employé au guichet (« par nom / par n° de boîte »). -->
+    <div class="search-modes reglages-sections" id="reglagesSections" role="tablist" aria-label="Sections des réglages"></div>
 
-      <div class="copies-grid">
-        <div>
-          <label for="setCc">Cc — copie visible, par défaut</label>
-          <input type="text" id="setCc" placeholder="archives@exemple.com">
-        </div>
-        <div>
-          <label for="setBcc">Cci — copie invisible, par défaut</label>
-          <input type="text" id="setBcc" placeholder="registre@exemple.com">
-        </div>
-      </div>
-
-      <h3 class="sous-titre" style="margin-top:24px;">Modèle du message</h3>
-      <p class="hint" style="margin-bottom:10px;">
-        Le modèle général sert à tout le courrier. Chaque type peut recevoir son propre
-        texte : un recommandé n'appelle pas la même phrase qu'un prospectus.
-      </p>
-      <div class="langue-choix">
-        <label for="gabaritLangue">Langue du message</label>
-        <select id="gabaritLangue" class="langue-select"></select>
-        <span class="hint" id="gabaritLangueEtat"></span>
-      </div>
-      <div class="gabarit-onglets" id="gabaritOnglets" role="tablist"></div>
-      <p class="hint" id="gabaritEtat" style="margin:-4px 0 14px;"></p>
-
-      <label for="setSubject">Sujet</label>
-      <input type="text" id="setSubject">
-      <label for="setBody">Corps du message</label>
-      <textarea id="setBody" rows="8"></textarea>
-      <p class="hint">
-        Variables : <code>{nom}</code>, <code>{courriel}</code>, <code>{date}</code>, <code>{bureau}</code>,
-        <code>{type}</code> (« Colis »), <code>{article}</code> (« Un colis », en début de phrase),
-        <code>{article_min}</code> (« un colis », au milieu), <code>{code}</code> (code de retrait).
-      </p>
-      <div class="row-actions" id="gabaritActions" hidden>
-        <button class="btn ghost small" id="gabaritEffacerBtn">Revenir au modèle général pour ce type</button>
-      </div>
-      <div class="row-actions">
-        <button class="btn" id="saveSettingsBtn">Enregistrer</button>
-        <button class="btn ghost" id="resetSettingsBtn">Rétablir le modèle par défaut</button>
-      </div>
-      <div id="settingsMsg"></div>
-      <label style="margin-top:18px;">Aperçu</label>
-      <pre class="preview" id="settingsPreview"></pre>
-    </div>
-
-    <div class="card">
-      <h2>Où le registre est conservé</h2>
-      <div class="registry-choice" id="registryChoice">
-        <label class="choice">
-          <input type="radio" name="registre" value="partage" id="registrePartage">
-          <span>
-            <b>Registre partagé</b>
-            Conservé sur le serveur : tous les postes voient le même registre, et
-            l'envoi automatique est possible.
-          </span>
-        </label>
-        <label class="choice">
-          <input type="radio" name="registre" value="local" id="registreLocal">
-          <span>
-            <b>Ce poste seulement</b>
-            Conservé dans ce navigateur. Rien ne quitte le poste, mais les autres
-            postes ne voient pas ce registre.
-          </span>
-        </label>
-      </div>
-      <div id="registryMsg"></div>
-    </div>
-
-    <div class="card" id="mailboxCard" hidden>
-      <h2>Ma boîte d'envoi</h2>
-      <div id="mailboxState"></div>
-
-      <div id="mailboxChoices">
-        <div class="mailbox-option">
-          <h3>Connecter ma boîte Gmail</h3>
-          <p>
-            Vous autorisez l'application depuis l'écran de Google. Votre mot de passe n'est jamais
-            transmis à l'application, et l'autorisation se retire à tout moment sur
-            <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">la page des accès Google</a>.
-          </p>
-          <button class="btn" id="connectGoogleBtn">Connecter ma boîte Gmail</button>
-          <p class="hint" id="googleUnavailable" hidden>
-            Indisponible : ce serveur n'a pas de <code>GOOGLE_CLIENT_ID</code> configuré.
-            Utilisez un mot de passe d'application ci-dessous, ou voir <code>docs/connexion-boite-mail.md</code>.
-          </p>
-        </div>
-
-        <details class="mailbox-option">
-          <summary>Utiliser un mot de passe d'application (SMTP)</summary>
-          <p class="hint">
-            Pour les boîtes sans connexion Google : vous fournissez un mot de passe d'application,
-            jamais le mot de passe de votre compte. Il est chiffré avant d'être enregistré.
-          </p>
-          <div class="copies-grid">
-            <div>
-              <label for="mbAddress">Votre adresse</label>
-              <input type="email" id="mbAddress" placeholder="vous@exemple.com">
-            </div>
-            <div>
-              <label for="mbHost">Serveur SMTP</label>
-              <input type="text" id="mbHost" placeholder="smtp.gmail.com">
-            </div>
-          </div>
-          <div class="copies-grid">
-            <div>
-              <label for="mbPort">Port</label>
-              <input type="text" id="mbPort" placeholder="587" value="587">
-            </div>
-            <div>
-              <label for="mbPassword">Mot de passe d'application</label>
-              <input type="password" id="mbPassword" autocomplete="off">
-            </div>
-          </div>
-          <button class="btn ghost" id="connectSmtpBtn">Enregistrer cette boîte</button>
-        </details>
-      </div>
-      <div id="mailboxMsg"></div>
-    </div>
-
-    <div class="card" id="postesCard" hidden>
-      <div class="card-head">
-        <h2>Postes du bureau</h2>
-        <div class="toolbar">
-          <button class="btn ghost small" id="rafraichirPostesBtn">Actualiser</button>
-          <button class="btn ghost small" id="imprimerPostesBtn">Imprimer la fiche</button>
-        </div>
-      </div>
-      <p class="hint" style="margin-bottom:14px;">
-        Le registre vit sur <strong>ce poste</strong>. Les autres ordinateurs du bureau
-        n'ont rien à installer : ils ouvrent l'adresse ci-dessous dans leur navigateur et
-        travaillent sur le même registre, en même temps.
-      </p>
-      <div id="postesAdresse"></div>
-      <div id="postesAlertes"></div>
-      <h3 class="sous-titre">Reliés en ce moment</h3>
-      <div id="postesListe"></div>
-    </div>
-
-    <div class="card" id="organismeCard">
-      <h2>Organisme domiciliataire</h2>
-      <p class="hint" style="margin-bottom:14px;">
-        Ce qui figure en tête des <strong>attestations d'élection de domicile</strong> :
-        c'est l'organisme qui atteste, il doit donc dire où il est et sous quel agrément il
-        domicilie. Laissé vide, l'attestation s'imprime quand même, avec des traits à
-        compléter à la main.
-      </p>
-      <label for="setAdresse">Adresse de l'organisme</label>
-      <input type="text" id="setAdresse" autocomplete="off" placeholder="12 rue des Lilas, 75011 Paris">
-      <p class="hint" style="margin:-10px 0 16px;">
-        C'est l'adresse que la personne domiciliée donnera aux administrations. Avec
-        plusieurs antennes, celle de l'antenne du dossier est utilisée si elle est renseignée.
-      </p>
-      <div class="copies-grid">
-        <div>
-          <label for="setVille">Ville — pour la mention « Fait à… »</label>
-          <input type="text" id="setVille" autocomplete="off" placeholder="Paris">
-        </div>
-        <div>
-          <label for="setAgrement">Agrément préfectoral</label>
-          <input type="text" id="setAgrement" autocomplete="off" placeholder="Agrément n° 2024-137 du 3 mars 2024">
-        </div>
-      </div>
-      <div class="row-actions">
-        <button class="btn" id="saveOrganismeBtn">Enregistrer</button>
-      </div>
-      <div id="organismeMsg"></div>
-    </div>
-
-    <div class="card" id="backupCard">
-      <h2>Sauvegarde du registre</h2>
-      <p class="hint" style="margin-bottom:14px;">
-        Tout le registre tient dans un seul fichier. Une copie datée est conservée
-        automatiquement sur le serveur ; téléchargez-en une de temps en temps et
-        rangez-la ailleurs que sur ce poste.
-      </p>
-      <div class="row-actions">
-        <button class="btn" id="downloadBackupBtn">Télécharger une sauvegarde</button>
-        <button class="btn ghost" id="serverBackupBtn">Copie sur le serveur</button>
-        <button class="btn ghost" id="listerSauvegardesBtn">Restaurer une copie</button>
-      </div>
-      <div id="backupMsg"></div>
-      <div id="sauvegardesListe"></div>
-
-      <h3 class="sous-titre">Durée de conservation</h3>
-      <p class="hint" style="margin-bottom:10px;">
-        Au-delà de cette durée, les courriers <strong>déjà retirés ou classés</strong> sont effacés
-        du registre. Ceux qui attendent encore ne sont jamais touchés, quel que soit leur âge.
-        Garder tout indéfiniment expose bien plus qu'il ne faudrait le jour d'une fuite.
-      </p>
-      <div class="retrait-row">
-        <select id="conservationMois" class="filter-input">
-          <option value="0">Illimitée</option>
-          <option value="12">12 mois</option>
-          <option value="24">24 mois</option>
-          <option value="36">36 mois</option>
-          <option value="60">5 ans</option>
-        </select>
-        <button class="btn ghost small" id="conservationBtn">Enregistrer la durée</button>
-      </div>
-      <div id="conservationMsg"></div>
-    </div>
-
-    <div class="card" id="accountsCard" hidden>
-      <h2>Comptes</h2>
-
-      <details id="passwordBox">
-        <summary>Changer mon mot de passe</summary>
-        <label for="pwdCurrent">Mot de passe actuel</label>
-        <input type="password" id="pwdCurrent" autocomplete="current-password">
-        <label for="pwdNext">Nouveau mot de passe</label>
-        <input type="password" id="pwdNext" autocomplete="new-password">
-        <p class="hint">Au moins 10 caractères. Les autres sessions ouvertes seront fermées.</p>
-        <button class="btn" id="changePasswordBtn">Changer</button>
-        <div id="passwordMsg"></div>
-      </details>
-
-      <div id="usersList"></div>
-      <div id="accountsMsg"></div>
-    </div>
-
-    <div class="card" id="antennesCard" hidden>
-      <div class="card-head">
-        <h2>Antennes (<span id="countAntennes">0</span>)</h2>
-        <div class="toolbar">
-          <button class="btn small" id="nouvelleAntenneBtn">Ajouter une antenne</button>
-        </div>
-      </div>
-      <p class="hint" style="margin-bottom:14px;">
-        Plusieurs points d'accueil peuvent partager ce serveur. Chaque destinataire et
-        chaque courrier appartient à une antenne ; le sélecteur en haut de page filtre
-        tout l'écran. Un accès agent peut être limité à une seule antenne — il ne reçoit
-        alors rien des autres.
-        <strong>Tant qu'aucune antenne n'est déclarée, rien de tout cela n'apparaît.</strong>
-      </p>
-      <div id="nouvelleAntenneForm" hidden>
+    <div class="reglages-groupe" data-groupe="bureau" hidden>
+      <div class="card" id="organismeCard">
+        <h2>Identité du bureau</h2>
+        <p class="hint" style="margin-bottom:14px;">
+          Le nom et l'adresse du bureau : ils signent les messages envoyés, les feuilles
+          imprimées et, si vous domiciliez, les <strong>attestations d'élection de
+          domicile</strong>. Laissés vides, l'attestation s'imprime quand même, avec des
+          traits à compléter à la main.
+        </p>
+        <label for="setOffice">Nom du bureau</label>
+        <input type="text" id="setOffice" placeholder="Bureau du Courrier">
+        <p class="hint" style="margin:-10px 0 16px;">
+          Il apparaît dans les courriels, en tête des impressions et sur les attestations.
+        </p>
+        <label for="setAdresse">Adresse de l'organisme</label>
+        <input type="text" id="setAdresse" autocomplete="off" placeholder="12 rue des Lilas, 75011 Paris">
+        <p class="hint" style="margin:-10px 0 16px;">
+          C'est l'adresse que la personne domiciliée donnera aux administrations. Avec
+          plusieurs antennes, celle de l'antenne du dossier est utilisée si elle est renseignée.
+        </p>
         <div class="copies-grid">
           <div>
-            <label for="antenneNom">Nom de l'antenne</label>
-            <input type="text" id="antenneNom" placeholder="Antenne Nord" autocomplete="off">
+            <label for="setVille">Ville — pour la mention « Fait à… »</label>
+            <input type="text" id="setVille" autocomplete="off" placeholder="Paris">
           </div>
           <div>
-            <label for="antenneAdresse">Adresse (facultative)</label>
-            <input type="text" id="antenneAdresse" placeholder="12 rue des Lilas" autocomplete="off">
+            <label for="setAgrement">Agrément préfectoral</label>
+            <input type="text" id="setAgrement" autocomplete="off" placeholder="Agrément n° 2024-137 du 3 mars 2024">
           </div>
         </div>
         <div class="row-actions">
-          <button class="btn" id="creerAntenneBtn">Ajouter</button>
-          <button class="btn ghost" id="annulerAntenneBtn">Annuler</button>
+          <button class="btn" id="saveOrganismeBtn">Enregistrer</button>
         </div>
+        <div id="organismeMsg"></div>
       </div>
-      <div id="antennesMsg"></div>
-      <div id="antennesListe"></div>
+      <div class="card" id="antennesCard" hidden>
+        <div class="card-head">
+          <h2>Antennes (<span id="countAntennes">0</span>)</h2>
+          <div class="toolbar">
+            <button class="btn small" id="nouvelleAntenneBtn">Ajouter une antenne</button>
+          </div>
+        </div>
+        <p class="hint" style="margin-bottom:14px;">
+          Plusieurs points d'accueil peuvent partager ce serveur. Chaque destinataire et
+          chaque courrier appartient à une antenne ; le sélecteur en haut de page filtre
+          tout l'écran. Un accès agent peut être limité à une seule antenne — il ne reçoit
+          alors rien des autres.
+          <strong>Tant qu'aucune antenne n'est déclarée, rien de tout cela n'apparaît.</strong>
+        </p>
+        <div id="nouvelleAntenneForm" hidden>
+          <div class="copies-grid">
+            <div>
+              <label for="antenneNom">Nom de l'antenne</label>
+              <input type="text" id="antenneNom" placeholder="Antenne Nord" autocomplete="off">
+            </div>
+            <div>
+              <label for="antenneAdresse">Adresse (facultative)</label>
+              <input type="text" id="antenneAdresse" placeholder="12 rue des Lilas" autocomplete="off">
+            </div>
+          </div>
+          <div class="row-actions">
+            <button class="btn" id="creerAntenneBtn">Ajouter</button>
+            <button class="btn ghost" id="annulerAntenneBtn">Annuler</button>
+          </div>
+        </div>
+        <div id="antennesMsg"></div>
+        <div id="antennesListe"></div>
+      </div>
+      <div class="card" id="postesCard" hidden>
+        <div class="card-head">
+          <h2>Postes du bureau</h2>
+          <div class="toolbar">
+            <button class="btn ghost small" id="rafraichirPostesBtn">Actualiser</button>
+            <button class="btn ghost small" id="imprimerPostesBtn">Imprimer la fiche</button>
+          </div>
+        </div>
+        <p class="hint" style="margin-bottom:14px;">
+          Le registre vit sur <strong>ce poste</strong>. Les autres ordinateurs du bureau
+          n'ont rien à installer : ils ouvrent l'adresse ci-dessous dans leur navigateur et
+          travaillent sur le même registre, en même temps.
+        </p>
+        <div id="postesAdresse"></div>
+        <div id="postesAlertes"></div>
+        <h3 class="sous-titre">Reliés en ce moment</h3>
+        <div id="postesListe"></div>
+      </div>
     </div>
 
-    <div class="card" id="agentsCard" hidden>
-      <div class="card-head">
-        <h2>Accès des agents (<span id="countAgents">0</span>)</h2>
-        <div class="toolbar">
-          <button class="btn small" id="nouvelAgentBtn">Créer un accès</button>
+    <div class="reglages-groupe" data-groupe="messages" hidden>
+      <div class="card" id="messageCard">
+        <h2>Message envoyé aux destinataires</h2>
+        <label for="setFrom">De — expéditeur</label>
+        <input type="text" id="setFrom" placeholder="Bureau du Courrier &lt;courrier@exemple.com&gt;">
+        <p class="hint" style="margin:-10px 0 16px;">
+          Utilisé pour l'envoi automatique. Laissé vide, c'est <code>MAIL_FROM</code> du serveur qui
+          s'applique. Sans envoi automatique, l'expéditeur reste celui du logiciel de courriel.
+        </p>
+
+        <div class="copies-grid">
+          <div>
+            <label for="setCc">Cc — copie visible, par défaut</label>
+            <input type="text" id="setCc" placeholder="archives@exemple.com">
+          </div>
+          <div>
+            <label for="setBcc">Cci — copie invisible, par défaut</label>
+            <input type="text" id="setBcc" placeholder="registre@exemple.com">
+          </div>
         </div>
-      </div>
-      <p class="hint" style="margin-bottom:14px;">
-        Un agent ouvre l'application sur n'importe quel poste avec un identifiant et un
-        code à six chiffres — sans courriel ni mot de passe. Vous décidez de ce qu'il voit :
-        par défaut, il tient le guichet et remet le courrier, <strong>sans voir les codes de
-        retrait</strong> ni pouvoir modifier le registre.
-      </p>
-      <div id="nouvelAgentForm" hidden>
-        <label for="agentNom">Nom de cet accès</label>
-        <input type="text" id="agentNom" placeholder="Accueil du matin, Marie B., poste 2" autocomplete="off">
-        <div id="agentAntenneBloc" hidden>
-          <label for="agentAntenne">Antenne de cet accès</label>
-          <select id="agentAntenne" class="langue-select"></select>
-          <p class="hint">Limité à une antenne, cet accès ne reçoit rien des autres.</p>
+
+        <h3 class="sous-titre" style="margin-top:24px;">Modèle du message</h3>
+        <p class="hint" style="margin-bottom:10px;">
+          Le modèle général sert à tout le courrier. Chaque type peut recevoir son propre
+          texte : un recommandé n'appelle pas la même phrase qu'un prospectus.
+        </p>
+        <div class="langue-choix">
+          <label for="gabaritLangue">Langue du message</label>
+          <select id="gabaritLangue" class="langue-select"></select>
+          <span class="hint" id="gabaritLangueEtat"></span>
         </div>
-        <div id="agentDroitsNeuf"></div>
+        <div class="gabarit-onglets" id="gabaritOnglets" role="tablist"></div>
+        <p class="hint" id="gabaritEtat" style="margin:-4px 0 14px;"></p>
+
+        <label for="setSubject">Sujet</label>
+        <input type="text" id="setSubject">
+        <label for="setBody">Corps du message</label>
+        <textarea id="setBody" rows="8"></textarea>
+        <p class="hint">
+          Variables : <code>{nom}</code>, <code>{courriel}</code>, <code>{date}</code>, <code>{bureau}</code>,
+          <code>{type}</code> (« Colis »), <code>{article}</code> (« Un colis », en début de phrase),
+          <code>{article_min}</code> (« un colis », au milieu), <code>{code}</code> (code de retrait).
+        </p>
+        <div class="row-actions" id="gabaritActions" hidden>
+          <button class="btn ghost small" id="gabaritEffacerBtn">Revenir au modèle général pour ce type</button>
+        </div>
         <div class="row-actions">
-          <button class="btn" id="creerAgentBtn">Créer l'accès</button>
-          <button class="btn ghost" id="annulerAgentBtn">Annuler</button>
+          <button class="btn" id="saveSettingsBtn">Enregistrer</button>
+          <button class="btn ghost" id="resetSettingsBtn">Rétablir le modèle par défaut</button>
         </div>
+        <div id="settingsMsg"></div>
+        <label style="margin-top:18px;">Aperçu</label>
+        <pre class="preview" id="settingsPreview"></pre>
       </div>
-      <div id="agentsMsg"></div>
-      <div id="agentsListe"></div>
+      <div class="card" id="mailboxCard" hidden>
+        <h2>Ma boîte d'envoi</h2>
+        <div id="mailboxState"></div>
+
+        <div id="mailboxChoices">
+          <div class="mailbox-option">
+            <h3>Connecter ma boîte Gmail</h3>
+            <p>
+              Vous autorisez l'application depuis l'écran de Google. Votre mot de passe n'est jamais
+              transmis à l'application, et l'autorisation se retire à tout moment sur
+              <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">la page des accès Google</a>.
+            </p>
+            <button class="btn" id="connectGoogleBtn">Connecter ma boîte Gmail</button>
+            <p class="hint" id="googleUnavailable" hidden>
+              Indisponible : ce serveur n'a pas de <code>GOOGLE_CLIENT_ID</code> configuré.
+              Utilisez un mot de passe d'application ci-dessous, ou voir <code>docs/connexion-boite-mail.md</code>.
+            </p>
+          </div>
+
+          <details class="mailbox-option">
+            <summary>Utiliser un mot de passe d'application (SMTP)</summary>
+            <p class="hint">
+              Pour les boîtes sans connexion Google : vous fournissez un mot de passe d'application,
+              jamais le mot de passe de votre compte. Il est chiffré avant d'être enregistré.
+            </p>
+            <div class="copies-grid">
+              <div>
+                <label for="mbAddress">Votre adresse</label>
+                <input type="email" id="mbAddress" placeholder="vous@exemple.com">
+              </div>
+              <div>
+                <label for="mbHost">Serveur SMTP</label>
+                <input type="text" id="mbHost" placeholder="smtp.gmail.com">
+              </div>
+            </div>
+            <div class="copies-grid">
+              <div>
+                <label for="mbPort">Port</label>
+                <input type="text" id="mbPort" placeholder="587" value="587">
+              </div>
+              <div>
+                <label for="mbPassword">Mot de passe d'application</label>
+                <input type="password" id="mbPassword" autocomplete="off">
+              </div>
+            </div>
+            <button class="btn ghost" id="connectSmtpBtn">Enregistrer cette boîte</button>
+          </details>
+        </div>
+        <div id="mailboxMsg"></div>
+      </div>
     </div>
 
-    <div class="card" id="journalCard">
-      <div class="card-head">
-        <h2>Journal d'activité</h2>
-        <div class="toolbar">
-          <button class="btn ghost small" id="rafraichirJournalBtn">Rafraîchir</button>
-        </div>
+    <div class="reglages-groupe" data-groupe="acces" hidden>
+      <div class="card" id="accountsCard" hidden>
+        <h2>Comptes</h2>
+
+        <details id="passwordBox">
+          <summary>Changer mon mot de passe</summary>
+          <label for="pwdCurrent">Mot de passe actuel</label>
+          <input type="password" id="pwdCurrent" autocomplete="current-password">
+          <label for="pwdNext">Nouveau mot de passe</label>
+          <input type="password" id="pwdNext" autocomplete="new-password">
+          <p class="hint">Au moins 10 caractères. Les autres sessions ouvertes seront fermées.</p>
+          <button class="btn" id="changePasswordBtn">Changer</button>
+          <div id="passwordMsg"></div>
+        </details>
+
+        <div id="usersList"></div>
+        <div id="accountsMsg"></div>
       </div>
-      <p class="hint" style="margin-bottom:12px;">
-        Qui a ajouté, modifié ou supprimé quoi. Les 100 dernières actions.
-      </p>
-      <div id="journalTable"><div class="empty">Chargement…</div></div>
+      <div class="card" id="agentsCard" hidden>
+        <div class="card-head">
+          <h2>Accès des agents (<span id="countAgents">0</span>)</h2>
+          <div class="toolbar">
+            <button class="btn small" id="nouvelAgentBtn">Créer un accès</button>
+          </div>
+        </div>
+        <p class="hint" style="margin-bottom:14px;">
+          Un agent ouvre l'application sur n'importe quel poste avec un identifiant et un
+          code à six chiffres — sans courriel ni mot de passe. Vous décidez de ce qu'il voit :
+          par défaut, il tient le guichet et remet le courrier, <strong>sans voir les codes de
+          retrait</strong> ni pouvoir modifier le registre.
+        </p>
+        <div id="nouvelAgentForm" hidden>
+          <label for="agentNom">Nom de cet accès</label>
+          <input type="text" id="agentNom" placeholder="Accueil du matin, Marie B., poste 2" autocomplete="off">
+          <div id="agentAntenneBloc" hidden>
+            <label for="agentAntenne">Antenne de cet accès</label>
+            <select id="agentAntenne" class="langue-select"></select>
+            <p class="hint">Limité à une antenne, cet accès ne reçoit rien des autres.</p>
+          </div>
+          <div id="agentDroitsNeuf"></div>
+          <div class="row-actions">
+            <button class="btn" id="creerAgentBtn">Créer l'accès</button>
+            <button class="btn ghost" id="annulerAgentBtn">Annuler</button>
+          </div>
+        </div>
+        <div id="agentsMsg"></div>
+        <div id="agentsListe"></div>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>État du système</h2>
-      <dl class="status-list" id="statusList"></dl>
-      <div class="row-actions" id="smtpActions"></div>
-      <div id="smtpMsg"></div>
+    <div class="reglages-groupe" data-groupe="registre" hidden>
+      <div class="card" id="stockageCard">
+        <h2>Où le registre est conservé</h2>
+        <div class="registry-choice" id="registryChoice">
+          <label class="choice">
+            <input type="radio" name="registre" value="partage" id="registrePartage">
+            <span>
+              <b>Registre partagé</b>
+              Conservé sur le serveur : tous les postes voient le même registre, et
+              l'envoi automatique est possible.
+            </span>
+          </label>
+          <label class="choice">
+            <input type="radio" name="registre" value="local" id="registreLocal">
+            <span>
+              <b>Ce poste seulement</b>
+              Conservé dans ce navigateur. Rien ne quitte le poste, mais les autres
+              postes ne voient pas ce registre.
+            </span>
+          </label>
+        </div>
+        <div id="registryMsg"></div>
+      </div>
+      <div class="card" id="backupCard">
+        <h2>Sauvegarde du registre</h2>
+        <p class="hint" style="margin-bottom:14px;">
+          Tout le registre tient dans un seul fichier. Une copie datée est conservée
+          automatiquement sur le serveur ; téléchargez-en une de temps en temps et
+          rangez-la ailleurs que sur ce poste.
+        </p>
+        <div class="row-actions">
+          <button class="btn" id="downloadBackupBtn">Télécharger une sauvegarde</button>
+          <button class="btn ghost" id="serverBackupBtn">Copie sur le serveur</button>
+          <button class="btn ghost" id="listerSauvegardesBtn">Restaurer une copie</button>
+        </div>
+        <div id="backupMsg"></div>
+        <div id="sauvegardesListe"></div>
+
+        <h3 class="sous-titre">Durée de conservation</h3>
+        <p class="hint" style="margin-bottom:10px;">
+          Au-delà de cette durée, les courriers <strong>déjà retirés ou classés</strong> sont effacés
+          du registre. Ceux qui attendent encore ne sont jamais touchés, quel que soit leur âge.
+          Garder tout indéfiniment expose bien plus qu'il ne faudrait le jour d'une fuite.
+        </p>
+        <div class="retrait-row">
+          <select id="conservationMois" class="filter-input">
+            <option value="0">Illimitée</option>
+            <option value="12">12 mois</option>
+            <option value="24">24 mois</option>
+            <option value="36">36 mois</option>
+            <option value="60">5 ans</option>
+          </select>
+          <button class="btn ghost small" id="conservationBtn">Enregistrer la durée</button>
+        </div>
+        <div id="conservationMsg"></div>
+      </div>
+    </div>
+
+    <div class="reglages-groupe" data-groupe="controle" hidden>
+      <div class="card" id="journalCard">
+        <div class="card-head">
+          <h2>Journal d'activité</h2>
+          <div class="toolbar">
+            <button class="btn ghost small" id="rafraichirJournalBtn">Rafraîchir</button>
+          </div>
+        </div>
+        <p class="hint" style="margin-bottom:12px;">
+          Qui a ajouté, modifié ou supprimé quoi. Les 100 dernières actions.
+        </p>
+        <div id="journalTable"><div class="empty">Chargement…</div></div>
+      </div>
+      <div class="card" id="systemeCard">
+        <h2>État du système</h2>
+        <dl class="status-list" id="statusList"></dl>
+        <div class="row-actions" id="smtpActions"></div>
+        <div id="smtpMsg"></div>
+      </div>
     </div>
   </section>
 
