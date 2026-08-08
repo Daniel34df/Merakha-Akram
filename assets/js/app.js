@@ -1,4 +1,21 @@
-/* Bureau du Courrier — interface. */
+/* Bureau du Courrier — interface.
+
+   Ce fichier tient les écrans : guichet, remise, registre, domiciliation,
+   réglages. Deux morceaux en sont sortis :
+
+     · ui/noyau.js      le socle partagé — messages, confirmation,
+                        téléchargement, sélecteurs d'antenne ;
+     · ui/impression.js ce qui part sur papier — attestation d'élection de
+                        domicile, feuille de casier, rapport annuel.
+
+   Le reste n'a pas suivi, et ce n'est pas un oubli. Découper les cinq écrans
+   demanderait de rendre explicites soixante-huit références qui traversent les
+   frontières naturelles du fichier — ici, dans le seul fichier du projet
+   qu'aucun test unitaire ne couvre, faute d'être chargeable hors navigateur.
+   La condition pour aller plus loin n'est donc pas du courage, c'est une
+   couverture : le jour où ces écrans se vérifient sans navigateur, le
+   découpage redevient bon marché. Avant, il n'échange qu'un fichier long
+   contre une régression silencieuse. */
 (function (root) {
   'use strict';
 
@@ -7,146 +24,27 @@
   const domi = root.BC.domiciliation;
   const roles = root.BC.roles;
   const notify = root.BC.notify;
+  const ui = root.BC.ui;
+  const impression = root.BC.impression;
   const S = store.state;
 
-  const $ = function (id) {
-    return document.getElementById(id);
-  };
-  const esc = util.escapeHtml;
-
-  /* Filtres d'affichage, purement locaux à l'interface. */
-  const view = {
-    // Section ouverte dans les Réglages, parmi les cinq groupes.
-    sectionReglages: 'bureau',
-    // Section ouverte dans le Suivi : à traiter, historique, statistiques.
-    sectionSuivi: 'traiter',
-    contactFilter: '',
-    historyFilter: '',
-    historyDate: '',
-    editingId: null,
-    highlight: -1,
-    suggestions: [],
-    // Vrai dès que l'employé·e a modifié les copies au guichet : on cesse alors
-    // de les réaligner sur les réglages tant qu'elles n'ont pas été remises à zéro.
-    copiesTouched: false,
-    // Premier démarrage : l'écran d'installation a été écarté volontairement.
-    skipAccount: false,
-    gateFormChosen: false,
-    // Recherche au guichet : 'nom' ou 'boite'.
-    searchMode: 'nom',
-    historyState: 'tous',
-    attenteFilter: '',
-    pile: [],
-    typeCourrier: 'lettre',
-    // Inscription en attente du code de confirmation.
-    pendingEmail: null,
-    // Adresse confirmée, en cours d'association comme boîte d'envoi.
-    associateEmail: null,
-    // Réglages : onglet de gabarit affiché et brouillons non enregistrés.
-    gabaritActif: 'general',
-    gabaritGeneral: { subject: '', body: '' },
-    gabarits: {},
-    // Langue en cours d'édition dans les Réglages ; 'fr' = le modèle de référence.
-    gabaritLangue: 'fr',
-    gabaritsLangues: {},
-    // Onglet Domiciliation : année du rapport, données servies par le serveur.
-    rapportAnnee: new Date().getFullYear(),
-    domiciliation: null,
-    // Saisie en série : ce qui a été traité depuis l'activation du mode.
-    serie: [],
-    // Antenne affichée ; '' = toutes. Propre au poste, retenu d'une visite à l'autre.
-    antenneActive: ''
-  };
-
-  /* ═════════════ retours visuels ═════════════ */
-
-  function toast(text, kind) {
-    const el = document.createElement('div');
-    el.className = 'toast' + (kind ? ' ' + kind : '');
-    el.textContent = text;
-    $('toasts').appendChild(el);
-    setTimeout(function () {
-      el.style.transition = 'opacity 0.3s ease';
-      el.style.opacity = '0';
-      setTimeout(function () {
-        el.remove();
-      }, 300);
-    }, 3200);
-  }
-
-  function stamp(label, who) {
-    const overlay = $('stampOverlay');
-    $('stampLabel').textContent = label;
-    $('stampWho').textContent = who;
-    overlay.classList.add('show');
-    setTimeout(function () {
-      overlay.classList.remove('show');
-    }, 1300);
-  }
-
-  function confirmDialog(title, text, okLabel) {
-    return new Promise(function (resolve) {
-      const dlg = $('confirmDialog');
-      $('confirmTitle').textContent = title;
-      $('confirmText').textContent = text;
-      $('confirmOk').textContent = okLabel || 'Confirmer';
-      if (typeof dlg.showModal !== 'function') {
-        resolve(root.confirm(text));
-        return;
-      }
-      dlg.addEventListener(
-        'close',
-        function () {
-          resolve(dlg.returnValue === 'ok');
-        },
-        { once: true }
-      );
-      dlg.showModal();
-    });
-  }
-
-  function setMsg(id, kind, html) {
-    $(id).innerHTML = html ? '<div class="msg ' + kind + '">' + html + '</div>' : '';
-  }
-
-  function download(filename, text, mime) {
-    const blob = new Blob(['\uFEFF' + text], { type: (mime || 'text/csv') + ';charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
-  }
-
-  /** Téléchargement d'un fichier binaire (classeur Excel). */
-  function downloadBytes(filename, bytes, mime) {
-    const blob = new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
-  }
-
-  const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-  function stampSuffix() {
-    const pad = function (n) {
-      return String(n).padStart(2, '0');
-    };
-    const d = new Date();
-    return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
-  }
+  /* Le socle, repris sous les noms courts que tout le fichier emploie déjà. */
+  const $ = ui.$;
+  const esc = ui.esc;
+  const view = ui.view;
+  const toast = ui.toast;
+  const stamp = ui.stamp;
+  const confirmDialog = ui.confirmDialog;
+  const setMsg = ui.setMsg;
+  const download = ui.download;
+  const downloadBytes = ui.downloadBytes;
+  const MIME_XLSX = ui.MIME_XLSX;
+  const stampSuffix = ui.stampSuffix;
+  const antennes = ui.antennes;
+  const antenneImposee = ui.antenneImposee;
+  const deLAntenne = ui.deLAntenne;
+  const enAttente = ui.enAttente;
+  const joursDepuis = ui.joursDepuis;
 
   /* ═════════════ navigation ═════════════ */
 
@@ -1779,7 +1677,7 @@
 
   $('ficheAttestationBtn').addEventListener('click', function (e) {
     $('ficheDialog').close();
-    imprimerAttestation(e.currentTarget.dataset.contact);
+    impression.imprimerAttestation(e.currentTarget.dataset.contact);
   });
 
   /* ── corriger une fiche ──────────────────────────────────────────────
@@ -2225,152 +2123,18 @@
     }
   });
 
-  /* Effacer l'application, imprimer la feuille, tout remettre en place. Le
-     même geste pour la feuille de casier, la fiche d'élection de domicile,
-     l'attestation et la liste des domiciliés. */
-  function imprimerFeuille(html) {
-    $('feuilleCasier').innerHTML = html;
-    $('feuilleCasier').hidden = false;
-    document.body.classList.add('impression-casier');
-    root.print();
-    setTimeout(function () {
-      document.body.classList.remove('impression-casier');
-      $('feuilleCasier').hidden = true;
-    }, 500);
-  }
+  /* L'impression est dans ui/impression.js : elle ne connaît aucun écran,
+     elle reçoit un contact et rend du papier. */
 
-  /* Fiche papier reprenant la saisie : de quoi la faire signer et la classer,
-     sans imiter le formulaire officiel — celui-ci se remplit à part. */
+  /* Fiche papier reprenant la saisie, à faire signer et classer. */
   $('imprimerDomiBtn').addEventListener('click', function () {
     const lu = lireFormDomiciliation();
     if (lu.erreur) {
       setMsg('domiMsg', 'error', esc(lu.erreur));
       return;
     }
-    const c = lu.contact;
-    const lignes = [
-      ['Nom et prénom', c.name],
-      ['Date de naissance', c.naissance ? util.formatJour(c.naissance) : '—'],
-      ['Courriel', c.email || '—'],
-      ['Téléphone', c.telephone || '—'],
-      ['Langue de correspondance', util.langue(c.langue).label],
-      ['Date d’élection de domicile', util.formatJour(c.domicilieDepuis)],
-      ['Échéance de l’attestation', util.formatJour(domi.echeance(c.domicilieDepuis))],
-      ['Numéro de boîte', c.box || '—'],
-      ['Observations', c.notes || '—']
-    ];
-    imprimerFeuille(
-      '<h1>Élection de domicile</h1>' +
-        '<p>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — ' +
-        new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) + '</p>' +
-        '<table><tbody>' +
-        lignes
-          .map(function (l) {
-            return '<tr><td>' + esc(l[0]) + '</td><td class="b">' + esc(l[1]) + '</td></tr>';
-          })
-          .join('') +
-        '</tbody></table>' +
-        '<p style="margin-top:36px;">Signature de la personne domiciliée :</p>' +
-        '<p style="margin-top:48px;">Signature de l’organisme :</p>'
-    );
+    impression.imprimerFeuille(impression.ficheDomiciliationHtml(lu.contact));
   });
-
-  /* ── l'attestation d'élection de domicile ──
-
-     C'est le document que la personne présente au guichet de la CAF, de France
-     Travail ou de la préfecture. Il n'imite aucun formulaire officiel : c'est
-     l'attestation de l'organisme, sous son propre en-tête et son agrément.
-
-     Une seule règle de fond, et elle compte : **on n'atteste pas une
-     domiciliation close ni une attestation périmée.** Imprimer un papier qui
-     dit le contraire du registre reviendrait à envoyer quelqu'un se faire
-     refuser à un guichet, avec un document de notre main à l'appui. */
-  function adresseDomiciliation(contact) {
-    const liste = antennes();
-    const a =
-      contact && contact.antenneId
-        ? liste.find(function (x) {
-            return x.id === contact.antenneId;
-          })
-        : null;
-    return (a && a.adresse) || S.settings.officeAdresse || '';
-  }
-
-  function trait(valeur, largeur) {
-    return valeur
-      ? '<span class="attest-valeur">' + esc(valeur) + '</span>'
-      : '<span class="attest-trait" style="min-width:' + (largeur || 180) + 'px;"></span>';
-  }
-
-  function attestationHtml(contact) {
-    const e = domi.etat(contact, S.history);
-    const bureau = S.settings.officeName || 'Bureau du Courrier';
-    const adresse = adresseDomiciliation(contact);
-    const ville = S.settings.officeVille || '';
-    const aujourdhui = new Date().toLocaleDateString('fr-CA', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-
-    return (
-      '<div class="attestation">' +
-      '<div class="attest-entete">' +
-      '<div class="attest-organisme">' + esc(bureau) + '</div>' +
-      (adresse ? '<div>' + esc(adresse) + '</div>' : '') +
-      (S.settings.officeAgrement ? '<div>' + esc(S.settings.officeAgrement) + '</div>' : '') +
-      '</div>' +
-      '<h1>Attestation d’élection de domicile</h1>' +
-      '<p class="attest-corps">Je soussigné·e, représentant l’organisme désigné ci-dessus, atteste que :</p>' +
-      '<p class="attest-corps attest-identite">' +
-      trait(contact.name, 240) +
-      (contact.naissance ? ', né·e le ' + esc(util.formatJour(contact.naissance)) : ', né·e le ' + trait('', 140)) +
-      '</p>' +
-      '<p class="attest-corps">a élu domicile auprès de notre organisme depuis le ' +
-      trait(contact.domicilieDepuis ? util.formatJour(contact.domicilieDepuis) : '', 150) +
-      '.</p>' +
-      '<p class="attest-corps">L’adresse à laquelle son courrier peut lui être adressé est :</p>' +
-      '<p class="attest-corps attest-adresse">' +
-      esc(bureau) + (adresse ? '<br>' + esc(adresse) : '<br>' + trait('', 320)) +
-      (contact.box ? '<br>Boîte ' + esc(contact.box) : '') +
-      '</p>' +
-      '<p class="attest-corps">La présente attestation est valable jusqu’au ' +
-      trait(e.echeance ? util.formatJour(e.echeance) : '', 150) +
-      '.</p>' +
-      '<p class="attest-corps attest-fait">Fait à ' + trait(ville, 140) + ', le ' + esc(aujourdhui) + '.</p>' +
-      '<div class="attest-signature"><p>Signature et cachet de l’organisme</p></div>' +
-      '</div>'
-    );
-  }
-
-  function imprimerAttestation(contactId) {
-    const c = S.contacts.find(function (x) {
-      return x.id === contactId;
-    });
-    if (!c) return;
-    if (!c.domicilie) {
-      toast('Cette personne n’est pas domiciliée ici : il n’y a rien à attester.', 'error');
-      return;
-    }
-    if (c.domiciliationCloseLe) {
-      toast(
-        'Domiciliation close le ' + util.formatJour(c.domiciliationCloseLe) + ' — pas d’attestation.',
-        'error'
-      );
-      return;
-    }
-    const e = domi.etat(c, S.history);
-    if (e.etat === 'expiree') {
-      toast(
-        'Attestation échue depuis le ' +
-          util.formatJour(e.echeance) +
-          ' : renouvelez l’élection de domicile avant d’imprimer.',
-        'error'
-      );
-      return;
-    }
-    imprimerFeuille(attestationHtml(c));
-  }
 
   /* ═════════════ domiciliation ═════════════ */
 
@@ -2453,7 +2217,7 @@
   $('activesImprimerBtn').addEventListener('click', function () {
     const lignes = activesFiltrees();
     if (!lignes.length) return;
-    imprimerFeuille(
+    impression.imprimerFeuille(
       '<h1>Personnes domiciliées</h1>' +
         '<p>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — ' +
         new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) +
@@ -2586,7 +2350,7 @@
     const fiche = e.target.closest('button[data-domifiche]');
     if (fiche) return ouvrirFiche(fiche.dataset.domifiche);
     const attestation = e.target.closest('button[data-attestation]');
-    if (attestation) return imprimerAttestation(attestation.dataset.attestation);
+    if (attestation) return impression.imprimerAttestation(attestation.dataset.attestation);
     const passage = e.target.closest('button[data-passage]');
     if (passage) return noterPassage(passage.dataset.passage, passage);
     const renouveler = e.target.closest('button[data-renouveler]');
@@ -2622,7 +2386,7 @@
           '. Voulez-vous l’imprimer maintenant ?',
         'Imprimer'
       );
-      if (encore) imprimerAttestation(id);
+      if (encore) impression.imprimerAttestation(id);
     } catch (err) {
       toast('Renouvellement impossible : ' + err.message, 'error');
       if (bouton) bouton.disabled = false;
@@ -2719,7 +2483,7 @@
   $('rapportImprimerBtn').addEventListener('click', function () {
     const d = view.domiciliation;
     if (!d) return;
-    imprimerRapport(d.rapport);
+    impression.imprimerRapport(d.rapport);
   });
 
   /* ═════════════ statistiques ═════════════ */
@@ -2843,115 +2607,8 @@
 
   /* ═════════════ feuille de casier ═════════════ */
 
-  function imprimerFeuilleCasier() {
-    const attente = S.history.filter(enAttente);
-    if (attente.length === 0) {
-      toast('Aucun courrier en attente.', 'error');
-      return;
-    }
-    // Triée par numéro de boîte : c'est l'ordre dans lequel on parcourt le local.
-    const lignes = attente
-      .map(function (h) {
-        const contact = S.contacts.find(function (c) {
-          return c.id === h.contactId;
-        });
-        return {
-          boite: (contact && contact.box) || '',
-          nom: h.name,
-          jours: joursDepuis(h.date),
-          type: util.typeCourrier(h.type).label,
-          code: h.pickupCode || ''
-        };
-      })
-      .sort(function (a, b) {
-        return util.normalizeBox(a.boite).localeCompare(util.normalizeBox(b.boite), 'fr', { numeric: true });
-      });
-
-    $('feuilleCasier').innerHTML =
-      '<h1>Courriers en attente</h1>' +
-      '<p>' +
-      (S.settings.officeName || 'Bureau du Courrier') +
-      ' — ' +
-      new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) +
-      ' — ' +
-      lignes.length +
-      ' courrier(s)</p>' +
-      '<table><thead><tr><th>Boîte</th><th>Nom</th><th>Type</th><th>Attente</th><th>Code</th><th>Retiré</th></tr></thead><tbody>' +
-      lignes
-        .map(function (l) {
-          return (
-            '<tr><td class="b">' +
-            esc(l.boite || '—') +
-            '</td><td>' +
-            esc(l.nom) +
-            '</td><td>' +
-            esc(l.type) +
-            '</td><td>' +
-            l.jours +
-            ' j</td><td class="b">' +
-            esc(l.code) +
-            '</td><td class="case"></td></tr>'
-          );
-        })
-        .join('') +
-      '</tbody></table>';
-
-    $('feuilleCasier').hidden = false;
-    document.body.classList.add('impression-casier');
-    root.print();
-    // Le retour d'impression n'est pas fiable partout : on rétablit tout de suite.
-    setTimeout(function () {
-      document.body.classList.remove('impression-casier');
-      $('feuilleCasier').hidden = true;
-    }, 500);
-  }
-
-  /* Le rapport annuel s'imprime dans la même feuille que la liste de casier :
-     un seul mécanisme d'impression, une seule feuille de style. */
-  function imprimerRapport(r) {
-    const motifs = Object.keys(r.motifs || {});
-    $('feuilleCasier').innerHTML =
-      '<h1>Domiciliation — rapport ' + r.annee + '</h1>' +
-      '<p>' +
-      esc(S.settings.officeName || 'Bureau du Courrier') +
-      ' — période du ' +
-      esc(util.formatJour(r.debut)) +
-      ' au ' +
-      esc(util.formatJour(r.fin)) +
-      '</p>' +
-      '<table><thead><tr><th>Poste</th><th>Nombre</th></tr></thead><tbody>' +
-      [
-        ['Domiciliations actives au terme de la période', r.actives],
-        ['Élections de domicile ouvertes dans l’année', r.ouvertesDansLAnnee],
-        ['Domiciliations closes dans l’année', r.closesDansLAnnee],
-        ['Courriers reçus pour des personnes domiciliées', r.courriersRecus],
-        ['Dont retirés', r.courriersRetires]
-      ]
-        .concat(
-          motifs.map(function (m) {
-            return ['Clôture — ' + m, r.motifs[m]];
-          })
-        )
-        .map(function (l) {
-          return '<tr><td>' + esc(l[0]) + '</td><td class="b">' + l[1] + '</td></tr>';
-        })
-        .join('') +
-      '</tbody></table>' +
-      '<p style="margin-top:24px;">Établi le ' +
-      new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) +
-      '. Chiffres extraits du registre ; l’appréciation des situations reste à l’équipe.</p>';
-
-    $('feuilleCasier').hidden = false;
-    document.body.classList.add('impression-casier');
-    root.print();
-    setTimeout(function () {
-      document.body.classList.remove('impression-casier');
-      $('feuilleCasier').hidden = true;
-    }, 500);
-  }
-
-  $('feuilleCasierBtn').addEventListener('click', imprimerFeuilleCasier);
-  $('feuilleCasierBtn2').addEventListener('click', imprimerFeuilleCasier);
+  $('feuilleCasierBtn').addEventListener('click', impression.imprimerFeuilleCasier);
+  $('feuilleCasierBtn2').addEventListener('click', impression.imprimerFeuilleCasier);
 
   /* ═════════════ pile de courrier ═════════════ */
 
@@ -3576,10 +3233,6 @@
     renderHistory();
   });
 
-  function enAttente(h) {
-    return !h.pickedUpAt && !h.closedAt && h.status !== 'échec';
-  }
-
   /** Même classement que le serveur : clos, récupéré, échec, signalé, relancé, attente. */
   function etatCourrier(h) {
     if (h.closedAt) return 'clos';
@@ -3588,10 +3241,6 @@
     if (h.flaggedAt) return 'signale';
     if (h.reminderCount > 0) return 'relance';
     return 'attente';
-  }
-
-  function joursDepuis(iso) {
-    return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   }
 
   function visibleHistory() {
@@ -4825,13 +4474,9 @@
 
   const ANTENNE_KEY = 'courrier-antenne';
 
-  function antennes() {
-    return S.settings.antennes || [];
-  }
-
-  function antenneImposee() {
-    return (S.auth.user && S.auth.user.antenneId) || '';
-  }
+  /* « antennes », « antenneImposee » et « deLAntenne » sont dans ui/noyau.js :
+     ce sont des lectures d'une ligne sur l'état du magasin, dont sept sections
+     se servent — elles n'appartenaient pas aux réglages. */
 
   function renderAntennes() {
     const liste = antennes();
@@ -4890,9 +4535,6 @@
   });
 
   /** Filtre commun : tout ce qui s'affiche passe par là. */
-  function deLAntenne(objet) {
-    return util.dansAntenne(objet, view.antenneActive, antennes());
-  }
 
   /* ═════════════ les postes du bureau ═════════════
 
@@ -5155,7 +4797,7 @@
     const r = vue.reseau;
     const adresse = r.recommandee || '—';
     const secours = r.adresses.length && r.adresses[0].url !== adresse ? r.adresses[0].url : '';
-    imprimerFeuille(
+    impression.imprimerFeuille(
       '<h1>' + esc(S.settings.officeName || 'Bureau du Courrier') + ' — accès depuis ce poste</h1>' +
         '<p>Le registre est tenu sur le poste du bureau. Cet ordinateur s’y connecte ; ' +
         'il n’a rien à installer.</p>' +
