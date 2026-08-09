@@ -978,6 +978,7 @@ assets/js/theme-tot.js  pose le thème choisi avant le premier pixel
 assets/js/util.js     fonctions partagées navigateur + serveur (recherche, CSV, gabarits)
 assets/js/xlsx.js     écriture de classeurs Excel, sans dépendance
 assets/js/store.js    persistance : serveur → localStorage → mémoire
+assets/js/attente.js  file des écritures faites hors ligne, rejouées au retour
 assets/js/notify.js   composition du message, mailto, presse-papiers
 assets/js/app.js      interface (onglets, registre, historique, réglages)
 server/app.js         serveur HTTP et API JSON
@@ -993,7 +994,7 @@ tools/verifier/       vérifications de navigateur, une par défaut corrigé
 ```
 
 ```bash
-npm test     # 388 tests : utilitaires, API, comptes, domiciliation, appels, socle, couleurs
+npm test     # 428 tests : utilitaires, API, comptes, domiciliation, appels, socle, couleurs, rejeu
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

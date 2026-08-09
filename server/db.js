@@ -6,6 +6,7 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const idem = require('./idempotence.js');
 
 const DEFAULT_SETTINGS = {
   subject: 'Un courrier vous attend',
@@ -56,6 +57,11 @@ function emptyDb() {
        prévenir quand elles ont changé : les autres postes du bureau ne
        trouveraient plus le serveur, sans que personne ne sache pourquoi. */
     reseau: null,
+    /* Les écritures déjà menées à bien, par identifiant d'intention. Sert à ne
+       pas exécuter deux fois la même remise quand un poste rejoue sa file hors
+       ligne après avoir perdu la réponse. Ne contient aucune donnée
+       personnelle : voir `server/idempotence.js`. */
+    operations: [],
     // Empreinte du code maître : jamais le code lui-même.
     masterCodeHash: ''
   };
@@ -103,6 +109,11 @@ class Db {
         // Inscriptions en attente de confirmation : les codes périmés ne
         // servent plus à rien et n'ont pas à traîner dans le fichier.
         journal: Array.isArray(parsed.journal) ? parsed.journal : [],
+        /* Le registre des opérations déjà exécutées survit au redémarrage :
+           sans lui, un serveur qui redémarre pendant une coupure réseau
+           laisserait passer le rejeu qu'il devait justement absorber. Purgé à
+           la relecture, pour ne pas ressusciter une semaine périmée. */
+        operations: idem.purger(Array.isArray(parsed.operations) ? parsed.operations.slice() : []),
         masterCodeHash: typeof parsed.masterCodeHash === 'string' ? parsed.masterCodeHash : '',
         pending: Array.isArray(parsed.pending)
           ? parsed.pending.filter(function (p) {
@@ -126,9 +137,15 @@ class Db {
     return this.data;
   }
 
-  /** Applique une mutation puis écrit le fichier. Les appels sont sérialisés. */
-  write(mutator) {
+  /** Applique une mutation puis écrit le fichier. Les appels sont sérialisés.
+
+      `options.silencieux` écrit sans prévenir les autres postes. Réservé à ce
+      qui ne se voit pas à l'écran — le registre des opérations déjà exécutées.
+      Le faire suivre déclencherait un rechargement complet sur chaque poste du
+      bureau pour une ligne qu'aucun d'eux n'affiche. */
+  write(mutator, options) {
     const self = this;
+    const silencieux = !!(options && options.silencieux);
     this.queue = this.queue.then(async function () {
       const result = mutator(self.data);
 
@@ -157,6 +174,7 @@ class Db {
          écriture qui n'a pas encore touché le disque les ferait recharger un
          état qu'une panne pourrait effacer. Un abonné qui échoue n'emporte pas
          l'écriture avec lui — elle est faite. */
+      if (silencieux) return result;
       self.revision++;
       self.abonnes.forEach(function (fn) {
         try {

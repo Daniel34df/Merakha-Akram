@@ -153,3 +153,100 @@ test('un courriel connu retrouve bien sa fiche, à la casse près', function () 
   assert.equal(t.id, 'a');
   assert.equal(store.findByEmail('personne@example.org'), null);
 });
+
+/* ---------- le rejeu de la file hors ligne ----------
+
+   Ce que le poste envoie quand le réseau revient, et ce qu'il fait de la
+   réponse. Le serveur, lui, est vérifié dans `test/idempotence.test.js` ;
+   ici on ne regarde que le poste, avec un faux réseau. */
+
+const attente = require('../assets/js/attente.js');
+
+function reponse(objet, status) {
+  return {
+    ok: (status || 200) < 400,
+    status: status || 200,
+    json: async function () {
+      return objet;
+    }
+  };
+}
+
+/* Rejoue la file avec un faux réseau. `repondre(url, opts, n)` rend le corps
+   de la réponse ; tous les appels sont conservés pour être relus après coup. */
+async function rejouer(file, contacts, repondre) {
+  const vrai = globalThis.fetch;
+  const appels = [];
+  store.state.mode = 'serveur';
+  store.state.enLigne = true;
+  store.state.rejeuEnCours = false;
+  store.state.file = file;
+  store.state.contacts = contacts;
+  store.state.history = [];
+  globalThis.fetch = async function (url, opts) {
+    appels.push({ url: url, opts: opts, contactsAlors: store.state.contacts.slice() });
+    // Le rechargement final : hors sujet ici, on le rend vide.
+    if (url === '/api/state') return reponse({ contacts: [], history: [] });
+    return reponse(repondre(url, opts, appels.length - 1), url.indexOf('/contacts') > 0 ? 200 : 201);
+  };
+  try {
+    const bilan = await store.viderFile();
+    return { bilan: bilan, appels: appels };
+  } finally {
+    globalThis.fetch = vrai;
+  }
+}
+
+const CREATION = attente.creerIntention({
+  id: 'local-op000001',
+  op: 'contact.create',
+  method: 'POST',
+  path: '/contacts',
+  idLocal: 'local-x',
+  body: { id: 'local-x', name: 'Amina Diallo' },
+  description: 'Fiche créée pour Amina Diallo'
+});
+const PASSAGE = attente.creerIntention({
+  id: 'local-op000002',
+  op: 'contact.passage',
+  method: 'POST',
+  path: '/contacts/local-x/passage',
+  body: { moyen: 'place' },
+  description: 'Passage enregistré'
+});
+
+test('chaque écriture rejouée porte l’identifiant de son intention', async function () {
+  /* Sans cet en-tête, le serveur ne peut pas reconnaître une écriture qu'il a
+     déjà exécutée et dont la réponse s'est perdue en route. */
+  const r = await rejouer([CREATION], [fiche({ id: 'local-x' })], function () {
+    return { id: 'c-serveur', name: 'Amina Diallo' };
+  });
+  assert.equal(r.appels[0].opts.headers['X-Operation-Id'], 'local-op000001');
+  assert.equal(r.bilan.envoyees, 1);
+});
+
+test('un rejeu reconnu recolle les identifiants sans effacer la fiche', async function () {
+  /* Le serveur répond « je l'ai déjà fait, voici l'identifiant » : il n'envoie
+     pas la fiche, il n'a pas de raison de renvoyer un nom et un téléphone. Le
+     poste doit s'en servir pour la substitution — et surtout ne pas poser cet
+     accusé de réception à la place de la fiche affichée. */
+  const r = await rejouer([CREATION, PASSAGE], [fiche({ id: 'local-x' })], function (url, opts, n) {
+    return n === 0 ? { rejoue: true, id: 'c-serveur' } : { contact: { id: 'c-serveur' } };
+  });
+
+  assert.equal(r.appels[1].url, '/api/contacts/c-serveur/passage', 'l’identifiant provisoire a été substitué dans la suite de la file');
+  const affichee = r.appels[1].contactsAlors[0];
+  assert.equal(affichee.name, 'Amina Diallo', 'la fiche est restée une fiche');
+  assert.equal(affichee.telephone, '06 12 34 56 78');
+  assert.notEqual(affichee.rejoue, true);
+});
+
+test('une vraie réponse, elle, remplace bien la fiche provisoire', async function () {
+  /* Le garde-fou ci-dessus ne doit pas bloquer le cas ordinaire : quand le
+     serveur renvoie la fiche, c'est elle qui fait foi. */
+  const r = await rejouer([CREATION, PASSAGE], [fiche({ id: 'local-x' })], function (url, opts, n) {
+    return n === 0 ? { contact: { id: 'c-serveur', name: 'Amina Diallo', telephone: '07 98 76 54 32' } } : { contact: {} };
+  });
+  assert.equal(r.appels[1].contactsAlors[0].id, 'c-serveur');
+  assert.equal(r.appels[1].contactsAlors[0].telephone, '07 98 76 54 32');
+});

@@ -256,7 +256,12 @@
         try {
           res = await fetch('/api' + intention.path, {
             method: intention.method,
-            headers: { 'Content-Type': 'application/json' },
+            /* L'identifiant de l'intention voyage avec elle. Il ne change pas
+               d'un rejeu à l'autre : c'est ce qui permet au serveur de
+               reconnaître une écriture qu'il a déjà exécutée et dont la
+               réponse s'est perdue en route, plutôt que de la refaire — un
+               courrier remis deux fois, une fiche créée en double. */
+            headers: { 'Content-Type': 'application/json', 'X-Operation-Id': intention.id },
             credentials: 'same-origin',
             body: intention.body === null ? undefined : JSON.stringify(intention.body)
           });
@@ -308,6 +313,13 @@
     const correspondances = {};
     correspondances[provisoire] = reel.id;
     state.file = attente.remapper(state.file, correspondances);
+
+    /* Le serveur a reconnu une écriture déjà faite : il n'en renvoie que
+       l'identifiant, pas la fiche. La substitution ci-dessus est ce qui
+       comptait — le reste de la file y renvoie. Poser cet objet-là dans le
+       registre affiché remplacerait une fiche par un accusé de réception ;
+       l'état complet arrive de toute façon au retour de `viderFile`. */
+    if (payload && payload.rejoue) return;
 
     const remplacer = function (liste) {
       const i = liste.findIndex(function (x) {

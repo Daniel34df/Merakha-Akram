@@ -16,6 +16,7 @@ const reminders = require('./reminders.js');
 const domiciliation = require('../assets/js/domiciliation.js');
 const roles = require('../assets/js/roles.js');
 const reseau = require('./reseau.js');
+const idem = require('./idempotence.js');
 
 const VERSION = '1.2.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -126,6 +127,9 @@ function lirePorteur(corps) {
 }
 
 function sendJson(res, status, payload) {
+  // Une opération rejouable ne s'inscrit qu'au moment où sa réponse part :
+  // avant, on ne sait pas encore si elle a abouti. Voir `idempotence.js`.
+  if (res.noterOperation) res.noterOperation(status, payload);
   const body = JSON.stringify(payload);
   res.writeHead(
     status,
@@ -311,6 +315,7 @@ async function serveStatic(req, res, rootDir) {
 /* ---------- comptes ---------- */
 
 function sendJsonWithCookie(res, status, payload, cookie) {
+  if (res.noterOperation) res.noterOperation(status, payload);
   const body = JSON.stringify(payload);
   res.writeHead(
     status,
@@ -2750,6 +2755,27 @@ function createServer(options) {
         // requêtes forgées qui contourneraient cette protection.
         throw Object.assign(new Error('Requête refusée : origine étrangère'), { status: 403 });
       }
+
+      /* Le rejeu d'une file hors ligne. Si cette écriture porte l'identifiant
+         d'une intention déjà menée à bien, on ne la refait pas : on rend son
+         premier résultat. Le poste recharge l'état complet juste après, il n'a
+         besoin ici que de l'identifiant attribué la première fois. */
+      const cle = idem.lireCle(req);
+      if (cle && ctx.db) {
+        const registre = ctx.db.data.operations || (ctx.db.data.operations = []);
+        const vue = idem.retrouver(registre, cle);
+        if (vue) return sendJson(res, vue.status, idem.reponseRejeu(vue));
+        res.noterOperation = function (status, payload) {
+          res.noterOperation = null; // une réponse, une inscription
+          const inscrit = idem.noter(registre, cle, { status: status, id: idem.extraireId(payload) }, Date.now());
+          /* Le tableau est déjà à jour en mémoire — un rejeu qui arriverait
+             dans la seconde le verra. L'écriture disque suit, pour que le
+             registre survive à un redémarrage ; si elle échoue, on a perdu une
+             protection, pas une donnée, et la requête est déjà répondue. */
+          if (inscrit) ctx.db.write(function () {}, { silencieux: true }).catch(function () {});
+        };
+      }
+
       await handleApi(req, res, ctx, pathname);
     } catch (err) {
       const status = err.status || 500;
