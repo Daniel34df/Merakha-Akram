@@ -461,6 +461,15 @@ se faire refuser à un guichet, avec un document de notre main à l'appui.
 L'application n'imite aucun formulaire officiel : c'est l'attestation de
 l'organisme, sous son propre en-tête.
 
+**Des étiquettes pour les casiers.** Le bouton **Étiquettes** — dans le registre
+et dans la liste des personnes domiciliées — sort une planche au format le plus
+répandu (63,5 × 38,1 mm, trois colonnes, 21 par feuille A4) : numéro de boîte en
+gros, nom dessous, et le code à barres pour pointer le casier au lecteur. Les
+dimensions sont en millimètres : la planche sort à la bonne taille quelle que
+soit l'imprimante, et sur du papier ordinaire les traits de coupe guident les
+ciseaux. C'est le filtre affiché qui décide de ce qui s'imprime — de quoi
+étiqueter une rangée sans refaire tout le local.
+
 **Attestations à renouveler.** Une attestation d'élection de domicile a une
 durée de validité — un an par défaut. Périmée, elle coupe l'accès aux droits,
 souvent sans que personne ne s'en aperçoive avant le refus d'un guichet. On

@@ -2358,6 +2358,17 @@
     );
   });
 
+  /* Les étiquettes des casiers. On imprime ce que le filtre laisse voir :
+     c'est déjà comme ça que fonctionnent l'export et l'impression de la liste,
+     et c'est ce qui permet d'étiqueter une rangée sans refaire tout le local. */
+  $('activesEtiquettesBtn').addEventListener('click', function () {
+    impression.imprimerEtiquettes(
+      activesFiltrees().map(function (l) {
+        return { name: l.name, box: l.box };
+      })
+    );
+  });
+
   $('activesXlsxBtn').addEventListener('click', function () {
     const lignes = activesFiltrees();
     if (!lignes.length) return;
@@ -3270,6 +3281,16 @@
       return { boite: c.box || '', nom: c.name, courriel: c.email };
     });
   }
+
+  $('etiquettesBtn').addEventListener('click', function () {
+    // Les destinataires affichés, filtre compris — et seulement ceux qui ont
+    // une boîte : une étiquette sans numéro n'irait sur aucun casier.
+    impression.imprimerEtiquettes(
+      visibleContacts().filter(function (c) {
+        return String(c.box || '').trim();
+      })
+    );
+  });
 
   $('exportContactsBtn').addEventListener('click', function () {
     if (S.contacts.length === 0) {
@@ -5477,7 +5498,7 @@
 
     // Exports et impression.
     ['exportContactsXlsxBtn', 'exportContactsBtn', 'exportHistoryBtn', 'exportHistoryXlsxBtn',
-     'feuilleCasierBtn', 'feuilleCasierBtn2'].forEach(function (id) {
+     'feuilleCasierBtn', 'feuilleCasierBtn2', 'etiquettesBtn', 'activesEtiquettesBtn'].forEach(function (id) {
       const b = $(id);
       if (b) b.hidden = !droit('exports');
     });

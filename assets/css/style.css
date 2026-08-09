@@ -222,6 +222,55 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
 .variables-gabarit code{font-weight:600;}
 @media (max-width:640px){ .variables-gabarit{columns:1;} }
 
+/* Planche d'étiquettes à coller sur les casiers.
+
+   Les dimensions sont en millimètres, pas en pixels : une étiquette doit
+   sortir à la taille de la planche autocollante qu'on a achetée, quelle que
+   soit l'imprimante. 63,5 × 38,1 mm sur trois colonnes est le format le plus
+   répandu (21 par feuille A4). Sur du papier ordinaire, les traits de coupe
+   guident les ciseaux. */
+.planche-etiquettes{
+  display:grid;
+  grid-template-columns:repeat(3, 63.5mm);
+  gap:0;
+  justify-content:center;
+}
+.etiquette{
+  width:63.5mm;
+  height:38.1mm;
+  padding:3mm;
+  border:1px dashed #bbb;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1.5mm;
+  text-align:center;
+  overflow:hidden;
+  page-break-inside:avoid;
+  break-inside:avoid;
+}
+.etq-boite{
+  font-family:var(--typewriter);
+  font-size:22pt;
+  font-weight:700;
+  line-height:1;
+  color:#000;
+}
+.etq-nom{
+  font-family:var(--serif);
+  font-size:10pt;
+  line-height:1.2;
+  color:#000;
+  /* Un nom trop long ne doit pas pousser le reste hors de l'étiquette. */
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.etq-code{line-height:0;}
+.etq-code .codebarres{padding-top:0;padding-bottom:0;}
+
 /* Code à barres (Code 39) — des traits, pas une image.
    Une image tramée devient illisible au lecteur dès que l'impression pâlit ;
    des éléments sortent nets à n'importe quelle résolution. Toujours noir sur

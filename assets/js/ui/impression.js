@@ -204,6 +204,53 @@
     imprimerFeuille(attestationHtml(c));
   }
 
+  /* ── les étiquettes à coller ──
+
+     Pour étiqueter les casiers du local une bonne fois : numéro de boîte en
+     gros, nom dessous. Une planche d'étiquettes autocollantes du commerce, ou
+     du papier ordinaire qu'on découpe — la grille est en millimètres, donc
+     elle sort à la bonne taille quelle que soit l'imprimante.
+
+     Le code à barres y est repris quand la boîte en a un : coller l'étiquette
+     sur le casier, et le courrier se pointe au lecteur sans ouvrir l'écran. */
+  const ETIQUETTE = { largeur: 63.5, hauteur: 38.1, colonnes: 3 };
+
+  function etiquettesHtml(fiches, options) {
+    const o = options || {};
+    const avecCode = o.avecCode !== false;
+    return (
+      '<div class="planche-etiquettes">' +
+      (fiches || [])
+        .map(function (c) {
+          const boite = String(c.box || '').trim();
+          return (
+            '<div class="etiquette">' +
+            '<div class="etq-boite">' + esc(boite || '—') + '</div>' +
+            '<div class="etq-nom">' + esc(c.name || '') + '</div>' +
+            (avecCode && boite
+              ? '<div class="etq-code">' +
+                codebarres.html(boite, { hauteur: 16, etroit: 1, avecTexte: false }) +
+                '</div>'
+              : '') +
+            '</div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function imprimerEtiquettes(fiches, options) {
+    const liste = (fiches || []).filter(function (c) {
+      return c && c.name;
+    });
+    if (!liste.length) {
+      ui.toast('Aucune fiche à étiqueter.', 'error');
+      return;
+    }
+    imprimerFeuille(etiquettesHtml(liste, options));
+  }
+
   /* ── la feuille de casier ──
 
      La liste des courriers en attente, triée par numéro de boîte : c'est
@@ -298,6 +345,9 @@
 
   return {
     imprimerFeuille: imprimerFeuille,
+    ETIQUETTE: ETIQUETTE,
+    etiquettesHtml: etiquettesHtml,
+    imprimerEtiquettes: imprimerEtiquettes,
     ficheDomiciliationHtml: ficheDomiciliationHtml,
     adresseDomiciliation: adresseDomiciliation,
     trait: trait,

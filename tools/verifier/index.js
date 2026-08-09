@@ -28,7 +28,7 @@ const RACINE = path.join(__dirname, '..', '..');
 const SCRIPTS = [
   ['corriger', 'corriger une fiche sans perdre le téléphone ni annuler un renouvellement'],
   ['effacer', 'sortir du registre et effacer sont deux gestes distincts'],
-  ['onglets', 'aucune erreur JS sur les six onglets, et les quatre documents s’impriment'],
+  ['onglets', 'aucune erreur JS sur les six onglets, et les cinq documents s’impriment'],
   ['maitre', 'le code de reprise publié ne s’utilise que depuis le poste du serveur'],
   ['rappel', 'une personne sans courriel qui n’est pas venue revient dans la liste'],
   ['appel-entrant', 'un appel de la personne compte comme manifestation'],

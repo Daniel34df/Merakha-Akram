@@ -63,8 +63,8 @@ const ok = v.ok;
        'onglet « ' + nom + ' » — ' + (erreurs.length === avant ? 'aucune erreur' : erreurs.slice(avant).join(' | ')));
   }
 
-  /* ---- 3. les quatre impressions ---- */
-  console.log('\n3. Les quatre documents');
+  /* ---- 3. les impressions ---- */
+  console.log('\n3. Les documents');
 
   const imprime = async (quoi, action) => {
     const avantErr = erreurs.length;
@@ -125,6 +125,28 @@ const ok = v.ok;
   await imprime('rapport annuel', async () => {
     await page.click('#rapportImprimerBtn');
   });
+
+  await imprime('planche d’étiquettes', async () => {
+    await page.click('#activesEtiquettesBtn');
+  });
+  const planche = await page.evaluate(() => {
+    const f = document.getElementById('feuilleCasier');
+    const etq = f.querySelectorAll('.etiquette');
+    if (!etq.length) return null;
+    const p = etq[0];
+    return {
+      combien: etq.length,
+      boite: (p.querySelector('.etq-boite') || {}).textContent || '',
+      nom: (p.querySelector('.etq-nom') || {}).textContent || '',
+      code: !!p.querySelector('.codebarres')
+    };
+  });
+  ok(!!planche, 'la planche contient des étiquettes');
+  if (planche) {
+    ok(planche.boite === 'B-12', 'le numéro de boîte est en gros : ' + planche.boite);
+    ok(/Amina/.test(planche.nom), 'avec le nom dessous : ' + planche.nom);
+    ok(planche.code, 'et le code à barres, pour pointer le casier au lecteur');
+  }
 
   /* ---- 4. la feuille est bien rangée après coup ---- */
   console.log('\n4. Après impression');
