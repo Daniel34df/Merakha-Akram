@@ -36,6 +36,20 @@ $NodeRepli = 'v22.14.0'   # utilisé seulement si nodejs.org ne répond pas
 function Titre($t) { Write-Host ''; Write-Host "  $t" -ForegroundColor White }
 function Info($t) { Write-Host "  $t" }
 function Souci($t) { Write-Host "  ! $t" -ForegroundColor Yellow }
+# Le code de reprise ne s'affiche qu'ici, une fois : seule son empreinte est
+# conservee, personne ne peut le retrouver ensuite.
+function AnnoncerCodeMaitre($code) {
+  $groupe = ($code -replace '(.{4})', '$1 ').Trim()
+  Write-Host ''
+  Write-Host '  Code de reprise du compte responsable' -ForegroundColor White
+  Write-Host '  ------------------------'
+  Write-Host ''
+  Write-Host "      $groupe" -ForegroundColor White
+  Write-Host ''
+  Info 'Notez-le sur papier et rangez-le : il ne se retrouve pas.'
+  Info 'Il sert si le responsable perd son mot de passe. Il n''ouvre pas le registre.'
+}
+
 function Fatal($t) { Write-Host ''; Write-Host "  X $t" -ForegroundColor Red; Write-Host ''; exit 1 }
 
 Titre 'Bureau du Courrier — installation'
@@ -149,6 +163,8 @@ if (Test-Path $EnvFichier) {
 } else {
   Info 'Écriture de la configuration…'
   $secret = & $Node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))'
+  # Un code de reprise propre a ce bureau : celui du depot est public.
+  $codeMaitre = & $Node (Join-Path $Racine 'tools\code-maitre.js') '--brut'
   $contenu = @"
 # Écrit par installer.cmd — modifiable à tout moment.
 # Chaque réglage est expliqué dans .env.example.
@@ -165,6 +181,12 @@ DB_FILE=./data/db.json
 # À sauvegarder avec le registre ; sans elle, les boîtes reliées sont à refaire.
 APP_SECRET=$secret
 
+# Code de reprise du compte responsable, tire au sort a l'installation.
+# Il permet de changer l'adresse ou le mot de passe du responsable, ou de
+# supprimer son compte pour reinstaller. Il ne donne pas acces au registre.
+# Seule son empreinte est conservee : s'il est perdu, il ne se retrouve pas.
+MASTER_CODE=$codeMaitre
+
 # Aucun serveur de courriel pour l'instant : les messages s'ouvrent dans le
 # logiciel de courriel de l'employé·e. Voir docs\installation-windows-gmail.md
 # pour activer l'envoi automatique.
@@ -178,6 +200,19 @@ DIGEST_HOUR=8
   # UTF-8 sans BOM : Node lit le .env tel quel, un BOM parasiterait la première clé.
   [System.IO.File]::WriteAllText($EnvFichier, $contenu, (New-Object System.Text.UTF8Encoding($false)))
   Info 'Clé de chiffrement créée.'
+  AnnoncerCodeMaitre $codeMaitre
+}
+
+# Un bureau installe avant que l'installateur ne tire ce code garde celui du
+# depot, qui est public. On ajoute la ligne sans toucher au reste : le serveur
+# la reprend au demarrage suivant.
+if ((Test-Path $EnvFichier) -and -not ((Get-Content $EnvFichier) -match '^MASTER_CODE=')) {
+  $codeMaitre = & $Node (Join-Path $Racine 'tools\code-maitre.js') '--brut'
+  $ajout = "`r`n# Code de reprise du compte responsable, ajoute par l'installateur.`r`n" +
+           "# Celui livre avec l'application est public : celui-ci ne l'est pas.`r`nMASTER_CODE=$codeMaitre`r`n"
+  [System.IO.File]::AppendAllText($EnvFichier, $ajout, (New-Object System.Text.UTF8Encoding($false)))
+  Souci 'Votre .env n''avait pas de code de reprise : il utilisait celui, public, du depot.'
+  AnnoncerCodeMaitre $codeMaitre
 }
 
 $Donnees = Join-Path $Racine 'data'

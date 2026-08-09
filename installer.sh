@@ -40,6 +40,25 @@ HOTE="127.0.0.1"
 titre() { printf '\n\033[1m  %s\033[0m\n' "$1"; }
 info() { printf '  %s\n' "$1"; }
 souci() { printf '  \033[33m!\033[0m %s\n' "$1"; }
+
+# Le code de reprise ne s'affiche qu'ici, une fois : seule son empreinte est
+# conservée, personne ne peut le retrouver ensuite. Il doit donc sauter aux
+# yeux dans le défilement de l'installation.
+#
+# Pas de cadre à remplir : printf compte les octets, pas les colonnes, et les
+# caractères de filet en occupent trois chacun — un cadre se décale dès qu'on y
+# met autre chose que de l'ASCII. Un trait au-dessus et en dessous ne peut pas
+# se désaligner.
+annoncer_code_maitre() {
+  # Groupé par quatre pour se dicter et se recopier : « 4821 9037 5164 ».
+  groupe="$(printf '%s' "$1" | sed 's/.\{4\}/& /g;s/ *$//')"
+  printf '\n'
+  printf '  \033[1m%s\033[0m\n' 'Code de reprise du compte responsable'
+  printf '  \033[2m%s\033[0m\n' '────────────────────────'
+  printf '\n      \033[1m%s\033[0m\n\n' "$groupe"
+  info "Notez-le sur papier et rangez-le : il ne se retrouve pas."
+  info "Il sert si le responsable perd son mot de passe. Il n'ouvre pas le registre."
+}
 fatal() {
   printf '  \033[31m✗\033[0m %s\n\n' "$1"
   exit 1
@@ -132,6 +151,8 @@ if [ -f .env ]; then
 else
   info "Écriture de la configuration…"
   secret="$("$NODE" -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')"
+  # Un code de reprise propre à ce bureau : celui du dépôt est public.
+  code_maitre="$("$NODE" tools/code-maitre.js --brut)"
   cat > .env <<ENV
 # Écrit par installer.sh — modifiable à tout moment.
 # Chaque réglage est expliqué dans .env.example.
@@ -148,6 +169,13 @@ DB_FILE=./data/db.json
 # À sauvegarder avec le registre ; sans elle, les boîtes reliées sont à refaire.
 APP_SECRET=$secret
 
+# Code de reprise du compte responsable, tiré au sort à l'installation.
+# Il permet de changer l'adresse ou le mot de passe du responsable, ou de
+# supprimer son compte pour réinstaller. Il ne donne pas accès au registre.
+# Seule son empreinte est conservée : s'il est perdu, il ne se retrouve pas —
+# relancez l'installateur pour en tirer un nouveau.
+MASTER_CODE=$code_maitre
+
 # Aucun serveur de courriel pour l'instant : les messages s'ouvrent dans le
 # logiciel de courriel de l'employé·e. Voir docs/installation-windows-gmail.md
 # pour activer l'envoi automatique.
@@ -160,6 +188,22 @@ DIGEST_HOUR=8
 ENV
   chmod 600 .env 2>/dev/null || true
   info "Clé de chiffrement créée. Le fichier .env n'est lisible que par vous."
+  annoncer_code_maitre "$code_maitre"
+fi
+
+# Un bureau installé avant que l'installateur ne tire ce code garde celui du
+# dépôt, qui est public. On ajoute la ligne sans toucher au reste : le serveur
+# la reprend au démarrage suivant, et l'avertissement rouge des Réglages
+# disparaît de lui-même.
+if [ -f .env ] && ! grep -q '^MASTER_CODE=' .env; then
+  code_maitre="$("$NODE" tools/code-maitre.js --brut)"
+  {
+    printf '\n# Code de reprise du compte responsable, ajouté par installer.sh.\n'
+    printf '# Celui livré avec l’application est public : celui-ci ne l’est pas.\n'
+    printf 'MASTER_CODE=%s\n' "$code_maitre"
+  } >> .env
+  souci "Votre .env n'avait pas de code de reprise : il utilisait celui, public, du dépôt."
+  annoncer_code_maitre "$code_maitre"
 fi
 
 mkdir -p data

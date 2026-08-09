@@ -32,7 +32,8 @@ administrateur. Il :
    son empreinte SHA-256** et la range dans `runtime/` — rien n'est installé sur
    le système, rien n'est ajouté au `PATH`, tout disparaît si l'on efface le
    dossier de l'application ;
-3. écrit un fichier `.env` avec une clé de chiffrement tirée au sort ;
+3. écrit un fichier `.env` avec une clé de chiffrement **et un code de reprise**
+   tirés au sort — le code s'affiche une fois, à noter sur papier ;
 4. installe `nodemailer` si le réseau le permet, et poursuit sans lui sinon ;
 5. lance les contrôles internes ;
 6. pose un raccourci sur le Bureau (Windows) ;
@@ -726,12 +727,29 @@ agents. Le code ne donne aucun accès aux données.
 Il n'est **jamais conservé en clair** : seule son empreinte est écrite au
 registre, au premier démarrage.
 
-> **À changer avant toute mise en service.** La valeur par défaut est publiée
-> avec le code source : qui lit ce dépôt la connaît. Fixez la vôtre dans `.env` :
+> **L'installateur s'en charge.** Il tire un code propre à votre bureau, l'écrit
+> dans `.env` et l'affiche **une seule fois**, groupé par quatre pour se dicter
+> et se recopier :
+>
+> ```
+>       4821 9037 5164
+> ```
+>
+> Notez-le sur papier et rangez-le : seule son empreinte est conservée, il ne se
+> retrouve pas. Un bureau installé avant cette version le reçoit au prochain
+> passage de l'installateur, qui ajoute la ligne sans toucher au reste du
+> fichier.
+>
+> Pour une installation à la main, ou pour en changer, tirez-en un et écrivez-le
+> vous-même :
 >
 > ```bash
-> MASTER_CODE=votre-code-a-vous
+> node tools/code-maitre.js        # un code à recopier dans .env
 > ```
+>
+> Tant que la valeur d'origine — publiée avec le code source — reste en place,
+> le serveur n'accepte la reprise que **depuis la machine qui tient le
+> registre**, et le responsable voit un avertissement dans Réglages.
 >
 > C'est une clé de coffre, pas un mécanisme d'authentification : elle ne vaut
 > que ce que vaut sa confidentialité. Les tentatives sont freinées, et chaque
