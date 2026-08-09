@@ -441,6 +441,18 @@ antennes, l'adresse de l'antenne du dossier est utilisée si elle est renseigné
 Les mentions manquantes deviennent des traits à compléter à la main : mieux vaut
 une attestation à finir au stylo qu'un refus d'imprimer un jour d'affluence.
 
+**Un code à barres, quand la personne a une boîte.** Il porte le numéro de
+boîte, en Code 39 — le format que lisent tous les lecteurs de comptoir. Au
+retour de la personne, un coup de lecteur dans le champ de recherche ouvre son
+dossier, sans retaper un nom qu'on orthographie mal une fois sur trois. Le
+numéro reste **écrit en clair sous les barres** : un lecteur en panne ou une
+impression pâle ne doivent pas rendre le papier inutilisable.
+
+Sans numéro de boîte, il n'y a pas de code : encoder un identifiant interne
+donnerait un code que la recherche ne saurait pas retrouver, et un code à barres
+qui ne mène nulle part est pire que pas de code — il promet un geste qui échoue
+devant la personne.
+
 **Ce qui ne s'imprime pas.** Une attestation n'est jamais délivrée pour une
 domiciliation **close**, ni pour une attestation **échue** — l'application le
 dit et ne sort rien. Un papier qui contredirait le registre enverrait quelqu'un

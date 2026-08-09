@@ -222,6 +222,34 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
 .variables-gabarit code{font-weight:600;}
 @media (max-width:640px){ .variables-gabarit{columns:1;} }
 
+/* Code à barres (Code 39) — des traits, pas une image.
+   Une image tramée devient illisible au lecteur dès que l'impression pâlit ;
+   des éléments sortent nets à n'importe quelle résolution. Toujours noir sur
+   blanc, y compris en thème sombre : c'est un objet destiné au papier. */
+.codebarres{
+  display:inline-flex;
+  align-items:flex-end;
+  flex-wrap:wrap;
+  background:#fff;
+  /* Le remplissage latéral vient du module : c'est la zone de silence, et elle
+     dépend de la largeur des barres. Ici, seulement le haut et le bas. */
+  padding-top:6px;
+  padding-bottom:2px;
+  line-height:0;
+}
+.cb-el{display:inline-block;background:transparent;}
+.cb-barre{background:#000;}
+.cb-legende{
+  flex-basis:100%;
+  text-align:center;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:2px;
+  color:#000;
+  line-height:1.6;
+}
+.attest-code{margin:26px 0 10px;text-align:center;}
+
 .card h2{
   font-family:var(--typewriter);
   font-size:15px;

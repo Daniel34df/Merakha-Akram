@@ -19,6 +19,7 @@
     enNode ? require('../store.js') : root.BC.store,
     enNode ? require('../domiciliation.js') : root.BC.domiciliation,
     enNode ? require('./noyau.js') : root.BC.ui,
+    enNode ? require('../codebarres.js') : root.BC.codebarres,
     root
   );
   if (enNode) {
@@ -27,7 +28,7 @@
     root.BC = root.BC || {};
     root.BC.impression = api;
   }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, store, domi, ui, root) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, store, domi, ui, codebarres, root) {
   'use strict';
 
   const S = store.state;
@@ -149,9 +150,28 @@
       trait(e.echeance ? util.formatJour(e.echeance) : '', 150) +
       '.</p>' +
       '<p class="attest-corps attest-fait">Fait à ' + trait(ville, 140) + ', le ' + esc(leJour()) + '.</p>' +
+      codeBarresAttestation(contact) +
       '<div class="attest-signature"><p>Signature et cachet de l’organisme</p></div>' +
       '</div>'
     );
+  }
+
+  /* Le code à barres de l'attestation.
+
+     On encode le numéro de boîte, et rien d'autre : c'est déjà la clé du
+     guichet — l'application sait chercher dessus — donc un coup de lecteur
+     ouvre le bon dossier. Encoder l'identifiant interne donnerait un code que
+     rien ne saurait retrouver : un code à barres qui ne mène nulle part est
+     pire que pas de code du tout, il promet un geste qui échoue devant la
+     personne.
+
+     Sans numéro de boîte, l'attestation sort donc comme avant. */
+  function codeBarresAttestation(contact) {
+    const boite = String((contact && contact.box) || '').trim();
+    if (!boite) return '';
+    const barres = codebarres.html(boite, { hauteur: 34, etroit: 2 });
+    if (!barres) return '';
+    return '<div class="attest-code">' + barres + '</div>';
   }
 
   /** Rend un refus motivé, ou null si l'attestation peut s'imprimer. */

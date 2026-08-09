@@ -97,6 +97,26 @@ const ok = v.ok;
     await page.click('#ficheAttestationBtn');
   });
 
+  /* Le code à barres : c'est lui qui évite de retaper un nom au retour de la
+     personne. Il doit porter le numéro de boîte, et rester lisible en clair
+     dessous — un lecteur en panne ne doit pas rendre le papier inutilisable. */
+  const codeBarres = await page.evaluate(() => {
+    const f = document.getElementById('feuilleCasier');
+    const cb = f.querySelector('.codebarres');
+    if (!cb) return null;
+    return {
+      barres: cb.querySelectorAll('.cb-barre').length,
+      legende: (cb.querySelector('.cb-legende') || {}).textContent || '',
+      silence: cb.style.paddingLeft
+    };
+  });
+  ok(!!codeBarres, 'l’attestation porte un code à barres');
+  if (codeBarres) {
+    ok(codeBarres.barres > 20, codeBarres.barres + ' barres dessinées');
+    ok(codeBarres.legende === 'B-12', 'le numéro est lisible en clair : ' + codeBarres.legende);
+    ok(codeBarres.silence === '20px', 'la zone de silence est là (' + codeBarres.silence + ')');
+  }
+
   await page.click('nav button[data-panel="domiciliation"]');
   await page.waitForTimeout(1000);
   await imprime('liste des personnes domiciliées', async () => {
