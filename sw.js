@@ -17,7 +17,7 @@
    Changer CACHE_VERSION invalide l'ancien cache au prochain chargement. */
 'use strict';
 
-const CACHE_VERSION = 'bdc-v18';
+const CACHE_VERSION = 'bdc-v19';
 
 /** Le code doit toujours être cohérent avec lui-même : réseau d'abord. */
 function isCode(url) {
@@ -46,6 +46,10 @@ const SHELL = [
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
   './assets/icons/apple-touch-icon.png',
+  './assets/fonts/bricolage-grotesque-latin.woff2',
+  './assets/fonts/bricolage-grotesque-latin-ext.woff2',
+  './assets/fonts/instrument-sans-latin.woff2',
+  './assets/fonts/instrument-sans-latin-ext.woff2',
   './assets/fonts/source-serif-4-latin.woff2',
   './assets/fonts/source-serif-4-latin-ext.woff2',
   './assets/fonts/special-elite-latin.woff2',

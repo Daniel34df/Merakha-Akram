@@ -1,79 +1,262 @@
 /* Bureau du Courrier — feuille de style
-   Papier crème, encre marine, tampon rouille : une administration d'autrefois. */
+   Encre profonde, surfaces claires, accent indigo-violet : un guichet vivant.
+
+   ═══════════════ LA RÈGLE QUI TIENT TOUT LE RESTE ═══════════════
+
+   Deux mondes cohabitent dans ce fichier, et ils ne se mélangent jamais.
+
+   **L'écran** est libre de changer. Il a ses polices (`--display`, `--sans`),
+   ses couleurs (`--ink`, `--surface`, `--accent`), ses rayons et ses ombres.
+
+   **Le papier** ne change pas. L'attestation d'élection de domicile se présente
+   à la CAF, à France Travail ou en préfecture ; les étiquettes sortent au format
+   d'une planche autocollante achetée dans le commerce ; le code à barres passe
+   sous un lecteur qui n'a pas d'opinion sur le design. Tout ce qui s'imprime
+   tire donc ses valeurs des variables `--print-*` et `--p-*` ci-dessous, gelées
+   à ce qu'elles ont toujours valu. Aucune retouche de l'écran ne peut les
+   emporter par ricochet — c'est le seul garde-fou, et il est là pour ça. */
 
 :root{
-  --navy:#16233F;
-  --navy-hover:#223255;
-  --paper:#F4F0E6;
-  --paper-dark:#E9E2D0;
-  --brass:#B8892B;
-  --slate:#5B6B82;
-  --forest:#3F6650;
-  --rust:#A8432E;
-  --line:#CFC6AE;
-  /* Rôles, distincts des teintes : c'est ce qui permet d'inverser la palette
-     sans toucher au reste de la feuille. */
-  --card:#FFFFFF;
-  --field:var(--paper);
-  --danger-wash:#FBEFEC;
-  --stamp-bg:rgba(255,255,255,0.92);
-  --shadow:rgba(22,35,63,0.10);
-  --grain-opacity:0.025;
-  --serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
-  --typewriter:'Special Elite', 'Courier New', monospace;
+  /* ── surfaces et encre ── */
+  --bg:#F7F8FC;
+  --surface:#FFFFFF;
+  --surface-2:#EEF1F8;
+  --ink:#0E1220;
+  --ink-2:#5A6478;
+  /* Deux filets, et la distinction est une exigence, pas un goût.
+     `--line` sépare : entre deux lignes d'un tableau, sous un titre. Personne
+     n'a besoin de le voir pour se servir de l'application, il peut donc être
+     ténu. `--bord` **délimite un objet manipulable** — le pourtour d'un champ,
+     d'une case à cocher, d'un bouton fantôme. La norme demande 3:1 pour
+     celui-là (WCAG 1.4.11) : quelqu'un doit pouvoir voir où finit le champ
+     avant d'y écrire. */
+  --line:#DDE3F0;
+  --bord:#79839C;
+
+  /* ── l'accent ──
+     Deux jeux, et la distinction n'est pas cosmétique. Les teintes « vives »
+     ne portent jamais de texte : dégradés, soulignements, lueurs, anneaux de
+     focus — on leur demande d'être belles. Les teintes « pleines » portent du
+     texte blanc et sont choisies pour passer AA (7,9:1 et 5,7:1) : on leur
+     demande d'être lisibles. Confondre les deux, c'est le défaut du code à
+     barres sans zone de silence — joli, et inutilisable. */
+  --a1:#4F6BFF;
+  --a2:#A855F7;
+  --accent:#4338CA;
+  --accent-2:#7C3AED;
+  --accent-texte:#4338CA;
+
+  /* ── ce que ça veut dire ── */
+  --ok:#047857;        --ok-vif:#10B981;
+  --warn:#B45309;      --warn-vif:#F59E0B;
+  --danger:#BE123C;    --danger-vif:#E11D48;
+  --info:#0E7490;      --info-vif:#06B6D4;
+  --danger-wash:#FFF1F3;
+  --ok-wash:#ECFDF5;
+  --warn-wash:#FFFBEB;
+
+  /* ── relief ── */
+  --r1:8px;  --r2:14px;  --r3:20px;
+  --ombre-1:0 1px 2px rgba(14,18,32,.06), 0 1px 3px rgba(14,18,32,.05);
+  --ombre-2:0 2px 4px rgba(14,18,32,.05), 0 6px 16px rgba(14,18,32,.08);
+  --ombre-3:0 8px 24px rgba(14,18,32,.10), 0 24px 48px rgba(14,18,32,.12);
+  --ombre-accent:0 6px 20px rgba(67,56,202,.28);
+  --lueur:0.06;
+  --voile:rgba(14,18,32,.45);
+  --stamp-bg:rgba(255,255,255,0.94);
+
+  /* ── mouvement ──
+     Deux courbes, trois durées, et rien d'autre : c'est ce qui fait qu'un
+     ensemble bouge d'une seule main plutôt que par accidents successifs. */
+  --ressort:cubic-bezier(.34, 1.56, .64, 1);
+  --sortie:cubic-bezier(.2, .8, .3, 1);
+  --t1:140ms;  --t2:240ms;  --t3:420ms;
+
+  /* ── typographie de l'écran ── */
+  --display:'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --sans:'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono:'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+  /* ── typographie et couleurs du papier — GELÉES ──
+     Ne pas repeindre. Voir l'avertissement en tête de fichier. */
+  --print-display:'Special Elite', 'Courier New', monospace;
+  --print-serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --print-mono:'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --p-ink:#16233F;
+  --p-ink-2:#5B6B82;
+  --p-paper:#F4F0E6;
+  --p-line:#CFC6AE;
+  --p-accent:#B8892B;
+
+  /* Une teinte par onglet. Le regard sait où il se trouve avant d'avoir lu le
+     libellé — et le soulignement qui la porte dit *quel* onglet est ouvert :
+     c'est une information, pas un ornement, donc elle doit se distinguer du
+     fond à 3:1. Les teintes vraiment vives (#06B6D4, #F59E0B) n'y arrivent pas
+     sur du blanc ; ce sont donc leurs versions profondes qui sont ici, et
+     l'éclat vient du dégradé posé par-dessus (`--teinte-vif`). */
+  --h-guichet:#4338CA;
+  --h-remise:#0E7490;
+  --h-registre:#7C3AED;
+  --h-suivi:#B45309;
+  --h-domiciliation:#047857;
+  --h-reglages:#52607A;
+  --teinte:var(--h-guichet);
+  --teinte-vif:color-mix(in srgb, var(--teinte) 62%, white);
+
+  /* ── compatibilité ──
+     Les anciens noms, le temps que la feuille finisse d'être réécrite. Ils
+     disparaissent à l'étape suivante ; rien de neuf ne doit s'y accrocher. */
+  --navy:var(--ink);
+  --navy-hover:var(--accent);
+  --paper:var(--bg);
+  --paper-dark:var(--surface-2);
+  --brass:var(--accent-texte);
+  --slate:var(--ink-2);
+  --forest:var(--ok);
+  --rust:var(--danger);
+  --card:var(--surface);
+  --field:var(--surface-2);
+  --shadow:rgba(14,18,32,.10);
+  --serif:var(--sans);
+  --typewriter:var(--display);
 }
 
-/* Thème sombre : mêmes rôles, valeurs inversées. L'encre devient crème et le
-   papier devient nuit ; le laiton et la rouille sont éclaircis pour rester
-   lisibles sur fond sombre. */
+/* Thème sombre : mêmes rôles, valeurs inversées.
+   Trois blocs et non deux — c'est ce qui permet à la bascule manuelle de
+   l'emporter dans les deux sens. Sans réglage explicite, on suit le système ;
+   avec, le choix de la personne gagne. */
 @media (prefers-color-scheme: dark){
-  :root{
-    --navy:#E7E1D1;
-    --navy-hover:#FFFAEC;
-    --paper:#141A26;
-    --paper-dark:#1E2635;
-    --brass:#D2A855;
-    --slate:#94A3B8;
-    --forest:#7FB392;
-    --rust:#DE7A61;
-    --line:#334158;
-    --card:#1B2333;
-    --field:#121926;
-    --danger-wash:#2C1D1A;
-    --stamp-bg:rgba(27,35,51,0.94);
-    --shadow:rgba(0,0,0,0.45);
-    --grain-opacity:0.035;
+  :root:not([data-theme="clair"]){
+    --bg:#0B0F1A;
+    --surface:#151B2B;
+    --surface-2:#1D2436;
+    --ink:#E8ECF7;
+    --ink-2:#98A3BC;
+    --line:#2A3348;
+    --bord:#697691;
+
+    --a1:#7C8FFF;
+    --a2:#C084FC;
+    --accent:#4F46E5;
+    --accent-2:#7C3AED;
+    --accent-texte:#A5B4FC;
+
+    --ok:#6EE7B7;        --ok-vif:#10B981;
+    --warn:#FCD34D;      --warn-vif:#F59E0B;
+    --danger:#FDA4AF;    --danger-vif:#E11D48;
+    --info:#67E8F9;      --info-vif:#06B6D4;
+    --danger-wash:#2B141C;
+    --ok-wash:#0D211B;
+    --warn-wash:#241C0C;
+
+    --ombre-1:0 1px 2px rgba(0,0,0,.4);
+    --ombre-2:0 2px 6px rgba(0,0,0,.45), 0 8px 20px rgba(0,0,0,.35);
+    --ombre-3:0 10px 30px rgba(0,0,0,.5), 0 26px 56px rgba(0,0,0,.45);
+    --ombre-accent:0 6px 22px rgba(124,143,255,.3);
+    --lueur:0.1;
+    --voile:rgba(3,6,14,.66);
+    --stamp-bg:rgba(21,27,43,0.95);
+
+    --h-guichet:#A5B4FC;
+    --h-remise:#67E8F9;
+    --h-registre:#C4B5FD;
+    --h-suivi:#FCD34D;
+    --h-domiciliation:#6EE7B7;
+    --h-reglages:#94A3B8;
+    --teinte-vif:color-mix(in srgb, var(--teinte) 70%, black);
+
+    --shadow:rgba(0,0,0,.45);
   }
+}
+
+:root[data-theme="sombre"]{
+  --bg:#0B0F1A;
+  --surface:#151B2B;
+  --surface-2:#1D2436;
+  --ink:#E8ECF7;
+  --ink-2:#98A3BC;
+  --line:#2A3348;
+  --bord:#697691;
+
+  --a1:#7C8FFF;
+  --a2:#C084FC;
+  --accent:#4F46E5;
+  --accent-2:#7C3AED;
+  --accent-texte:#A5B4FC;
+
+  --ok:#6EE7B7;        --ok-vif:#10B981;
+  --warn:#FCD34D;      --warn-vif:#F59E0B;
+  --danger:#FDA4AF;    --danger-vif:#E11D48;
+  --info:#67E8F9;      --info-vif:#06B6D4;
+  --danger-wash:#2B141C;
+  --ok-wash:#0D211B;
+  --warn-wash:#241C0C;
+
+  --ombre-1:0 1px 2px rgba(0,0,0,.4);
+  --ombre-2:0 2px 6px rgba(0,0,0,.45), 0 8px 20px rgba(0,0,0,.35);
+  --ombre-3:0 10px 30px rgba(0,0,0,.5), 0 26px 56px rgba(0,0,0,.45);
+  --ombre-accent:0 6px 22px rgba(124,143,255,.3);
+  --lueur:0.1;
+  --voile:rgba(3,6,14,.66);
+  --stamp-bg:rgba(21,27,43,0.95);
+
+  --h-guichet:#A5B4FC;
+  --h-remise:#67E8F9;
+  --h-registre:#C4B5FD;
+  --h-suivi:#FCD34D;
+  --h-domiciliation:#6EE7B7;
+  --h-reglages:#94A3B8;
+  --teinte-vif:color-mix(in srgb, var(--teinte) 70%, black);
+
+  --shadow:rgba(0,0,0,.45);
 }
 *{box-sizing:border-box;}
 body{
   margin:0;
-  background:var(--paper);
-  font-family:var(--serif);
-  color:var(--navy);
+  background:var(--bg);
+  font-family:var(--sans);
+  color:var(--ink);
   min-height:100vh;
+  font-size:15px;
+  line-height:1.55;
 }
 
-/* Grain de papier : bruit fractal en SVG, posé en couche séparée pour que son
-   intensité reste réglable d'un seul cran, sans teinter le fond. */
+/* Le lissage des glyphes est un réglage d'écran. Posé sur le corps de page, il
+   descendait jusque dans la feuille d'impression et changeait le rendu des
+   caractères d'un document destiné au papier. Il reste donc sur l'enveloppe de
+   l'application, que la feuille ne traverse pas. */
+.wrap, .gate, .toasts, .palette, dialog{
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* Le grain de papier a laissé la place à une lueur.
+   Deux halos d'accent très dilués en haut de page : de la profondeur, sans
+   teinter une seule ligne de texte. `--lueur` en règle l'intensité d'un cran,
+   et le thème sombre la monte un peu — sur du noir, il en faut davantage pour
+   que ça se voie. */
 body::before{
   content:'';
   position:fixed;
-  inset:0;
+  inset:0 0 auto 0;
+  height:min(70vh, 620px);
   pointer-events:none;
   z-index:0;
-  opacity:var(--grain-opacity);
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+  opacity:var(--lueur);
+  background:
+    radial-gradient(60% 70% at 12% 0%, var(--a1) 0%, transparent 62%),
+    radial-gradient(55% 65% at 88% 6%, var(--a2) 0%, transparent 60%);
 }
 .wrap, .gate, .toasts, .stamp-overlay{position:relative;z-index:1;}
-::selection{background:var(--brass);color:var(--paper);}
+::selection{background:var(--accent);color:#fff;}
 
-/* Un anneau de focus unique, visible seulement au clavier. */
+/* Un anneau de focus unique, visible seulement au clavier. Il est vif : c'est
+   le seul repère de qui n'utilise pas la souris. */
 :focus-visible{
-  outline:2px solid var(--brass);
+  outline:2px solid var(--a1);
   outline-offset:2px;
-  border-radius:1px;
+  border-radius:4px;
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--a1) 22%, transparent);
 }
 input:focus-visible, textarea:focus-visible{outline-offset:1px;}
 .wrap{max-width:960px;margin:0 auto;padding:32px 24px 80px;}
@@ -251,14 +434,14 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
   break-inside:avoid;
 }
 .etq-boite{
-  font-family:var(--typewriter);
+  font-family:var(--print-display);
   font-size:22pt;
   font-weight:700;
   line-height:1;
   color:#000;
 }
 .etq-nom{
-  font-family:var(--serif);
+  font-family:var(--print-serif);
   font-size:10pt;
   line-height:1.2;
   color:#000;
@@ -291,7 +474,7 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
 .cb-legende{
   flex-basis:100%;
   text-align:center;
-  font-family:var(--mono);
+  font-family:var(--print-mono);
   font-size:11px;
   letter-spacing:2px;
   color:#000;
@@ -885,8 +1068,19 @@ footer.note{
   nav, .toolbar, .row-actions, .btn, .link-btn, .toasts, .stamp-overlay, footer.note{display:none !important;}
   .panel{display:block !important;}
   body{background:#fff;}
-  .card{border-color:#999;page-break-inside:avoid;}
+  .card{border-color:#999;box-shadow:none;page-break-inside:avoid;}
+  /* La lueur d'accent est une couche fixe : `background:#fff` sur le corps ne
+     l'atteint pas. Sans cette ligne elle sortait sur le papier — un voile
+     indigo derrière l'attestation, et de l'encre dépensée pour rien. */
+  body::before{display:none !important;}
+  /* Rien ne bouge sur du papier. */
+  *, *::before, *::after{animation:none !important;transition:none !important;}
 }
+
+/* Le même nettoyage pendant la préparation de la feuille, avant que le
+   navigateur ne bascule en média « print » : l'aperçu doit montrer la page qui
+   sortira, pas celle qu'on regardait. */
+body.impression-casier::before{display:none;}
 
 /* ---------- suivi des courriers ---------- */
 .attente-cell{
@@ -1329,28 +1523,43 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 }
 
 /* ---------- feuille de casier (impression) ---------- */
-.feuille-casier{display:none;}
+.feuille-casier{
+  display:none;
+  /* La feuille ne prend rien à l'écran qui l'entoure : ni sa police, ni son
+     encre, ni ses mesures.
+
+     Les deux dernières lignes ont l'air superflues et ne le sont pas. Le corps
+     de page a gagné `font-size:15px` et `line-height:1.55` en même temps que la
+     nouvelle typographie ; la feuille en héritait, et les trois documents
+     tabulaires ont grandi de 20 à 35 pixels — assez pour qu'un rapport annuel
+     déborde d'une page. Le papier repart donc des mesures qu'il a toujours
+     eues. */
+  font-family:var(--print-serif);
+  color:var(--p-ink);
+  font-size:16px;
+  line-height:normal;
+}
 .feuille-casier h1{
-  font-family:var(--typewriter);
+  font-family:var(--print-display);
   font-size:20px;
   margin-bottom:4px;
 }
-.feuille-casier p{font-size:13px;color:var(--slate);margin-bottom:16px;}
+.feuille-casier p{font-size:13px;color:var(--p-ink-2);margin-bottom:16px;}
 .feuille-casier table{width:100%;border-collapse:collapse;font-size:13px;}
 .feuille-casier th{
   text-align:left;
-  background:var(--navy);
-  color:var(--paper);
+  background:var(--p-ink);
+  color:var(--p-paper);
   padding:7px 8px;
-  font-family:var(--mono);
+  font-family:var(--print-mono);
   font-size:10px;
   text-transform:uppercase;
   letter-spacing:.05em;
 }
-.feuille-casier tbody tr:nth-child(even) td{background:var(--paper);}
-.feuille-casier td{border-bottom:1px solid var(--line);padding:8px 4px;}
-.feuille-casier td.b{font-family:var(--mono);font-weight:600;}
-.feuille-casier td.case{width:70px;border:1px solid var(--navy);}
+.feuille-casier tbody tr:nth-child(even) td{background:var(--p-paper);}
+.feuille-casier td{border-bottom:1px solid var(--p-line);padding:8px 4px;}
+.feuille-casier td.b{font-family:var(--print-mono);font-weight:600;}
+.feuille-casier td.case{width:70px;border:1px solid var(--p-ink);}
 
 /* Le numéro à appeler : c'est ce qu'on recopie sur un clavier, il doit se lire
    sans se pencher, et sans confondre un 0 et un O. */
@@ -1431,22 +1640,29 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
    aéré, place pour le cachet. Les traits remplacent les mentions qu'on n'a pas
    enregistrées — l'attestation s'imprime toujours, quitte à se compléter à la
    main, plutôt que de refuser de sortir. */
-.attestation{max-width:17cm;margin:0 auto;line-height:1.65;}
+.attestation{
+  max-width:17cm;
+  margin:0 auto;
+  font-size:16px;
+  line-height:1.65;
+  font-family:var(--print-serif);
+  color:var(--p-ink);
+}
 .attest-entete{
-  border-bottom:3px solid var(--brass);
+  border-bottom:3px solid var(--p-accent);
   padding-bottom:10px;
   margin-bottom:28px;
   font-size:12px;
-  color:var(--slate);
+  color:var(--p-ink-2);
 }
 .attest-organisme{
-  font-family:var(--typewriter);
+  font-family:var(--print-display);
   font-size:17px;
   margin-bottom:2px;
-  color:var(--navy);
+  color:var(--p-ink);
 }
 .attestation h1{
-  font-family:var(--typewriter);
+  font-family:var(--print-display);
   font-size:19px;
   text-align:center;
   margin:0 0 30px;
@@ -1458,21 +1674,21 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 .attest-adresse{
   margin:6px 0 20px 0;
   padding:10px 14px;
-  background:var(--paper);
-  border-left:3px solid var(--brass);
-  font-family:var(--mono);
+  background:var(--p-paper);
+  border-left:3px solid var(--p-accent);
+  font-family:var(--print-mono);
   font-size:13px;
 }
-.attest-valeur{font-weight:600;color:var(--navy);}
+.attest-valeur{font-weight:600;color:var(--p-ink);}
 .attest-trait{
   display:inline-block;
-  border-bottom:1px solid var(--navy);
+  border-bottom:1px solid var(--p-ink);
   height:1em;
   vertical-align:baseline;
 }
 .attest-fait{margin-top:30px;}
 .attest-signature{margin-top:14px;text-align:right;}
-.attest-signature p{font-size:12px;color:var(--slate);margin:0 0 70px;}
+.attest-signature p{font-size:12px;color:var(--p-ink-2);margin:0 0 70px;}
 
 /* Pendant l'impression de la feuille, l'application entière s'efface. */
 body.impression-casier .feuille-casier{display:block;}

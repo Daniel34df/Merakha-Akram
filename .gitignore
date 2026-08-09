@@ -33,6 +33,8 @@ npm-debug.log*
 
 # Dépendances de développement (Playwright) — jamais nécessaires au serveur.
 node_modules/
+# `npm install` en fabrique un ; l'application n'a aucune dépendance à figer.
+package-lock.json
 
 # Captures des vérifications de navigateur, quand on demande à les garder.
 captures/
