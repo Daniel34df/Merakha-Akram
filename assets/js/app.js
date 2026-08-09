@@ -2900,13 +2900,11 @@
           'Type',
           'Date',
           { titre: 'Attente', classe: 'attente-cell' },
-          /* Ces deux intitulés sont décalés d'un cran : « Suivi » surmonte les
-             boutons, et la pastille d'état — qui est *le* suivi — n'a pas
-             d'intitulé du tout. Le défaut est antérieur à ce remaniement, qui
-             ne doit rien changer ; il est corrigé juste après, seul, pour qu'on
-             puisse le voir. */
-          { titre: 'Suivi', classe: 'actions' },
-          { titre: '', classe: 'actions' }
+          /* L'intitulé va sur la colonne qu'il nomme. Il surmontait les
+             boutons, et la pastille d'état — qui est *le* suivi — n'avait pas
+             d'intitulé du tout. */
+          { titre: '', classe: 'actions' },
+          { titre: 'Suivi', classe: 'actions' }
         ],
         lignes: dessinees,
         attrsLigne: function (h) {
