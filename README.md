@@ -176,6 +176,18 @@ Le choix est propre au navigateur, pas au serveur : deux postes peuvent faire
 des choix différents. Changer d'option recharge la page — les données de l'autre
 support ne sont pas effacées, elles cessent seulement d'être affichées.
 
+### Quand le réseau tombe en pleine journée
+
+Un poste sur le registre partagé qui perd le serveur ne s'arrête pas : chaque
+écriture est appliquée à l'écran, mise de côté, et rejouée dans l'ordre au
+retour du réseau. La bannière dit combien d'actions attendent et depuis quand.
+
+Le rejeu ne recompte rien. Chaque action emporte son propre identifiant, que le
+serveur retient une semaine : si la réponse s'était perdue en route alors que
+l'écriture, elle, était passée, le serveur reconnaît l'action et rend son
+premier résultat au lieu de la refaire. Sans quoi un passage inscrit hors ligne
+pouvait être compté deux fois, ou un destinataire créé en double.
+
 ---
 
 ## Comptes et boîte d'envoi personnelle
@@ -983,6 +995,7 @@ assets/js/notify.js   composition du message, mailto, presse-papiers
 assets/js/app.js      interface (onglets, registre, historique, réglages)
 server/app.js         serveur HTTP et API JSON
 server/db.js          fichier JSON, écritures atomiques et sérialisées
+server/idempotence.js une écriture rejouée n'est pas exécutée deux fois
 server/mailer.js      envoi SMTP (nodemailer, optionnel) et mode essai
 server/auth.js        mots de passe scrypt, sessions, limitation des tentatives
 server/secrets.js     chiffrement des identifiants au repos (AES-256-GCM)
@@ -994,7 +1007,7 @@ tools/verifier/       vérifications de navigateur, une par défaut corrigé
 ```
 
 ```bash
-npm test     # 428 tests : utilitaires, API, comptes, domiciliation, appels, socle, couleurs, rejeu
+npm test     # 433 tests : utilitaires, API, comptes, domiciliation, appels, socle, couleurs, rejeu
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

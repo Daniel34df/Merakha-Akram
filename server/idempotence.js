@@ -78,6 +78,17 @@ function retrouver(registre, cle) {
   return null;
 }
 
+/* La même, mais pour un compte donné. Un rejeu est servi **avant** que la
+   route ait vérifié la session : il doit donc la vérifier lui-même, sans quoi
+   connaître une clé suffirait à apprendre qu'une écriture a eu lieu et quel
+   identifiant elle a produit, sans être connecté. Deux comptes ne partagent
+   jamais une clé — elle vient de la file d'un poste, sous une identité. */
+function retrouverPour(registre, cle, qui) {
+  const e = retrouver(registre, cle);
+  if (!e) return null;
+  return (e.qui || '') === (qui || '') ? e : null;
+}
+
 /* L'identifiant attribué par le serveur, s'il y en a un. Les réponses de
    l'application le portent de trois façons selon l'appel — `record` pour un
    courrier, `contact` pour un destinataire, ou l'objet lui-même. */
@@ -127,7 +138,9 @@ function noter(registre, cle, entree, maintenant) {
     cle: cle,
     at: new Date(maintenant === undefined ? Date.now() : maintenant).toISOString(),
     status: status,
-    id: (entree && entree.id) || null
+    id: (entree && entree.id) || null,
+    // Le compte qui a fait l'écriture — un identifiant, pas un nom.
+    qui: (entree && entree.qui) || ''
   });
   purger(registre, maintenant);
   return true;
@@ -148,6 +161,7 @@ module.exports = {
   estCle: estCle,
   lireCle: lireCle,
   retrouver: retrouver,
+  retrouverPour: retrouverPour,
   extraireId: extraireId,
   estRetenu: estRetenu,
   purger: purger,

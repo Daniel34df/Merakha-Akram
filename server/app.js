@@ -2761,13 +2761,18 @@ function createServer(options) {
          premier résultat. Le poste recharge l'état complet juste après, il n'a
          besoin ici que de l'identifiant attribué la première fois. */
       const cle = idem.lireCle(req);
-      if (cle && ctx.db) {
+      /* Ce contrôle passe avant la route, donc avant qu'elle ait vérifié la
+         session : il la vérifie lui-même, et ne rend son résultat qu'au compte
+         qui a fait l'écriture. Sans session, on laisse la route refuser. */
+      const compte = cle && ctx.db ? auth.userFromRequest(ctx.db, req) : null;
+      if (cle && ctx.db && (compte || (ctx.db.data.users || []).length === 0)) {
         const registre = ctx.db.data.operations || (ctx.db.data.operations = []);
-        const vue = idem.retrouver(registre, cle);
+        const qui = (compte && compte.id) || '';
+        const vue = idem.retrouverPour(registre, cle, qui);
         if (vue) return sendJson(res, vue.status, idem.reponseRejeu(vue));
         res.noterOperation = function (status, payload) {
           res.noterOperation = null; // une réponse, une inscription
-          const inscrit = idem.noter(registre, cle, { status: status, id: idem.extraireId(payload) }, Date.now());
+          const inscrit = idem.noter(registre, cle, { status: status, id: idem.extraireId(payload), qui: qui }, Date.now());
           /* Le tableau est déjà à jour en mémoire — un rejeu qui arriverait
              dans la seconde le verra. L'écriture disque suit, pour que le
              registre survive à un redémarrage ; si elle échoue, on a perdu une

@@ -70,8 +70,12 @@ test('une entrée ne retient rien de ce qu’il y avait dans la réponse', funct
      naissance et les téléphones de gens sans logement — parfois de gens qui se
      cachent de quelqu'un. Une clé, une heure, un code, un identifiant. */
   const r = [];
-  idem.noter(r, 'local-aaaa1111', { status: 201, id: idem.extraireId({ contact: { id: 'c1', name: 'Amina Diallo', telephone: '06 12 34 56 78' } }) });
-  assert.deepEqual(Object.keys(r[0]).sort(), ['at', 'cle', 'id', 'status']);
+  idem.noter(r, 'local-aaaa1111', {
+    status: 201,
+    qui: 'u-akram',
+    id: idem.extraireId({ contact: { id: 'c1', name: 'Amina Diallo', telephone: '06 12 34 56 78' } })
+  });
+  assert.deepEqual(Object.keys(r[0]).sort(), ['at', 'cle', 'id', 'qui', 'status']);
   assert.ok(JSON.stringify(r).indexOf('Amina') < 0);
   assert.ok(JSON.stringify(r).indexOf('06 12') < 0);
 });
@@ -121,10 +125,13 @@ async function withServer(run) {
   const fichier = path.join(dir, 'db.json');
   const db = new Db(fichier);
   await db.load();
+  const mailer = createMailer({ MAIL_DRY_RUN: 'true' });
   const server = createServer({
     db: db,
-    mailer: createMailer({ MAIL_DRY_RUN: 'true' }),
-    rootDir: path.join(__dirname, '..')
+    mailer: mailer,
+    rootDir: path.join(__dirname, '..'),
+    // Les tests de comptes ci-dessous s'inscrivent sans relever de courriel.
+    verifyEmail: false
   });
   await new Promise(function (resolve) {
     server.listen(0, '127.0.0.1', resolve);
@@ -132,15 +139,22 @@ async function withServer(run) {
   const base = 'http://127.0.0.1:' + server.address().port;
 
   /* `operation` est la seule différence avec le client des autres tests : le
-     poste envoie l'identifiant de son intention, et ne le change pas au rejeu. */
-  const call = async function (method, url, body, operation) {
-    const headers = { 'Content-Type': 'application/json' };
+     poste envoie l'identifiant de son intention, et ne le change pas au rejeu.
+     Le bocal à biscuits retient la session, comme le ferait un navigateur ;
+     `entetes.Cookie = ''` sert à jouer un poste qui n'en a pas. */
+  const jar = { cookie: '' };
+  const call = async function (method, url, body, operation, entetes) {
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, entetes || {});
     if (operation) headers['X-Operation-Id'] = operation;
+    if (jar.cookie && headers.Cookie === undefined) headers.Cookie = jar.cookie;
+    if (headers.Cookie === '') delete headers.Cookie;
     const res = await fetch(base + url, {
       method: method,
       headers: headers,
       body: body === undefined ? undefined : JSON.stringify(body)
     });
+    const biscuit = res.headers.get('set-cookie');
+    if (biscuit) jar.cookie = biscuit.split(';')[0];
     const texte = await res.text();
     let json = null;
     try {
@@ -152,7 +166,7 @@ async function withServer(run) {
   };
 
   try {
-    await run({ call: call, db: db, fichier: fichier });
+    await run({ call: call, db: db, fichier: fichier, jar: jar, mailer: mailer });
   } finally {
     await new Promise(function (resolve) {
       server.close(resolve);
@@ -214,6 +228,41 @@ test('le même courrier rejoué n’entre qu’une fois au registre', function (
   });
 });
 
+test('la même remise rejouée n’est inscrite qu’une fois au journal', function () {
+  return withServer(async function (t) {
+    /* Le journal est ce qu'on relit quand deux agents ne sont pas d'accord sur
+       qui a remis quoi. Deux lignes pour une seule remise, et il ment. */
+    const c = (await t.call('POST', '/api/contacts', { name: 'Remise Double', telephone: '07 77 77 77 77' })).body;
+    const h = (await t.call('POST', '/api/history', { contactId: c.id, name: 'Remise Double', subject: 'Un courrier' })).body;
+    const idCourrier = h.id || (h.record && h.record.id);
+
+    const un = await t.call('POST', '/api/history/' + idCourrier + '/pickup', { porteur: '' }, 'local-r1r2r3r4');
+    assert.ok(un.status < 300, 'la remise passe (' + un.status + ')');
+    const deux = await t.call('POST', '/api/history/' + idCourrier + '/pickup', { porteur: '' }, 'local-r1r2r3r4');
+    assert.equal(deux.body.rejoue, true);
+
+    const remises = (await t.call('GET', '/api/journal')).body.entrees.filter(function (l) {
+      return /remis/i.test(l.action || '');
+    });
+    assert.equal(remises.length, 1);
+  });
+});
+
+test('la même notification rejouée n’envoie qu’un courriel', function () {
+  return withServer(async function (t) {
+    /* Deux courriels identiques à quelques secondes d'intervalle, c'est au
+       mieux une personne qui se déplace deux fois pour un seul courrier. */
+    const c = (await t.call('POST', '/api/contacts', { name: 'Jean Roy', email: 'jean@exemple.com' })).body;
+    const envoi = { contactId: c.id, name: c.name, email: c.email };
+    assert.equal((await t.call('POST', '/api/notify', envoi, 'local-n1n2n3n4')).status, 200);
+    const deux = await t.call('POST', '/api/notify', envoi, 'local-n1n2n3n4');
+    assert.equal(deux.status, 200);
+    assert.equal(deux.body.rejoue, true);
+    assert.equal(t.mailer.sent.length, 1);
+    assert.equal((await t.call('GET', '/api/history')).body.length, 1);
+  });
+});
+
 test('deux intentions distinctes restent deux écritures', function () {
   return withServer(async function (t) {
     /* Le garde-fou ne doit pas devenir un bouchon : deux courriers pour la
@@ -251,6 +300,54 @@ test('une clé brûlée par un refus reste utilisable', function () {
     assert.equal(bon.status, 201);
     assert.ok(bon.body.id);
     assert.notEqual(bon.body.rejoue, true);
+  });
+});
+
+test('une entrée dit de quel compte elle vient', function () {
+  const r = [];
+  idem.noter(r, 'local-aaaa1111', { status: 201, id: 'c1', qui: 'u-akram' });
+  assert.equal(r[0].qui, 'u-akram');
+  assert.ok(idem.retrouverPour(r, 'local-aaaa1111', 'u-akram'));
+  assert.equal(idem.retrouverPour(r, 'local-aaaa1111', 'u-autre'), null);
+  assert.equal(idem.retrouverPour(r, 'local-aaaa1111', ''), null);
+  // Sans comptes créés, tout le monde est le même « personne » : c'est le
+  // premier démarrage, où l'application est encore ouverte.
+  const s = [];
+  idem.noter(s, 'local-bbbb2222', { status: 201, id: 'c2' });
+  assert.ok(idem.retrouverPour(s, 'local-bbbb2222', ''));
+  assert.equal(idem.retrouverPour(s, 'local-bbbb2222', 'u-akram'), null);
+});
+
+test('un rejeu sans session est refusé, pas servi', function () {
+  return withServer(async function (t) {
+    /* Le rejeu répond avant que la route ait vérifié la session. Sans ce
+       garde-fou, connaître une clé suffirait à apprendre qu'une écriture a eu
+       lieu et quel identifiant elle a produit — sans être connecté. */
+    assert.equal((await t.call('POST', '/api/auth/signup', { name: 'Akram', email: 'akram@bureau.org', password: 'mot-de-passe-du-bureau' })).status, 201);
+    const un = await t.call('POST', '/api/contacts', { name: 'Amina Diallo', telephone: '06 12 34 56 78' }, 'local-a1b2c3d4');
+    assert.equal(un.status, 201);
+
+    const sans = await t.call('POST', '/api/contacts', { name: 'Amina Diallo' }, 'local-a1b2c3d4', { Cookie: '' });
+    assert.equal(sans.status, 401);
+    assert.notEqual(sans.body.rejoue, true);
+    assert.ok(!sans.body.id, 'aucun identifiant ne sort de là');
+  });
+});
+
+test('un rejeu n’est rendu qu’au compte qui a fait l’écriture', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', { name: 'Akram', email: 'akram@bureau.org', password: 'mot-de-passe-du-bureau' });
+    const un = await t.call('POST', '/api/contacts', { name: 'Amina Diallo', telephone: '06 12 34 56 78' }, 'local-a1b2c3d4');
+    assert.equal(un.status, 201);
+
+    /* Un second compte du même bureau. Il a le droit d'écrire au registre —
+       ce n'est pas une question de droits, mais de qui rejoue quoi : sa file
+       à lui ne contient pas cette intention. */
+    const deuxieme = await t.call('POST', '/api/auth/signup', { name: 'Sonia', email: 'sonia@bureau.org', password: 'un-autre-mot-de-passe' });
+    assert.equal(deuxieme.status, 201, 'le second compte est créé (' + JSON.stringify(deuxieme.body) + ')');
+    const chezElle = await t.call('POST', '/api/contacts', { name: 'Yannick Mbala', telephone: '07 00 00 00 00' }, 'local-a1b2c3d4');
+    assert.notEqual(chezElle.body.rejoue, true, 'ce n’est pas son rejeu');
+    assert.equal((await t.call('GET', '/api/contacts')).body.length, 2);
   });
 });
 
