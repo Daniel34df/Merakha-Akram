@@ -37,6 +37,8 @@ const DEFAULT_SETTINGS = {
      Un registre qui garde tout indéfiniment expose bien plus qu'il ne devrait
      le jour d'une fuite ; c'est aussi une obligation. */
   // Joindre le français sous le message rédigé dans la langue du destinataire.
+  // Avis de domiciliation ; vide = les textes fournis par l'application.
+  avis: {},
   bilingue: false,
   conservationMois: 0
 };

@@ -1831,6 +1831,94 @@ async function handleApi(req, res, ctx, pathname) {
     });
   }
 
+  /* Prévenir une personne au sujet de sa domiciliation — pas de son courrier.
+
+     Le registre calcule deux échéances qui pèsent sur elle : son attestation
+     qui expire, et son absence prolongée qui peut mettre fin à sa
+     domiciliation. L'écran les signalait à l'équipe ; personne ne prévenait
+     l'intéressée, qui l'apprenait au refus d'un guichet.
+
+     Cet avis n'entre **pas** au registre du courrier : pas de ligne
+     d'historique, pas de code de retrait, rien qui compte comme du courrier
+     reçu. Les confondre fausserait le rapport annuel remis à la préfecture. */
+  const avisMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/avis$/);
+  if (avisMatch && method === 'POST') {
+    exigerUnDesDroits(currentUser, ['registre', 'domiciliation']);
+    const id = decodeURIComponent(avisMatch[1]);
+    const contact = pourSonAntenne(db.data.contacts || []).find(function (c) {
+      return c.id === id;
+    });
+    if (!contact) throw Object.assign(new Error('Destinataire introuvable'), { status: 404 });
+
+    const corps = await readBody(req);
+    const sujet = util.avis(corps && corps.sujet).id;
+    const settings = db.data.settings;
+    const etat = domiciliation.etat(contact, db.data.history || []);
+
+    const gabarit = util.gabaritAvis(settings, sujet);
+    const vars = util.variablesMessage({
+      contact: contact,
+      bureau: settings.officeName,
+      echeance: etat.echeance || contact.domicilieJusqua || '',
+      jours: etat.joursSansPassage
+    });
+    const rendu = util.messagePour(
+      Object.assign({}, settings, { subject: gabarit.subject, body: gabarit.body, langues: {} }),
+      'lettre',
+      util.langue(contact.langue).id,
+      vars
+    );
+
+    /* Avec une adresse, le message part. Sans adresse — le cas le plus
+       fréquent ici — il n'y a rien où écrire : l'avis est noté « à annoncer »
+       et se dira de vive voix. Le geste ne dépend donc d'aucun réglage SMTP. */
+    const adresse = String(contact.email || '').trim();
+    let envoye = false;
+    let echec = '';
+    if (adresse) {
+      try {
+        await ctx.mailer.send({ to: adresse, subject: rendu.subject, text: rendu.body });
+        envoye = true;
+      } catch (err) {
+        echec = err.message;
+      }
+    }
+
+    const trace = {
+      at: new Date().toISOString(),
+      sujet: sujet,
+      canal: envoye ? 'courriel' : 'telephone',
+      par: currentUser ? currentUser.name : null,
+      echec: echec
+    };
+    await db.write(function (data) {
+      const cible = data.contacts.find(function (c) {
+        return c.id === id;
+      });
+      if (!cible) return;
+      cible.avis = Array.isArray(cible.avis) ? cible.avis : [];
+      cible.avis.unshift(trace);
+      if (cible.avis.length > 20) cible.avis.length = 20;
+    });
+
+    await consigner(db, {
+      qui: currentUser && currentUser.name,
+      action: 'avis de domiciliation',
+      cible: contact.name,
+      details: util.avis(sujet).libelle + (envoye ? ' — par courriel' : ' — à annoncer de vive voix')
+    });
+
+    return sendJson(res, 200, {
+      envoye: envoye,
+      canal: trace.canal,
+      echec: echec,
+      message: { subject: rendu.subject, body: rendu.body },
+      contact: db.data.contacts.find(function (c) {
+        return c.id === id;
+      })
+    });
+  }
+
   const contactMatch = pathname.match(/^\/api\/contacts\/([^/]+)$/);
   if (contactMatch) {
     const id = decodeURIComponent(contactMatch[1]);
@@ -2332,6 +2420,9 @@ async function handleApi(req, res, ctx, pathname) {
            envoie. */
         bilingue:
           body.bilingue !== undefined ? !!body.bilingue : !!db.data.settings.bilingue,
+        /* Avis de domiciliation : mêmes règles que les gabarits de courrier —
+           incomplet = ignoré, absent de la requête = conservé. */
+        avis: util.nettoyerAvis(body.avis !== undefined ? body.avis : db.data.settings.avis),
         /* Durée de conservation des courriers terminés, en mois. 0 = illimitée.
            Bornée à dix ans : au-delà, ce n'est plus une durée de conservation,
            c'est un oubli de la fixer. */

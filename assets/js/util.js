@@ -367,6 +367,75 @@
     return complet(settings && settings.templates && settings.templates[typeId]) || general;
   }
 
+  /* Les avis qui concernent la domiciliation elle-même, et non un courrier.
+
+     Le registre calcule deux échéances qui pèsent sur la personne : son
+     attestation qui expire, et son absence prolongée qui peut mettre fin à sa
+     domiciliation. Jusqu'ici l'écran les signalait à l'équipe, et personne ne
+     prévenait l'intéressée — qui l'apprenait au refus d'un guichet.
+
+     Ces messages ne sont pas des courriers : ils n'entrent pas au registre du
+     courrier, ne reçoivent pas de code de retrait, et ne comptent nulle part
+     comme du courrier reçu. Les confondre fausserait le rapport annuel. */
+  const AVIS = [
+    {
+      id: 'renouvellement',
+      libelle: 'Attestation à renouveler',
+      subject: 'Votre attestation de domiciliation arrive à échéance',
+      body:
+        'Bonjour {nom},\n\n' +
+        'Votre attestation d’élection de domicile auprès de {bureau} arrive à échéance ' +
+        'le {echeance}.\n\n' +
+        'Passez nous voir pour la renouveler : sans elle, vos démarches peuvent être ' +
+        'refusées.\n\n' +
+        'À bientôt.'
+    },
+    {
+      id: 'absence',
+      libelle: 'Sans nouvelles',
+      subject: 'Votre domiciliation — merci de vous manifester',
+      body:
+        'Bonjour {nom},\n\n' +
+        'Nous sommes sans nouvelles de vous depuis {jours} jours. Sans passage ni appel ' +
+        'de votre part, votre domiciliation auprès de {bureau} peut prendre fin.\n\n' +
+        'Un appel suffit : venez, ou téléphonez-nous.\n\n' +
+        'À bientôt.'
+    }
+  ];
+
+  function avis(id) {
+    return (
+      AVIS.find(function (a) {
+        return a.id === id;
+      }) || AVIS[0]
+    );
+  }
+
+  /** Le texte d'un avis : celui du bureau s'il en a écrit un, sinon le nôtre. */
+  function gabaritAvis(settings, sujetId) {
+    const defaut = avis(sujetId);
+    const ecrit = settings && settings.avis && settings.avis[defaut.id];
+    const subject = String((ecrit && ecrit.subject) || '').trim();
+    const body = String((ecrit && ecrit.body) || '').trim();
+    return subject && body
+      ? { subject: subject, body: body, propre: true }
+      : { subject: defaut.subject, body: defaut.body, propre: false };
+  }
+
+  /** Ne garde que les avis complets, sur des sujets connus. */
+  function nettoyerAvis(entrees) {
+    const out = {};
+    if (!entrees || typeof entrees !== 'object') return out;
+    AVIS.forEach(function (a) {
+      const e = entrees[a.id];
+      if (!e) return;
+      const subject = String(e.subject || '').trim();
+      const body = String(e.body || '').trim();
+      if (subject && body) out[a.id] = { subject: subject, body: body };
+    });
+    return out;
+  }
+
   /* Le message rendu, éventuellement dans deux langues.
 
      Un message part dans la langue du destinataire. C'est le bon choix — une
@@ -697,6 +766,10 @@
     renderTemplate: renderTemplate,
     gabaritPour: gabaritPour,
     messagePour: messagePour,
+    AVIS: AVIS,
+    avis: avis,
+    gabaritAvis: gabaritAvis,
+    nettoyerAvis: nettoyerAvis,
     variablesMessage: variablesMessage,
     VARIABLES_MESSAGE: VARIABLES_MESSAGE,
     SEPARATEUR_LANGUES: SEPARATEUR_LANGUES,

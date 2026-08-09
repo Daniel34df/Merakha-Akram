@@ -57,7 +57,9 @@
     // Antennes ; vide = un seul bureau, la notion n'apparaît pas.
     antennes: [],
     // Joindre le français sous le message rédigé dans une autre langue.
-    bilingue: false
+    bilingue: false,
+    // Avis de domiciliation ; vide = les textes fournis par l'application.
+    avis: {}
   };
 
   const state = {
@@ -799,6 +801,28 @@
     return result;
   }
 
+  /**
+   * Prévenir quelqu'un au sujet de sa domiciliation — pas de son courrier.
+   * Avec une adresse, le message part ; sans adresse, l'avis est noté et se
+   * dira de vive voix. N'écrit rien au registre du courrier.
+   * @param {string} id
+   * @param {'renouvellement'|'absence'} sujet
+   */
+  async function envoyerAvis(id, sujet) {
+    const result = await api('/contacts/' + encodeURIComponent(id) + '/avis', {
+      method: 'POST',
+      body: JSON.stringify({ sujet: sujet })
+    });
+    if (result && result.contact) {
+      const i = state.contacts.findIndex(function (c) {
+        return c.id === result.contact.id;
+      });
+      if (i !== -1) state.contacts[i] = result.contact;
+      emit();
+    }
+    return result;
+  }
+
   async function loadStats() {
     return api('/stats');
   }
@@ -1240,6 +1264,7 @@
     noterAppel: noterAppel,
     actionDomiciliation: actionDomiciliation,
     enregistrerPassage: enregistrerPassage,
+    envoyerAvis: envoyerAvis,
     loadJournal: loadJournal,
     changePassword: changePassword,
     listUsers: listUsers,

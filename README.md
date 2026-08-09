@@ -461,6 +461,17 @@ se faire refuser à un guichet, avec un document de notre main à l'appui.
 L'application n'imite aucun formulaire officiel : c'est l'attestation de
 l'organisme, sous son propre en-tête.
 
+**Prévenir la personne, pas seulement l'équipe.** Les deux listes ci-dessous
+signalaient une échéance à l'accueil ; l'intéressée, elle, n'apprenait rien — et
+découvrait le problème au refus d'un guichet. Le bouton **Prévenir** lui envoie
+un message : par courriel si elle en a un, sinon l'avis est noté sur sa fiche
+avec son numéro, à lui dire de vive voix. Les deux textes se réécrivent dans
+*Réglages → Les messages*, avec `{echeance}` et `{jours}`.
+
+Ces avis **n'entrent pas au registre du courrier** : pas de ligne d'historique,
+pas de code de retrait, rien qui compte comme du courrier reçu. Les confondre
+fausserait le rapport annuel remis à la préfecture.
+
 **Des étiquettes pour les casiers.** Le bouton **Étiquettes** — dans le registre
 et dans la liste des personnes domiciliées — sort une planche au format le plus
 répandu (63,5 × 38,1 mm, trois colonnes, 21 par feuille A4) : numéro de boîte en
@@ -981,7 +992,7 @@ tools/verifier/       vérifications de navigateur, une par défaut corrigé
 ```
 
 ```bash
-npm test     # 334 tests : utilitaires, API, comptes, domiciliation, appels, socle
+npm test     # 372 tests : utilitaires, API, comptes, domiciliation, appels, socle
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 
@@ -993,12 +1004,12 @@ Tout ce qui est calculable — règles de domiciliation, listes d'appels, bornes
 d'affichage, droits, filtrage par antenne — vit dans des modules chargeables des
 deux côtés et se teste là, vite et partout.
 
-Reste ce qui exige un écran. Sept parcours cliquent pour de vrai :
+Reste ce qui exige un écran. Huit parcours cliquent pour de vrai :
 
 ```bash
 npm i                    # installe Playwright (outillage seulement)
 npx playwright install chromium
-npm run verifier         # les sept, chacun sur son serveur et sa base
+npm run verifier         # les huit, chacun sur son serveur et sa base
 npm run verifier -- rappel   # un seul
 npm run parcours         # le parcours complet, qui s'imprime comme procédure
 ```

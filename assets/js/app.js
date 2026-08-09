@@ -2433,6 +2433,10 @@
             '<button class="link-btn" data-domifiche="' + esc(l.id) + '">Fiche</button>' +
             '<button class="link-btn" data-attestation="' + esc(l.id) + '">Attestation</button>' +
             '<button class="link-btn" data-renouveler="' + esc(l.id) + '">Renouveler</button>' +
+            /* Prévenir la personne, pas seulement le signaler à l'équipe. Le
+               sujet suit la liste : échéance d'attestation ou absence. */
+            '<button class="link-btn" data-avis="' + esc(l.id) + '" data-sujet="' +
+            (colonne === 'echeance' ? 'renouvellement' : 'absence') + '">Prévenir</button>' +
             '<button class="link-btn" data-passage="' + esc(l.id) + '">Noter un passage</button>' +
             '<button class="link-btn danger" data-clore="' + esc(l.id) + '">Clore</button>' +
             '</td></tr>'
@@ -2490,6 +2494,8 @@
     if (attestation) return impression.imprimerAttestation(attestation.dataset.attestation);
     const passage = e.target.closest('button[data-passage]');
     if (passage) return noterPassage(passage.dataset.passage, passage);
+    const avis = e.target.closest('button[data-avis]');
+    if (avis) return prevenirDomicilie(avis.dataset.avis, avis.dataset.sujet, avis);
     const renouveler = e.target.closest('button[data-renouveler]');
     if (renouveler) return renouvelerDomiciliation(renouveler.dataset.renouveler, renouveler);
     const clore = e.target.closest('button[data-clore]');
@@ -2526,6 +2532,37 @@
       if (encore) impression.imprimerAttestation(id);
     } catch (err) {
       toast('Renouvellement impossible : ' + err.message, 'error');
+      if (bouton) bouton.disabled = false;
+    }
+  }
+
+  /* Prévenir quelqu'un au sujet de sa domiciliation.
+
+     L'écran signalait les échéances à l'équipe ; l'intéressée, elle, ne savait
+     rien et l'apprenait au refus d'un guichet. Avec une adresse, le message
+     part ; sans adresse — le cas le plus fréquent ici — l'avis est noté et se
+     dira au téléphone. Rien de tout cela n'entre au registre du courrier. */
+  async function prevenirDomicilie(id, sujet, bouton) {
+    const c = S.contacts.find(function (x) {
+      return x.id === id;
+    });
+    if (!c) return;
+    if (bouton) bouton.disabled = true;
+    try {
+      const r = await store.envoyerAvis(id, sujet);
+      if (r.canal === 'courriel') {
+        toast('Message envoyé à ' + c.name + '.', 'ok');
+      } else {
+        toast(
+          c.name + ' n’a pas de courriel : avis noté, à lui dire de vive voix' +
+            (c.telephone ? ' au ' + c.telephone : '') + '.',
+          'ok'
+        );
+      }
+      await renderDomiciliation();
+    } catch (err) {
+      toast('Impossible de prévenir : ' + err.message, 'error');
+    } finally {
       if (bouton) bouton.disabled = false;
     }
   }

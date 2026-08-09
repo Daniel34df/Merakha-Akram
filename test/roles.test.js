@@ -1384,3 +1384,119 @@ test('inscrire un passage demande un droit, et respecte l’antenne', function (
     assert.equal((t.db.data.contacts[0].passages || []).length, 0, 'rien n’a été inscrit');
   });
 });
+
+/* ═══════════ prévenir une personne au sujet de sa domiciliation ═══════════
+
+   Le registre calculait deux échéances qui pèsent sur elle — son attestation
+   qui expire, son absence qui peut mettre fin à sa domiciliation — et les
+   signalait à l'équipe. L'intéressée, elle, n'était prévenue par rien, et
+   l'apprenait au refus d'un guichet. */
+
+test('un avis de domiciliation n’entre pas au registre du courrier', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const c = (await t.patron('POST', '/api/contacts', {
+      name: 'Amina Diallo', email: 'amina@ex.com',
+      domicilie: true, domicilieDepuis: '2026-01-10'
+    })).body;
+
+    const r = await t.patron('POST', '/api/contacts/' + c.id + '/avis', { sujet: 'renouvellement' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.canal, 'courriel');
+    assert.match(r.body.message.subject, /échéance/i);
+
+    /* C'est la règle qui compte : ces messages ne sont pas du courrier reçu.
+       Les confondre fausserait le rapport annuel remis à la préfecture. */
+    assert.equal(t.db.data.history.length, 0, 'aucune ligne au registre du courrier');
+    assert.equal(t.db.data.contacts[0].avis.length, 1, 'l’avis est noté sur la fiche');
+    assert.equal(t.db.data.contacts[0].avis[0].sujet, 'renouvellement');
+  });
+});
+
+test('sans courriel, l’avis est noté « à dire de vive voix »', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const c = (await t.patron('POST', '/api/contacts', {
+      name: 'Amina Diallo', telephone: '06 12 34 56 78',
+      domicilie: true, domicilieDepuis: '2026-01-10'
+    })).body;
+
+    /* Le cas le plus fréquent de ce bureau. Le geste ne doit dépendre d'aucun
+       réglage SMTP : il n'y a rien à envoyer, seulement à noter. */
+    const r = await t.patron('POST', '/api/contacts/' + c.id + '/avis', { sujet: 'absence' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.envoye, false);
+    assert.equal(r.body.canal, 'telephone');
+    assert.equal(t.db.data.contacts[0].avis[0].canal, 'telephone');
+    assert.equal(t.db.data.history.length, 0);
+  });
+});
+
+test('le message reprend l’échéance et les jours sans nouvelles', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    const c = (await t.patron('POST', '/api/contacts', {
+      name: 'Amina Diallo', email: 'amina@ex.com',
+      domicilie: true, domicilieDepuis: '2026-01-10', domicilieJusqua: '2027-01-10'
+    })).body;
+
+    const r = await t.patron('POST', '/api/contacts/' + c.id + '/avis', { sujet: 'renouvellement' });
+    assert.match(r.body.message.body, /2027/, 'l’échéance est dans le texte');
+    assert.ok(!/\{echeance\}/.test(r.body.message.body), 'la variable est remplacée');
+    assert.match(r.body.message.body, /Amina Diallo/);
+  });
+});
+
+test('le bureau peut écrire ses propres textes d’avis', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      avis: { renouvellement: { subject: 'À renouveler', body: 'Bonjour {nom}, passez nous voir.' } }
+    });
+    const c = (await t.patron('POST', '/api/contacts', {
+      name: 'Amina Diallo', email: 'amina@ex.com',
+      domicilie: true, domicilieDepuis: '2026-01-10'
+    })).body;
+
+    const r = await t.patron('POST', '/api/contacts/' + c.id + '/avis', { sujet: 'renouvellement' });
+    assert.equal(r.body.message.subject, 'À renouveler');
+    assert.equal(r.body.message.body, 'Bonjour Amina Diallo, passez nous voir.');
+  });
+});
+
+test('prévenir demande un droit, et respecte l’antenne', function () {
+  return withServer(async function (t) {
+    await t.patron('POST', '/api/auth/signup', PATRON);
+    await t.patron('PUT', '/api/settings', {
+      subject: 'S', body: 'B',
+      antennes: [{ id: 'antenne-nord', nom: 'Nord' }, { id: 'antenne-sud', nom: 'Sud' }]
+    });
+    const nord = (await t.patron('POST', '/api/contacts', {
+      name: 'Nadia Nord', email: 'nadia@ex.com', antenneId: 'antenne-nord',
+      domicilie: true, domicilieDepuis: '2026-01-10'
+    })).body;
+
+    const sansDroit = (await t.patron('POST', '/api/auth/agents', {
+      name: 'Guichet seul',
+      permissions: { guichet: true, remise: true, registre: false, domiciliation: false }
+    })).body;
+    await t.agent('POST', '/api/auth/login-code', {
+      identifiant: sansDroit.agent.identifiant, code: sansDroit.code
+    });
+    const refus = await t.agent('POST', '/api/contacts/' + nord.id + '/avis', { sujet: 'absence' });
+    assert.equal(refus.status, 403);
+
+    const duSud = (await t.patron('POST', '/api/auth/agents', {
+      name: 'Accueil Sud', antenneId: 'antenne-sud',
+      permissions: { guichet: true, domiciliation: true }
+    })).body;
+    const sud = t.session();
+    await sud('POST', '/api/auth/login-code', {
+      identifiant: duSud.agent.identifiant, code: duSud.code
+    });
+    assert.equal((await sud('POST', '/api/contacts/' + nord.id + '/avis', {})).status, 404);
+
+    assert.equal((t.db.data.contacts[0].avis || []).length, 0, 'rien n’a été noté');
+  });
+});
