@@ -77,6 +77,19 @@
   --sans:'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono:'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
 
+  /* Une échelle, pas une collection de tailles.
+     Chaque cran est un `clamp()` : le titre respire sur le 27 pouces du bureau
+     et reste lisible sur le portable qu'on emmène au guichet, sans qu'aucune
+     règle de média n'ait à le dire. Les deux derniers crans n'ont pas de borne
+     mobile — un libellé de champ ne rétrécit pas. */
+  --tx-6:clamp(28px, 1.4rem + 1.5vw, 44px);   /* le titre de l'application */
+  --tx-5:clamp(20px, 1.1rem + .5vw, 26px);    /* titres d'écran de connexion */
+  --tx-4:clamp(16px, .95rem + .3vw, 19px);    /* titres de carte */
+  --tx-3:15px;                                /* texte courant */
+  --tx-2:13px;                                /* texte second */
+  --tx-1:11px;                                /* étiquettes et pastilles */
+  --suivi-large:.08em;                        /* interlettrage des capitales */
+
   /* ── typographie et couleurs du papier — GELÉES ──
      Ne pas repeindre. Voir l'avertissement en tête de fichier. */
   --print-display:'Special Elite', 'Courier New', monospace;
@@ -102,23 +115,6 @@
   --h-reglages:#52607A;
   --teinte:var(--h-guichet);
   --teinte-vif:color-mix(in srgb, var(--teinte) 62%, white);
-
-  /* ── compatibilité ──
-     Les anciens noms, le temps que la feuille finisse d'être réécrite. Ils
-     disparaissent à l'étape suivante ; rien de neuf ne doit s'y accrocher. */
-  --navy:var(--ink);
-  --navy-hover:var(--accent);
-  --paper:var(--bg);
-  --paper-dark:var(--surface-2);
-  --brass:var(--accent-texte);
-  --slate:var(--ink-2);
-  --forest:var(--ok);
-  --rust:var(--danger);
-  --card:var(--surface);
-  --field:var(--surface-2);
-  --shadow:rgba(14,18,32,.10);
-  --serif:var(--sans);
-  --typewriter:var(--display);
 }
 
 /* Thème sombre : mêmes rôles, valeurs inversées.
@@ -259,85 +255,160 @@ body::before{
   box-shadow:0 0 0 4px color-mix(in srgb, var(--a1) 22%, transparent);
 }
 input:focus-visible, textarea:focus-visible{outline-offset:1px;}
-.wrap{max-width:960px;margin:0 auto;padding:32px 24px 80px;}
+.wrap{max-width:1080px;margin:0 auto;padding:36px 24px 96px;}
 
 /* ---------- en-tête ---------- */
 header{
+  position:relative;
   display:flex;
   justify-content:space-between;
   align-items:flex-end;
-  gap:16px;
-  border-bottom:3px double var(--navy);
-  padding-bottom:16px;
-  margin-bottom:28px;
+  gap:20px;
+  padding-bottom:22px;
+  margin-bottom:26px;
+}
+/* Le filet double d'imprimerie a laissé la place à un trait dégradé qui
+   s'éteint : la page commence par une couleur, pas par une règle. */
+header::after{
+  content:'';
+  position:absolute;
+  left:0;right:0;bottom:0;
+  height:2px;
+  border-radius:2px;
+  background:linear-gradient(90deg, var(--a1), var(--a2) 45%, transparent);
 }
 header h1{
-  font-family:var(--typewriter);
-  font-size:28px;
-  letter-spacing:0.5px;
-  margin:0 0 6px;
+  font-family:var(--display);
+  font-size:var(--tx-6);
+  font-weight:800;
+  letter-spacing:-.02em;
+  line-height:1.05;
+  margin:0 0 4px;
+  /* Le titre porte le dégradé de l'accent. C'est le seul endroit de
+     l'application où le texte est peint : ailleurs, la couleur reste derrière
+     les mots. */
+  background:linear-gradient(100deg, var(--ink) 0%, var(--accent) 55%, var(--accent-2) 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
 }
-header p{margin:0;color:var(--slate);font-size:14px;font-style:italic;}
-.brand{display:flex;align-items:center;gap:14px;}
+header p{margin:0;color:var(--ink-2);font-size:var(--tx-2);}
+.brand{display:flex;align-items:center;gap:16px;}
 .brand-logo{
-  width:52px;
-  height:52px;
+  width:54px;
+  height:54px;
   flex:0 0 auto;
   object-fit:contain;
+  filter:drop-shadow(0 4px 12px rgba(67,56,202,.22));
 }
-.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
-.header-badges{display:flex;align-items:center;gap:8px;}
-.install-btn{padding:5px 10px;font-size:10px;}
+.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+.header-badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+.install-btn{padding:6px 12px;font-size:var(--tx-1);}
 .date-stamp{
   font-family:var(--mono);
-  font-size:12px;
-  color:var(--slate);
+  font-size:var(--tx-2);
+  color:var(--ink-2);
   text-align:right;
   border:1px solid var(--line);
-  padding:6px 10px;
-  background:var(--paper-dark);
+  border-radius:999px;
+  padding:6px 14px;
+  background:var(--surface);
+  box-shadow:var(--ombre-1);
 }
+/* Les pastilles d'état : une teinte diluée en fond, la même en trait et en
+   texte. Trois façons de dire la même chose, dont deux survivent au daltonisme
+   et à l'impression en noir et blanc. */
 .mode-badge{
   font-family:var(--mono);
-  font-size:10px;
+  font-size:var(--tx-1);
   text-transform:uppercase;
-  letter-spacing:0.5px;
-  padding:3px 8px;
-  border:1px solid var(--slate);
-  color:var(--slate);
-  background:transparent;
+  letter-spacing:var(--suivi-large);
+  padding:4px 11px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--ink-2) 45%, transparent);
+  color:var(--ink-2);
+  background:color-mix(in srgb, var(--ink-2) 10%, transparent);
   cursor:help;
 }
-.mode-badge.server{border-color:var(--forest);color:var(--forest);}
-.mode-badge.local{border-color:var(--brass);color:var(--brass);}
-.mode-badge.memory{border-color:var(--rust);color:var(--rust);}
+.mode-badge.server{
+  border-color:color-mix(in srgb, var(--ok) 50%, transparent);
+  color:var(--ok);
+  background:var(--ok-wash);
+}
+.mode-badge.local{
+  border-color:color-mix(in srgb, var(--warn) 55%, transparent);
+  color:var(--warn);
+  background:var(--warn-wash);
+}
+.mode-badge.memory{
+  border-color:color-mix(in srgb, var(--danger) 55%, transparent);
+  color:var(--danger);
+  background:var(--danger-wash);
+}
 
-/* ---------- navigation ---------- */
-nav{display:flex;gap:2px;margin-bottom:24px;}
-nav button{
-  flex:1;
-  font-family:var(--typewriter);
-  font-size:13px;
-  letter-spacing:0.5px;
-  padding:12px;
-  background:var(--paper-dark);
+/* ---------- navigation ----------
+   Six pastilles dans une gouttière, et non six boutons juxtaposés. L'onglet
+   ouvert n'est plus un aplat sombre : c'est une surface qui remonte, sous un
+   soulignement de la couleur de l'onglet. La teinte porte l'information, la
+   graisse la double — les deux se lisent aussi en noir et blanc. */
+nav{
+  position:relative;
+  display:flex;
+  gap:4px;
+  margin-bottom:28px;
+  padding:5px;
+  border-radius:var(--r3);
+  background:var(--surface-2);
   border:1px solid var(--line);
-  color:var(--slate);
+}
+nav button{
+  position:relative;
+  flex:1;
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  font-weight:600;
+  letter-spacing:.01em;
+  padding:11px 10px 13px;
+  background:transparent;
+  border:none;
+  border-radius:calc(var(--r3) - 6px);
+  color:var(--ink-2);
   cursor:pointer;
-  text-transform:uppercase;
+  white-space:nowrap;
 }
-nav button{transition:background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;}
-nav button:hover{color:var(--navy);background:var(--line);}
+nav button:hover{color:var(--ink);background:color-mix(in srgb, var(--ink) 6%, transparent);}
 nav button.active{
-  background:var(--navy);
-  color:var(--paper);
-  border-color:var(--navy);
+  background:var(--surface);
+  color:var(--ink);
+  font-weight:700;
+  box-shadow:var(--ombre-1);
 }
+/* Chaque onglet apporte sa teinte, et l'onglet ouvert la donne à la page
+   entière : c'est `--teinte` que reprennent le filet des cartes et le
+   soulignement mobile. */
+nav button[data-panel="guichet"],   #panel-guichet{--teinte:var(--h-guichet);}
+nav button[data-panel="remise"],    #panel-remise{--teinte:var(--h-remise);}
+nav button[data-panel="registre"],  #panel-registre{--teinte:var(--h-registre);}
+nav button[data-panel="suivi"],     #panel-suivi{--teinte:var(--h-suivi);}
+nav button[data-panel="domiciliation"], #panel-domiciliation{--teinte:var(--h-domiciliation);}
+nav button[data-panel="reglages"],  #panel-reglages{--teinte:var(--h-reglages);}
+
 .tab-count{
+  display:inline-block;
   font-family:var(--mono);
-  font-size:10px;
-  opacity:0.7;
-  margin-left:2px;
+  font-size:var(--tx-1);
+  font-weight:500;
+  line-height:1;
+  padding:3px 7px;
+  margin-left:6px;
+  border-radius:999px;
+  background:color-mix(in srgb, var(--ink-2) 15%, transparent);
+  color:var(--ink-2);
+  vertical-align:1px;
+}
+nav button.active .tab-count{
+  background:color-mix(in srgb, var(--teinte) 18%, transparent);
+  color:var(--teinte);
 }
 
 .panel{display:none;}
@@ -369,25 +440,39 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
 
 /* ---------- cartes ---------- */
 .card{
-  background:var(--card);
-  box-shadow:0 1px 2px var(--shadow);
-  border:1px solid var(--line);
-  padding:24px;
-  margin-bottom:20px;
   position:relative;
+  background:var(--surface);
+  box-shadow:var(--ombre-2);
+  border:1px solid var(--line);
+  border-radius:var(--r2);
+  padding:26px 28px;
+  margin-bottom:22px;
+  overflow:hidden;
+}
+/* Un filet de la couleur de l'onglet, en haut de chaque carte. Il ne se voit
+   pas vraiment ; il se remarque quand on change d'écran, et c'est tout ce
+   qu'on lui demande. */
+.card::before{
+  content:'';
+  position:absolute;
+  inset:0 0 auto 0;
+  height:3px;
+  background:linear-gradient(90deg, var(--teinte), var(--teinte-vif) 60%, transparent);
+  opacity:.9;
 }
 /* Une carte qui signale un risque, pas un réglage. Le filet à gauche la
    distingue au premier coup d'œil dans une colonne de cartes identiques —
    sans clignoter ni réclamer un clic pour disparaître : elle doit rester là
    tant que la cause est là. Les deux teintes existent en clair et en sombre. */
 .alerte-securite{
-  border-color:var(--rust);
-  border-left:4px solid var(--rust);
+  border-color:color-mix(in srgb, var(--danger) 45%, transparent);
   background:var(--danger-wash);
+  box-shadow:var(--ombre-2), inset 4px 0 0 var(--danger);
 }
-.alerte-securite h2{color:var(--rust);}
+.alerte-securite::before{background:var(--danger);opacity:1;}
+.alerte-securite h2{color:var(--danger);}
 .alerte-securite code{
-  font-family:var(--typewriter);
+  font-family:var(--mono);
   font-weight:600;
   white-space:nowrap;
 }
@@ -482,13 +567,16 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
 }
 .attest-code{margin:26px 0 10px;text-align:center;}
 
+/* Les titres de carte ne crient plus en capitales espacées. Ce sont des titres
+   lus des dizaines de fois par jour : la graisse suffit à les distinguer, et
+   le bas-de-casse se lit plus vite. */
 .card h2{
-  font-family:var(--typewriter);
-  font-size:15px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  margin:0 0 18px;
-  color:var(--navy);
+  font-family:var(--display);
+  font-size:var(--tx-4);
+  font-weight:700;
+  letter-spacing:-.01em;
+  margin:0 0 20px;
+  color:var(--ink);
 }
 .card-head{
   display:flex;
@@ -503,102 +591,149 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
 /* ---------- formulaires ---------- */
 label{
   display:block;
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--slate);
-  margin-bottom:6px;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  letter-spacing:0;
+  text-transform:none;
+  color:var(--ink-2);
+  margin-bottom:7px;
 }
-input[type=text], input[type=email], input[type=date], textarea{
+input[type=text], input[type=email], input[type=date], input[type=password], textarea, select{
   width:100%;
-  font-family:var(--serif);
-  font-size:16px;
-  padding:10px 12px;
-  border:1px solid var(--line);
-  background:var(--field);
-  color:var(--navy);
+  font-family:var(--sans);
+  font-size:var(--tx-3);
+  padding:11px 14px;
+  border:1px solid var(--bord);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  color:var(--ink);
   margin-bottom:16px;
+  transition:border-color var(--t1) var(--sortie), background-color var(--t1) var(--sortie), box-shadow var(--t1) var(--sortie);
 }
-textarea{font-family:var(--mono);font-size:13.5px;line-height:1.6;resize:vertical;}
-input:focus, textarea:focus{outline:2px solid var(--brass);outline-offset:1px;}
-input.invalid{border-color:var(--rust);background:var(--danger-wash);}
+input::placeholder, textarea::placeholder{color:var(--ink-2);opacity:.7;}
+textarea{font-family:var(--mono);font-size:var(--tx-2);line-height:1.65;resize:vertical;}
+/* Un champ qu'on remplit s'éclaire : il passe de creux à clair, avec un halo
+   d'accent. C'est le seul retour visuel que reçoit quelqu'un qui saisit
+   quarante fiches dans la journée. */
+input:focus, textarea:focus, select:focus{
+  outline:none;
+  border-color:var(--a1);
+  background:var(--surface);
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--a1) 16%, transparent);
+}
+input.invalid{border-color:var(--danger);background:var(--danger-wash);}
+input.invalid:focus{box-shadow:0 0 0 4px color-mix(in srgb, var(--danger) 18%, transparent);}
 .filter-input{
   width:auto;
-  font-size:13px;
-  padding:7px 10px;
+  font-size:var(--tx-2);
+  padding:8px 12px;
   margin-bottom:0;
-  background:var(--card);
+  background:var(--surface);
 }
-.hint{font-size:12px;color:var(--slate);font-style:italic;margin:0;}
+.hint{font-size:var(--tx-2);color:var(--ink-2);margin:0;}
 .hint code{
   font-family:var(--mono);
-  font-size:11.5px;
-  font-style:normal;
-  background:var(--paper-dark);
-  padding:1px 5px;
+  font-size:var(--tx-1);
+  background:var(--surface-2);
+  padding:2px 6px;
+  border-radius:5px;
   border:1px solid var(--line);
 }
 
 /* ---------- boutons ---------- */
 .btn{
-  font-family:var(--typewriter);
-  font-size:13px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  padding:11px 22px;
-  border:1px solid var(--navy);
-  background:var(--navy);
-  color:var(--paper);
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  font-weight:700;
+  letter-spacing:0;
+  text-transform:none;
+  padding:11px 20px;
+  border:1px solid transparent;
+  border-radius:var(--r1);
+  background:linear-gradient(135deg, var(--accent), var(--accent-2));
+  color:#fff;
   cursor:pointer;
   white-space:nowrap;
-  transition:background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  box-shadow:var(--ombre-1);
+  transition:transform var(--t1) var(--sortie), box-shadow var(--t2) var(--sortie),
+             filter var(--t1) var(--sortie), background-color var(--t1) var(--sortie),
+             color var(--t1) var(--sortie), border-color var(--t1) var(--sortie);
 }
-.btn:active:not(:disabled){transform:translateY(1px);}
-.btn:hover{background:var(--navy-hover);}
-.btn.ghost{background:transparent;color:var(--navy);}
-.btn.ghost:hover{background:var(--paper-dark);}
-.btn.rust{background:var(--rust);border-color:var(--rust);color:#fff;}
-.btn.rust:hover{background:#8F3826;}
-.btn.small{font-size:11px;padding:7px 12px;}
-.btn.ghost.danger{color:var(--rust);border-color:var(--rust);}
-.btn.ghost.danger:hover{background:var(--danger-wash);}
-.btn:disabled{opacity:0.45;cursor:not-allowed;}
+.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:var(--ombre-accent);filter:saturate(1.1);}
+.btn:active:not(:disabled){transform:translateY(1px);box-shadow:var(--ombre-1);}
+.btn.ghost{
+  background:var(--surface);
+  color:var(--ink);
+  border-color:var(--bord);
+  box-shadow:none;
+}
+.btn.ghost:hover:not(:disabled){
+  background:var(--surface-2);
+  border-color:var(--a1);
+  color:var(--accent-texte);
+  box-shadow:var(--ombre-1);
+}
+.btn.rust{background:linear-gradient(135deg, #BE123C, #E11D48);border-color:transparent;color:#fff;}
+.btn.rust:hover:not(:disabled){box-shadow:0 6px 20px rgba(190,18,60,.3);}
+.btn.small{font-size:var(--tx-1);padding:8px 13px;border-radius:7px;}
+.btn.ghost.danger{color:var(--danger);border-color:color-mix(in srgb, var(--danger) 55%, transparent);}
+.btn.ghost.danger:hover:not(:disabled){background:var(--danger-wash);color:var(--danger);border-color:var(--danger);}
+.btn:disabled{opacity:0.45;cursor:not-allowed;box-shadow:none;}
 .row-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
 .row-actions.end{justify-content:flex-end;}
 
 /* ---------- guichet ---------- */
-.search-modes{display:flex;gap:2px;margin-bottom:16px;max-width:360px;}
+/* Même vocabulaire que la navigation : une gouttière, des pastilles, celle qui
+   est choisie remonte. Rien de nouveau à apprendre d'un écran à l'autre. */
+.search-modes{
+  display:flex;
+  gap:4px;
+  margin-bottom:18px;
+  max-width:380px;
+  padding:4px;
+  border-radius:var(--r2);
+  background:var(--surface-2);
+  border:1px solid var(--line);
+}
 .search-modes button{
   flex:1;
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  padding:9px 10px;
-  background:var(--paper-dark);
-  border:1px solid var(--line);
-  color:var(--slate);
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  padding:9px 12px;
+  background:transparent;
+  border:none;
+  border-radius:calc(var(--r2) - 5px);
+  color:var(--ink-2);
   cursor:pointer;
-  transition:background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie), box-shadow var(--t1) var(--sortie);
 }
-.search-modes button:hover{color:var(--navy);}
-.search-modes button.active{background:var(--navy);color:var(--paper);border-color:var(--navy);}
+.search-modes button:hover{color:var(--ink);}
+.search-modes button.active{
+  background:var(--surface);
+  color:var(--ink);
+  font-weight:700;
+  box-shadow:var(--ombre-1);
+}
 
 /* Numéro de boîte : une étiquette compacte, lisible d'un coup d'œil. */
 .box-tag{
   display:inline-block;
   font-family:var(--mono);
-  font-size:11px;
+  font-size:var(--tx-1);
   font-style:normal;
-  letter-spacing:0.5px;
-  padding:2px 7px;
-  margin-right:6px;
-  border:1px solid var(--brass);
-  color:var(--brass);
+  font-weight:600;
+  letter-spacing:.04em;
+  padding:3px 9px;
+  margin-right:7px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--accent-texte) 35%, transparent);
+  background:color-mix(in srgb, var(--accent-texte) 10%, transparent);
+  color:var(--accent-texte);
   vertical-align:1px;
 }
-td.box-cell{font-family:var(--mono);font-size:12.5px;color:var(--slate);white-space:nowrap;}
+td.box-cell{font-family:var(--mono);font-size:var(--tx-2);color:var(--ink-2);white-space:nowrap;}
 
 .search-field{position:relative;}
 .suggestions{
@@ -607,40 +742,46 @@ td.box-cell{font-family:var(--mono);font-size:12.5px;color:var(--slate);white-sp
   left:0;right:0;
   margin:0;padding:0;
   list-style:none;
-  background:var(--card);
-  border:1px solid var(--navy);
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r2);
   z-index:20;
-  max-height:230px;
-  overflow-y:auto;
-  box-shadow:0 8px 18px rgba(22,35,63,0.18);
+  max-height:260px;
+  overflow:hidden auto;
+  box-shadow:var(--ombre-3);
+  padding:5px;
 }
 .suggestions li{
-  padding:9px 12px;
+  padding:10px 12px;
+  border-radius:var(--r1);
   cursor:pointer;
-  font-size:15px;
-  border-bottom:1px solid var(--line);
+  font-size:var(--tx-3);
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie);
 }
-.suggestions li:last-child{border-bottom:none;}
-.suggestions li:hover, .suggestions li.highlight{background:var(--paper-dark);}
+.suggestions li:hover, .suggestions li.highlight{
+  background:color-mix(in srgb, var(--a1) 12%, transparent);
+  color:var(--accent-texte);
+}
 .suggestions li span{
   display:block;
   font-family:var(--mono);
-  font-size:11.5px;
-  color:var(--slate);
-  margin-top:2px;
+  font-size:var(--tx-1);
+  color:var(--ink-2);
+  margin-top:3px;
 }
 .result-row{
   display:flex;
   justify-content:space-between;
   align-items:center;
   gap:12px;
-  padding:12px 14px;
+  padding:14px 16px;
   border:1px solid var(--line);
-  margin-bottom:8px;
-  background:var(--paper);
+  border-radius:var(--r1);
+  margin-bottom:10px;
+  background:var(--surface-2);
 }
-.result-row .who{font-size:15px;}
-.result-row .who span{display:block;font-family:var(--mono);font-size:12px;color:var(--slate);margin-top:2px;}
+.result-row .who{font-size:var(--tx-3);font-weight:600;}
+.result-row .who span{display:block;font-family:var(--mono);font-size:var(--tx-2);font-weight:400;color:var(--ink-2);margin-top:3px;}
 
 /* ---------- écran de connexion ---------- */
 /* display:flex l'emporterait sur le display:none implicite de [hidden] :
@@ -649,7 +790,7 @@ td.box-cell{font-family:var(--mono);font-size:12.5px;color:var(--slate);white-sp
 .gate{
   position:fixed;
   inset:0;
-  background:var(--paper);
+  background:var(--bg);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -657,71 +798,88 @@ td.box-cell{font-family:var(--mono);font-size:12.5px;color:var(--slate);white-sp
   z-index:80;
   overflow-y:auto;
 }
-.gate-card{
-  background:var(--card);
-  box-shadow:0 6px 30px var(--shadow);
-  border:1px solid var(--line);
-  padding:28px;
-  width:100%;
-  max-width:420px;
+/* La lueur d'accent revient ici, plus franche : l'écran d'entrée est une page
+   vide, et c'est la seule chose qui l'habite. */
+.gate::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity:calc(var(--lueur) * 2.2);
+  background:
+    radial-gradient(50% 45% at 20% 15%, var(--a1) 0%, transparent 60%),
+    radial-gradient(45% 45% at 82% 80%, var(--a2) 0%, transparent 60%);
 }
-.gate-head{display:flex;align-items:center;gap:14px;margin-bottom:22px;}
-.gate-head h1{font-family:var(--typewriter);font-size:20px;margin:0 0 4px;}
-.gate-head p{margin:0;color:var(--slate);font-size:13px;font-style:italic;}
-.gate-head .brand-logo{width:46px;height:46px;}
+.gate-card{
+  position:relative;
+  background:var(--surface);
+  box-shadow:var(--ombre-3);
+  border:1px solid var(--line);
+  border-radius:var(--r3);
+  padding:32px;
+  width:100%;
+  max-width:440px;
+}
+.gate-head{display:flex;align-items:center;gap:16px;margin-bottom:24px;}
+.gate-head h1{font-family:var(--display);font-size:var(--tx-5);font-weight:800;letter-spacing:-.02em;margin:0 0 4px;}
+.gate-head p{margin:0;color:var(--ink-2);font-size:var(--tx-2);}
+.gate-head .brand-logo{width:48px;height:48px;}
 /* Même piège que .gate : display:flex l'emporterait sur [hidden]. */
 .gate-tabs[hidden]{display:none;}
-.gate-tabs{display:flex;gap:2px;margin-bottom:20px;}
+.gate-tabs{
+  display:flex;
+  gap:4px;
+  margin-bottom:22px;
+  padding:4px;
+  border-radius:var(--r2);
+  background:var(--surface-2);
+  border:1px solid var(--line);
+}
 .gate-tabs button{
   flex:1;
-  font-family:var(--typewriter);
-  font-size:12px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  padding:10px;
-  background:var(--paper-dark);
-  border:1px solid var(--line);
-  color:var(--slate);
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  padding:10px 8px;
+  background:transparent;
+  border:none;
+  border-radius:calc(var(--r2) - 5px);
+  color:var(--ink-2);
   cursor:pointer;
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie), box-shadow var(--t1) var(--sortie);
 }
-.gate-tabs button.active{background:var(--navy);color:var(--paper);border-color:var(--navy);}
+.gate-tabs button:hover{color:var(--ink);}
+.gate-tabs button.active{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:var(--ombre-1);}
 .gate-form .btn{width:100%;margin-top:4px;}
 .gate-form .hint{margin:-8px 0 14px;}
 /* La marge négative ci-dessus sert à rapprocher l'aide d'un champ ; sous un
    résumé dépliant, elle ferait chevaucher les deux lignes. */
 .gate-form details .hint{margin:10px 0 14px;}
 .gate-form details summary{
-  font-family:var(--typewriter);
-  font-size:12.5px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  font-weight:600;
   cursor:pointer;
   margin-bottom:4px;
 }
-input[type=password]{
-  width:100%;
-  font-family:var(--serif);
-  font-size:16px;
-  padding:10px 12px;
-  border:1px solid var(--line);
-  background:var(--paper);
-  color:var(--navy);
-  margin-bottom:16px;
-}
-.verify-lead{font-size:13.5px;line-height:1.5;margin:0 0 16px;}
+.verify-lead{font-size:var(--tx-3);line-height:1.6;margin:0 0 18px;color:var(--ink-2);}
+.verify-lead strong{color:var(--ink);}
+/* Un code qu'on dicte au téléphone ou qu'on recopie d'un papier : chiffres
+   détachés, grande taille, rien qui puisse se confondre. */
 .code-input{
   font-family:var(--mono);
   font-size:26px;
+  font-weight:600;
   letter-spacing:10px;
   text-align:center;
-  padding:12px;
+  padding:14px 12px;
 }
 .who-badge{
   font-family:var(--mono);
-  font-size:10px;
+  font-size:var(--tx-1);
   text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--slate);
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
 }
 
 /* ---------- choix du registre ---------- */
@@ -731,50 +889,53 @@ input[type=password]{
   gap:12px;
   align-items:flex-start;
   border:1px solid var(--line);
-  background:var(--paper);
+  background:var(--surface);
   padding:14px 16px;
   cursor:pointer;
   text-transform:none;
   letter-spacing:0;
-  font-family:var(--serif);
+  font-family:var(--sans);
   font-size:14px;
-  color:var(--navy);
+  color:var(--ink);
   margin-bottom:0;
   transition:border-color 0.15s ease, background-color 0.15s ease;
 }
-.registry-choice .choice:hover{border-color:var(--brass);}
-.registry-choice input{margin-top:3px;accent-color:var(--navy);flex:0 0 auto;}
+.registry-choice .choice:hover{border-color:var(--accent-texte);}
+.registry-choice input{margin-top:3px;accent-color:var(--ink);flex:0 0 auto;}
 .registry-choice b{
   display:block;
-  font-family:var(--typewriter);
+  font-family:var(--display);
   font-size:13px;
   text-transform:uppercase;
   letter-spacing:0.5px;
   margin-bottom:4px;
 }
 .registry-choice span{line-height:1.5;}
-.registry-choice .choice:has(input:checked){border-color:var(--navy);background:var(--paper-dark);}
+.registry-choice .choice:has(input:checked){
+  border-color:var(--a1);
+  background:color-mix(in srgb, var(--a1) 8%, var(--surface));
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--a1) 14%, transparent);
+}
 
 /* ---------- boîte d'envoi personnelle ---------- */
 .mailbox-option{
   border:1px solid var(--line);
-  padding:16px;
+  border-radius:var(--r1);
+  padding:18px;
   margin-bottom:14px;
-  background:var(--paper);
+  background:var(--surface-2);
 }
 .mailbox-option h3{
-  font-family:var(--typewriter);
-  font-size:13px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
+  font-family:var(--display);
+  font-size:var(--tx-3);
+  font-weight:700;
   margin:0 0 8px;
 }
-.mailbox-option p{margin:0 0 12px;font-size:13.5px;line-height:1.5;}
+.mailbox-option p{margin:0 0 12px;font-size:var(--tx-2);line-height:1.6;color:var(--ink-2);}
 .mailbox-option summary{
-  font-family:var(--typewriter);
-  font-size:13px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  font-weight:600;
   cursor:pointer;
   margin-bottom:10px;
 }
@@ -786,23 +947,22 @@ input[type=password]{
   padding-top:14px;
 }
 .copies summary{
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--slate);
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
   cursor:pointer;
   list-style:none;
+  transition:color var(--t1) var(--sortie);
 }
 .copies summary::-webkit-details-marker{display:none;}
-.copies summary::before{content:'▸ ';}
-.copies[open] summary::before{content:'▾ ';}
-.copies summary:hover{color:var(--navy);}
+.copies summary::before{content:'▸ ';display:inline-block;transition:transform var(--t1) var(--sortie);}
+.copies[open] summary::before{transform:rotate(90deg);}
+.copies summary:hover{color:var(--accent-texte);}
 .copies-state{
-  font-size:10px;
-  color:var(--brass);
-  text-transform:none;
-  letter-spacing:0;
+  font-size:var(--tx-1);
+  color:var(--accent-texte);
+  font-weight:600;
 }
 .copies-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;}
 @media (max-width:720px){
@@ -812,78 +972,113 @@ input[type=password]{
 /* ---------- messages ---------- */
 .empty{
   text-align:center;
-  padding:30px 10px;
-  color:var(--slate);
-  font-style:italic;
+  padding:36px 14px;
+  color:var(--ink-2);
+  font-size:var(--tx-3);
 }
+/* Trois couleurs, trois sens, et le fond les dit autant que le filet : un
+   message d'erreur ne doit pas se distinguer d'un message de succès par un
+   trait de quatre pixels sur le côté. */
 .msg{
-  padding:12px 14px;
-  border-radius:0 2px 2px 0;
-  border-left:4px solid var(--brass);
-  background:var(--paper-dark);
+  padding:13px 16px;
+  border-radius:var(--r1);
+  border:1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-left:4px solid var(--warn);
+  background:var(--warn-wash);
+  color:var(--ink);
   margin-bottom:16px;
-  font-size:14px;
-  line-height:1.5;
+  font-size:var(--tx-2);
+  line-height:1.6;
 }
 .msg:last-child{margin-bottom:0;}
-.msg.error{border-color:var(--rust);}
-.msg.ok{border-color:var(--forest);}
+.msg.error{
+  border-color:color-mix(in srgb, var(--danger) 32%, transparent);
+  border-left-color:var(--danger);
+  background:var(--danger-wash);
+}
+.msg.ok{
+  border-color:color-mix(in srgb, var(--ok) 32%, transparent);
+  border-left-color:var(--ok);
+  background:var(--ok-wash);
+}
 .msg ul{margin:8px 0 0;padding-left:20px;}
-.msg a{color:var(--navy);font-weight:600;}
+.msg a{color:var(--accent-texte);font-weight:600;}
 
 /* ---------- tableaux ---------- */
-.table-scroll{overflow-x:auto;max-height:60vh;overflow-y:auto;}
-table{width:100%;border-collapse:collapse;font-size:14px;}
-th{
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--slate);
-  text-align:left;
-  padding:8px 6px;
-  border-bottom:2px solid var(--navy);
-  white-space:nowrap;
+.table-scroll{
+  overflow:auto;
+  max-height:62vh;
+  border:1px solid var(--line);
+  border-radius:var(--r1);
 }
-th{position:sticky;top:0;background:var(--card);z-index:1;}
-tbody tr{transition:background-color 0.12s ease;}
-tbody tr:hover{background:var(--paper-dark);}
-td{padding:10px 6px;border-bottom:1px solid var(--line);vertical-align:middle;}
+table{width:100%;border-collapse:collapse;font-size:var(--tx-2);}
+th{
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+  text-align:left;
+  padding:10px;
+  border-bottom:1px solid var(--line);
+  white-space:nowrap;
+  position:sticky;
+  top:0;
+  background:var(--surface-2);
+  z-index:1;
+}
+td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 td.actions{text-align:right;white-space:nowrap;}
 td.copies-cell{
   font-family:var(--mono);
-  font-size:11.5px;
-  color:var(--slate);
+  font-size:var(--tx-1);
+  color:var(--ink-2);
   max-width:220px;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
 }
-td input{margin-bottom:0;font-size:14px;padding:6px 8px;}
+td input{margin-bottom:0;font-size:var(--tx-2);padding:7px 10px;}
+/* Les actions de ligne : discrètes tant qu'on ne les vise pas, franches
+   ensuite. Pas de soulignement permanent — sur huit colonnes de liens
+   soulignés, la ligne devient illisible. */
 .link-btn{
-  background:none;border:none;
-  font-family:var(--mono);
-  font-size:11px;color:var(--slate);cursor:pointer;text-decoration:underline;
-  padding:2px 4px;
+  background:none;
+  border:1px solid transparent;
+  border-radius:6px;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
+  cursor:pointer;
+  text-decoration:none;
+  padding:4px 8px;
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie);
 }
-.link-btn:hover{color:var(--navy);}
-.link-btn.danger{color:var(--rust);}
-.add-form{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;}
-.add-form label{margin-bottom:6px;}
-.add-form .btn{height:44px;margin-bottom:16px;}
+.link-btn:hover{color:var(--accent-texte);background:color-mix(in srgb, var(--a1) 12%, transparent);}
+.link-btn.danger{color:var(--danger);}
+.link-btn.danger:hover{color:var(--danger);background:var(--danger-wash);}
+.add-form{display:grid;grid-template-columns:1fr 1fr auto;gap:14px;align-items:end;}
+.add-form label{margin-bottom:7px;}
+.add-form .btn{height:46px;margin-bottom:16px;}
 
 .status-pill{
-  font-family:var(--mono);
-  font-size:10px;
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:600;
   text-transform:uppercase;
-  padding:3px 8px;
-  border:1px solid var(--forest);
-  color:var(--forest);
+  letter-spacing:.04em;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+  background:var(--ok-wash);
+  color:var(--ok);
   white-space:nowrap;
 }
-.status-pill.manual{border-color:var(--brass);color:var(--brass);}
-.status-pill.failed{border-color:var(--rust);color:var(--rust);}
+.status-pill.manual{border-color:var(--accent-texte);color:var(--accent-texte);}
+.status-pill.failed{border-color:var(--danger);color:var(--danger);}
 
 /* ---------- réglages ---------- */
 .preview{
@@ -891,49 +1086,62 @@ td input{margin-bottom:0;font-size:14px;padding:6px 8px;}
   font-family:var(--mono);
   font-size:12.5px;
   line-height:1.6;
-  background:var(--paper);
+  background:var(--surface-2);
   border:1px solid var(--line);
   padding:12px;
   margin:0;
 }
-.status-list{margin:0 0 16px;font-size:14px;}
+.status-list{margin:0 0 16px;font-size:var(--tx-2);}
 .status-list div{
   display:flex;
   justify-content:space-between;
   gap:16px;
-  padding:9px 0;
+  padding:11px 0;
   border-bottom:1px solid var(--line);
 }
 .status-list div:last-child{border-bottom:none;}
-.status-list dt{font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--slate);letter-spacing:0.5px;}
-.status-list dd{margin:0;text-align:right;}
+.status-list dt{
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  text-transform:none;
+  color:var(--ink-2);
+  letter-spacing:0;
+}
+.status-list dd{margin:0;text-align:right;font-weight:600;}
 
-/* ---------- tampon ---------- */
+/* ---------- tampon ----------
+   Le seul moment franchement joyeux de la journée : le courrier est parti.
+   Il garde sa forme de cachet — c'est un geste de bureau, et il est compris
+   sans légende — mais il prend la couleur de l'accent et un vrai rebond. */
 .stamp-overlay{
   position:fixed;inset:0;
   display:flex;align-items:center;justify-content:center;
-  background:rgba(22,35,63,0.35);
+  background:var(--voile);
+  backdrop-filter:blur(3px);
   z-index:50;
   opacity:0;pointer-events:none;
-  transition:opacity 0.15s ease;
+  transition:opacity var(--t2) var(--sortie);
 }
 .stamp-overlay.show{opacity:1;}
 .stamp{
-  width:190px;height:190px;
-  border:6px solid var(--rust);
+  width:200px;height:200px;
+  border:6px solid var(--accent-2);
   border-radius:50%;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  color:var(--rust);
-  font-family:var(--typewriter);
-  font-size:20px;
-  letter-spacing:1px;
+  color:var(--accent-2);
+  font-family:var(--display);
+  font-size:21px;
+  font-weight:800;
+  letter-spacing:.02em;
   text-transform:uppercase;
   text-align:center;
-  padding:12px;
+  padding:14px;
   background:var(--stamp-bg);
   transform:scale(2.2) rotate(-18deg);
   opacity:0;
-  box-shadow:0 0 0 3px rgba(168,67,46,0.15) inset;
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--accent-2) 18%, transparent) inset,
+             0 18px 50px rgba(0,0,0,.28);
 }
 .stamp-overlay.show .stamp{animation:stampDown 0.45s cubic-bezier(.2,.9,.3,1.3) forwards;}
 @keyframes stampDown{
@@ -941,62 +1149,82 @@ td input{margin-bottom:0;font-size:14px;padding:6px 8px;}
   60%{transform:scale(0.92) rotate(-12deg);opacity:1;}
   100%{transform:scale(1) rotate(-12deg);opacity:1;}
 }
-.stamp small{display:block;font-size:11px;margin-top:6px;font-family:var(--mono);letter-spacing:0;line-height:1.4;}
+.stamp small{
+  display:block;
+  font-size:var(--tx-1);
+  font-weight:500;
+  margin-top:7px;
+  font-family:var(--mono);
+  letter-spacing:0;
+  line-height:1.45;
+  text-transform:none;
+  color:var(--ink-2);
+}
 
 /* ---------- notifications éphémères ---------- */
 .toasts{
   position:fixed;
-  right:20px;bottom:20px;
-  display:flex;flex-direction:column;gap:8px;
+  right:22px;bottom:22px;
+  display:flex;flex-direction:column;gap:10px;
   z-index:60;
-  max-width:340px;
+  max-width:360px;
 }
 .toast{
-  background:var(--navy);
-  color:var(--paper);
-  border-left:4px solid var(--brass);
-  padding:12px 14px;
-  font-size:13.5px;
-  box-shadow:0 6px 20px rgba(22,35,63,0.25);
-  animation:toastIn 0.2s ease;
+  background:var(--ink);
+  color:var(--bg);
+  border-radius:var(--r1);
+  border-left:4px solid var(--a1);
+  padding:13px 16px;
+  font-size:var(--tx-2);
+  font-weight:500;
+  box-shadow:var(--ombre-3);
 }
-.toast.ok{border-left-color:var(--forest);}
-.toast.error{border-left-color:var(--rust);}
-@keyframes toastIn{from{opacity:0;transform:translateX(12px);}to{opacity:1;transform:none;}}
+.toast.ok{border-left-color:var(--ok-vif);}
+.toast.error{border-left-color:var(--danger-vif);}
 
 /* ---------- dialogue de confirmation ---------- */
 dialog{
-  border:1px solid var(--navy);
-  background:var(--paper);
-  color:var(--navy);
-  padding:24px;
-  max-width:420px;
-  font-family:var(--serif);
+  border:1px solid var(--line);
+  border-radius:var(--r3);
+  background:var(--surface);
+  color:var(--ink);
+  padding:28px;
+  max-width:440px;
+  font-family:var(--sans);
+  box-shadow:var(--ombre-3);
 }
-dialog::backdrop{background:rgba(22,35,63,0.4);}
-dialog h3{font-family:var(--typewriter);font-size:15px;text-transform:uppercase;margin:0 0 12px;}
-dialog p{margin:0 0 20px;font-size:14.5px;line-height:1.5;}
+dialog::backdrop{background:var(--voile);backdrop-filter:blur(3px);}
+dialog h3{
+  font-family:var(--display);
+  font-size:var(--tx-4);
+  font-weight:700;
+  text-transform:none;
+  letter-spacing:-.01em;
+  margin:0 0 12px;
+}
+dialog p{margin:0 0 22px;font-size:var(--tx-3);line-height:1.6;color:var(--ink-2);}
 
 footer.note{
-  margin-top:8px;
-  font-size:12px;
-  color:var(--slate);
-  font-style:italic;
+  margin-top:14px;
+  font-size:var(--tx-2);
+  color:var(--ink-2);
   line-height:1.6;
 }
 
 /* ---------- petits écrans ---------- */
 @media (max-width:720px){
-  .wrap{padding:20px 14px 60px;}
+  .wrap{padding:22px 14px 72px;}
   header{flex-direction:column;align-items:flex-start;}
   .header-right{align-items:flex-start;}
-  nav{flex-wrap:wrap;}
-  nav button{flex:1 1 45%;}
+  .header-badges{justify-content:flex-start;}
+  nav{flex-wrap:wrap;border-radius:var(--r2);}
+  nav button{flex:1 1 45%;border-radius:calc(var(--r2) - 5px);}
   .add-form{grid-template-columns:1fr;}
   .add-form .btn{width:100%;height:auto;}
-  .card{padding:18px 14px;}
+  .card{padding:20px 16px;}
   .result-row{flex-direction:column;align-items:flex-start;}
   .toasts{left:14px;right:14px;max-width:none;}
+  th, td{padding:10px 8px;}
 }
 
 /* ---------- mise à jour venue d'un autre poste ----------
@@ -1013,12 +1241,12 @@ footer.note{
   gap:9px;
   padding:9px 15px;
   border-radius:999px;
-  background:var(--navy);
-  color:var(--paper);
+  background:var(--ink);
+  color:var(--bg);
   font-family:var(--mono);
   font-size:11.5px;
   letter-spacing:.02em;
-  box-shadow:0 6px 20px var(--shadow);
+  box-shadow:var(--ombre-2);
   animation:majIn .34s cubic-bezier(.2,.8,.3,1) both;
 }
 .maj-distante.sortie{animation:majOut .38s ease both;}
@@ -1026,7 +1254,7 @@ footer.note{
   width:7px;
   height:7px;
   border-radius:50%;
-  background:var(--brass);
+  background:var(--accent-texte);
   box-shadow:0 0 0 0 rgba(184,137,43,.65);
   animation:majPouls 1.9s ease-out infinite;
 }
@@ -1042,7 +1270,7 @@ footer.note{
 .tab-count.vient-de-changer{animation:compteurChange 1.1s cubic-bezier(.2,.8,.3,1);}
 @keyframes compteurChange{
   0%{transform:scale(1);}
-  22%{transform:scale(1.28);background:var(--brass);color:#fff;}
+  22%{transform:scale(1.28);background:var(--accent-texte);color:#fff;}
   100%{transform:scale(1);}
 }
 
@@ -1086,23 +1314,31 @@ body.impression-casier::before{display:none;}
 .attente-cell{
   font-family:var(--mono);
   font-size:12.5px;
-  color:var(--slate);
+  color:var(--ink-2);
   white-space:nowrap;
 }
-tbody tr.vieux .attente-cell{color:var(--rust);font-weight:600;}
-tbody tr.vieux td:first-child{box-shadow:inset 3px 0 0 var(--rust);}
-.relance-tag{
+tbody tr.vieux .attente-cell{color:var(--danger);font-weight:600;}
+tbody tr.vieux td:first-child{box-shadow:inset 3px 0 0 var(--danger);}
+/* Les étiquettes de ligne — relance, absence, porteur, requis, urgent.
+   Elles partagent une forme et ne diffèrent que par la teinte, portée par
+   `--ton` : une seule règle à corriger plutôt que six copies. */
+.relance-tag, .absence-tag, .porteur-tag, .urgent-tag, .requis, .compte-pill{
   display:inline-block;
-  font-family:var(--mono);
-  font-size:10px;
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:600;
   text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--brass);
-  border:1px solid var(--brass);
-  padding:1px 6px;
+  letter-spacing:.04em;
+  padding:3px 9px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--ton) 40%, transparent);
+  background:color-mix(in srgb, var(--ton) 12%, transparent);
+  color:var(--ton);
   margin-left:8px;
   vertical-align:1px;
+  white-space:nowrap;
 }
+.relance-tag{--ton:var(--accent-texte);}
 
 /* ---------- pile de courrier ---------- */
 .pile{
@@ -1111,41 +1347,41 @@ tbody tr.vieux td:first-child{box-shadow:inset 3px 0 0 var(--rust);}
   padding-top:14px;
 }
 .pile summary{
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--slate);
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
   cursor:pointer;
   list-style:none;
+  transition:color var(--t1) var(--sortie);
 }
 .pile summary::-webkit-details-marker{display:none;}
-.pile summary::before{content:'▸ ';}
-.pile[open] summary::before{content:'▾ ';}
-.pile summary:hover{color:var(--navy);}
+.pile summary::before{content:'▸ ';display:inline-block;transition:transform var(--t1) var(--sortie);}
+.pile[open] summary::before{transform:rotate(90deg);}
+.pile summary:hover{color:var(--accent-texte);}
 .pile textarea{margin-top:12px;}
 .pile .msg ul{margin:8px 0 0;padding-left:20px;}
 .pile .msg li{margin-bottom:3px;}
 
 .sous-titre{
-  font-family:var(--typewriter);
-  font-size:13px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  margin:20px 0 12px;
+  font-family:var(--display);
+  font-size:var(--tx-3);
+  font-weight:700;
+  letter-spacing:-.01em;
+  margin:24px 0 12px;
 }
 #passwordBox summary{
-  font-family:var(--typewriter);
-  font-size:13px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
+  font-family:var(--display);
+  font-size:var(--tx-3);
+  font-weight:600;
   cursor:pointer;
   margin-bottom:12px;
 }
 select.filter-input{
-  font-family:var(--serif);
-  color:var(--navy);
-  border:1px solid var(--line);
+  font-family:var(--sans);
+  color:var(--ink);
+  border:1px solid var(--bord);
+  width:auto;
 }
 
 /* ---------- remise par code ---------- */
@@ -1155,38 +1391,48 @@ select.filter-input{
 /* ---------- accès des agents ---------- */
 .identifiant-input{letter-spacing:6px;font-size:22px;}
 .identifiant-pill{
+  display:inline-block;
   font-family:var(--mono);
-  font-size:14px;
+  font-size:var(--tx-3);
+  font-weight:600;
   letter-spacing:2px;
-  background:var(--brass);
-  color:var(--paper);
-  padding:3px 10px;
+  border-radius:999px;
+  background:linear-gradient(135deg, var(--accent), var(--accent-2));
+  color:#fff;
+  padding:4px 13px;
   white-space:nowrap;
 }
 .agent-fiche{
   border:1px solid var(--line);
-  border-left:4px solid var(--forest);
-  background:var(--paper-dark);
-  padding:14px 16px;
+  border-left:4px solid var(--ok);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  padding:16px 18px;
   margin-bottom:12px;
 }
 /* Un accès suspendu se distingue au premier coup d'œil du reste de la liste. */
-.agent-fiche.suspendu{border-left-color:var(--rust);opacity:0.75;}
+.agent-fiche.suspendu{border-left-color:var(--danger);opacity:0.75;}
 .agent-tete{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
-.agent-tete strong{font-family:var(--typewriter);font-size:16px;font-weight:400;}
+.agent-tete strong{font-family:var(--display);font-size:var(--tx-4);font-weight:700;}
 .agent-fiche summary{
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--slate);
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
   cursor:pointer;
   padding:6px 0;
 }
-.droits-grille{display:grid;gap:2px;margin:10px 0 14px;}
-.droit-ligne{align-items:flex-start;gap:10px;padding:8px 10px;background:var(--card);border:1px solid var(--line);}
+.droits-grille{display:grid;gap:4px;margin:12px 0 16px;}
+.droit-ligne{
+  align-items:flex-start;
+  gap:10px;
+  padding:10px 12px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+}
 .droit-ligne input{margin-top:3px;flex:0 0 auto;}
-.droit-detail{display:block;font-size:12.5px;color:var(--slate);margin-top:2px;}
+.droit-detail{display:block;font-size:var(--tx-2);color:var(--ink-2);margin-top:3px;}
 #masterForm .code-input{letter-spacing:4px;}
 /* Dans l'écran d'entrée, le bouton colle à l'indication qui le suit. */
 .gate-form .btn{margin-bottom:12px;}
@@ -1197,18 +1443,15 @@ select.filter-input{
 /* ---------- courrier urgent ---------- */
 /* Filet rouille en bordure de ligne : repérable en balayant la liste, sans
    crier sur toute la largeur. */
-tr.urgent td:first-child{box-shadow:inset 3px 0 0 var(--rust);}
+tr.urgent td:first-child{box-shadow:inset 3px 0 0 var(--danger);}
 tr.urgent{background:var(--danger-wash);}
+/* Un courrier urgent : la seule étiquette en aplat plein. Sur une liste où
+   tout le reste est en teinte diluée, c'est ce qui la fait sortir. */
 .urgent-tag{
-  display:inline-block;
-  font-family:var(--mono);
-  font-size:10px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--paper);
-  background:var(--rust);
-  padding:1px 6px;
-  margin-left:8px;
+  --ton:var(--danger);
+  border-color:transparent;
+  background:var(--danger);
+  color:#fff;
 }
 .guichet-options{display:flex;gap:20px;flex-wrap:wrap;margin:14px 0 4px;}
 .guichet-options .check-row{margin:0;}
@@ -1216,22 +1459,24 @@ tr.urgent{background:var(--danger-wash);}
 /* ---------- saisie en série ---------- */
 .serie-bilan{
   border:1px solid var(--line);
-  border-left:4px solid var(--forest);
-  background:var(--paper-dark);
-  padding:12px 16px;
-  margin-top:14px;
+  border-left:4px solid var(--ok);
+  border-radius:var(--r1);
+  background:var(--ok-wash);
+  padding:14px 18px;
+  margin-top:16px;
 }
 .serie-tete{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;}
-.serie-liste{margin:0;padding-left:22px;font-size:13.5px;max-height:200px;overflow-y:auto;}
-.serie-liste li{padding:2px 0;}
-.serie-detail{font-family:var(--mono);font-size:11px;color:var(--slate);}
+.serie-liste{margin:0;padding-left:22px;font-size:var(--tx-2);max-height:200px;overflow-y:auto;}
+.serie-liste li{padding:3px 0;}
+.serie-detail{font-family:var(--mono);font-size:var(--tx-1);color:var(--ink-2);}
 
 /* ---------- recherche globale ---------- */
 .palette{
   position:fixed;
   inset:0;
   z-index:60;
-  background:rgba(22,35,63,0.4);
+  background:var(--voile);
+  backdrop-filter:blur(4px);
   display:flex;
   align-items:flex-start;
   justify-content:center;
@@ -1240,24 +1485,25 @@ tr.urgent{background:var(--danger-wash);}
 .palette[hidden]{display:none;}
 .palette-boite{
   width:100%;
-  max-width:640px;
-  background:var(--card);
-  border:1px solid var(--navy);
-  box-shadow:0 12px 40px var(--shadow);
-  animation:paletteIn 0.16s ease;
+  max-width:660px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r3);
+  box-shadow:var(--ombre-3);
+  overflow:hidden;
 }
-@keyframes paletteIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:none;}}
 #paletteInput{
   width:100%;
   margin:0;
   border:none;
   border-bottom:1px solid var(--line);
+  border-radius:0;
   font-size:18px;
-  padding:16px 18px;
-  background:var(--card);
+  padding:18px 20px;
+  background:var(--surface);
 }
-#paletteInput:focus{outline:none;border-bottom-color:var(--brass);}
-#paletteResultats{max-height:52vh;overflow-y:auto;}
+#paletteInput:focus{outline:none;box-shadow:none;border-bottom-color:var(--a1);}
+#paletteResultats{max-height:52vh;overflow-y:auto;padding:6px;}
 .palette-ligne{
   display:grid;
   grid-template-columns:130px 1fr;
@@ -1267,74 +1513,71 @@ tr.urgent{background:var(--danger-wash);}
   text-align:left;
   background:none;
   border:none;
-  border-bottom:1px solid var(--line);
-  padding:10px 18px;
+  border-radius:var(--r1);
+  padding:11px 14px;
   cursor:pointer;
-  font-family:var(--serif);
-  color:var(--navy);
+  font-family:var(--sans);
+  color:var(--ink);
+  transition:background-color var(--t1) var(--sortie);
 }
-.palette-ligne:hover, .palette-ligne.actif{background:var(--paper-dark);}
+.palette-ligne:hover, .palette-ligne.actif{background:color-mix(in srgb, var(--a1) 12%, transparent);}
 .palette-genre{
   grid-area:genre;
   align-self:center;
-  font-family:var(--mono);
-  font-size:10px;
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:700;
   text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--slate);
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
 }
-.palette-titre{grid-area:titre;font-size:15px;}
-.palette-detail{grid-area:detail;font-size:12.5px;color:var(--slate);}
-.palette-aide{margin:0;padding:10px 18px;border-top:1px solid var(--line);font-size:11.5px;}
+.palette-titre{grid-area:titre;font-size:var(--tx-3);font-weight:600;}
+.palette-detail{grid-area:detail;font-size:var(--tx-2);color:var(--ink-2);}
+.palette-aide{
+  margin:0;
+  padding:11px 20px;
+  border-top:1px solid var(--line);
+  background:var(--surface-2);
+  font-size:var(--tx-1);
+}
 
 /* ---------- retrait par un tiers ---------- */
 .fiche-porteur{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
 .fiche-porteur input[type=text]{margin-bottom:0;}
 .fiche-porteur label[for]{margin-top:10px;}
-/* Étiquette rouille : le destinataire n'est pas venu lui-même, cela se voit. */
-.porteur-tag{
-  display:inline-block;
-  font-family:var(--mono);
-  font-size:10px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--rust);
-  border:1px solid var(--rust);
-  padding:1px 6px;
-  margin-left:8px;
-  white-space:nowrap;
-}
+/* Le destinataire n'est pas venu lui-même, cela se voit. */
+.porteur-tag{--ton:var(--danger);}
 
 /* ---------- coupure réseau ---------- */
 /* Le bandeau est en tête de page et ne se referme pas tout seul : une action
    qui n'est pas encore partie doit rester sous les yeux. */
 .bandeau-file{
-  border:1px solid var(--line);
-  border-left:4px solid var(--brass);
-  background:var(--paper-dark);
-  padding:12px 16px;
-  margin-bottom:16px;
-  font-size:14px;
-  line-height:1.55;
+  border:1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-left:4px solid var(--warn);
+  border-radius:var(--r1);
+  background:var(--warn-wash);
+  padding:14px 18px;
+  margin-bottom:18px;
+  font-size:var(--tx-2);
+  line-height:1.6;
 }
-.bandeau-file.coupure{border-left-color:var(--rust);}
-.bandeau-file.echec{border-left-color:var(--rust);background:var(--danger-wash);}
+.bandeau-file.coupure{border-left-color:var(--danger);}
+.bandeau-file.echec{
+  border-color:color-mix(in srgb, var(--danger) 32%, transparent);
+  border-left-color:var(--danger);
+  background:var(--danger-wash);
+}
 .bandeau-file ul{margin:8px 0 6px;padding-left:20px;}
 .bandeau-file li{margin-bottom:3px;}
 .bandeau-file .link-btn{margin-left:6px;}
-.mode-badge.hors-ligne{border-color:var(--rust);color:var(--rust);}
+.mode-badge.hors-ligne{
+  border-color:color-mix(in srgb, var(--danger) 55%, transparent);
+  color:var(--danger);
+  background:var(--danger-wash);
+}
 
 /* ---------- formulaire de domiciliation ---------- */
-.requis{
-  font-family:var(--mono);
-  font-size:9px;
-  letter-spacing:0.5px;
-  color:var(--rust);
-  border:1px solid var(--rust);
-  padding:0 4px;
-  margin-left:6px;
-  text-transform:uppercase;
-}
+.requis{--ton:var(--danger);font-size:10px;padding:2px 8px;margin-left:6px;}
 #formDomiciliation .sous-titre{margin-top:22px;}
 #formDomiciliation .sous-titre:first-child{margin-top:0;}
 #formDomiciliation .hint{margin:-10px 0 16px;}
@@ -1343,26 +1586,31 @@ tr.urgent{background:var(--danger-wash);}
 /* Le sélecteur vit dans l'en-tête, à côté du mode de stockage : c'est un
    contexte d'affichage, pas un réglage. Absent tant qu'il n'y a qu'un bureau. */
 .antenne-select{
-  font-family:var(--mono);
-  font-size:11px;
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:600;
   text-transform:uppercase;
-  letter-spacing:0.5px;
-  padding:3px 8px;
-  border:1px solid var(--brass);
-  color:var(--brass);
-  background:transparent;
-  max-width:190px;
+  letter-spacing:.04em;
+  padding:4px 12px;
+  width:auto;
+  margin-bottom:0;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--accent-texte) 40%, transparent);
+  color:var(--accent-texte);
+  background:color-mix(in srgb, var(--accent-texte) 10%, transparent);
+  max-width:200px;
 }
 .antenne-select:disabled{opacity:1;cursor:default;}
 
 /* ---------- langues ---------- */
 .langue-select{
-  font-family:var(--serif);
-  font-size:15px;
-  padding:8px 10px;
-  border:1px solid var(--line);
-  background:var(--field);
-  color:var(--navy);
+  font-family:var(--sans);
+  font-size:var(--tx-3);
+  padding:11px 14px;
+  border:1px solid var(--bord);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  color:var(--ink);
   width:100%;
 }
 .langue-choix{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
@@ -1376,35 +1624,41 @@ tr.urgent{background:var(--danger-wash);}
 /* ---------- gabarits par type de courrier ---------- */
 .gabarit-onglets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
 .gabarit-onglets button{
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  padding:7px 12px;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  padding:8px 14px;
   border:1px solid var(--line);
-  background:var(--paper-dark);
-  color:var(--slate);
+  border-radius:999px;
+  background:var(--surface-2);
+  color:var(--ink-2);
   cursor:pointer;
   display:inline-flex;
   align-items:center;
-  gap:6px;
+  gap:7px;
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie), border-color var(--t1) var(--sortie);
 }
-.gabarit-onglets button:hover{border-color:var(--navy);color:var(--navy);}
-.gabarit-onglets button.active{background:var(--navy);color:var(--paper);border-color:var(--navy);}
-/* Pastille laiton : ce type a son propre texte, il ne suit plus le général. */
-.point-propre{width:6px;height:6px;border-radius:50%;background:var(--brass);display:inline-block;}
-#setSubject::placeholder, #setBody::placeholder{color:var(--slate);opacity:0.65;font-style:italic;}
+.gabarit-onglets button:hover{border-color:var(--a1);color:var(--accent-texte);}
+.gabarit-onglets button.active{
+  background:linear-gradient(135deg, var(--accent), var(--accent-2));
+  color:#fff;
+  border-color:transparent;
+}
+/* Pastille : ce type a son propre texte, il ne suit plus le général. */
+.point-propre{width:6px;height:6px;border-radius:50%;background:var(--accent-texte);display:inline-block;}
+.gabarit-onglets button.active .point-propre{background:#fff;}
+#setSubject::placeholder, #setBody::placeholder{color:var(--ink-2);opacity:0.7;}
 
 /* ---------- fiche de vérification avant remise ---------- */
-/* Le bord laiton et l'apparition franche disent : « regardez ceci avant de
+/* Le bord coloré et l'apparition franche disent : « regardez ceci avant de
    valider ». C'est le seul écran qui s'interpose entre le code et la remise. */
 .fiche-retrait{
-  border:1px solid var(--line);
-  border-left:4px solid var(--brass);
-  background:var(--paper-dark);
-  padding:16px 18px;
-  margin-top:4px;
-  animation:msgIn 0.25s ease;
+  border:1px solid color-mix(in srgb, var(--a1) 26%, transparent);
+  border-left:4px solid var(--a1);
+  border-radius:var(--r1);
+  background:color-mix(in srgb, var(--a1) 7%, var(--surface));
+  padding:18px 20px;
+  margin-top:6px;
 }
 .fiche-retrait-tete{
   display:flex;
@@ -1415,30 +1669,25 @@ tr.urgent{background:var(--danger-wash);}
   padding-bottom:12px;
   border-bottom:1px solid var(--line);
 }
-.fiche-retrait-tete strong{font-size:19px;font-family:var(--typewriter);font-weight:400;}
+.fiche-retrait-tete strong{font-size:var(--tx-5);font-family:var(--display);font-weight:700;letter-spacing:-.02em;}
+/* Le code de retrait : c'est ce qu'on lit à voix haute par-dessus le
+   comptoir. Chiffres détachés, aplat sombre, aucune ambiguïté. */
 .code-pill{
   font-family:var(--mono);
-  font-size:16px;
+  font-size:var(--tx-4);
+  font-weight:600;
   letter-spacing:4px;
-  background:var(--navy);
-  color:var(--paper);
-  padding:4px 10px 4px 14px;
+  border-radius:999px;
+  background:var(--ink);
+  color:var(--bg);
+  padding:5px 12px 5px 17px;
 }
 /* Le nombre de courriers, lisible d'un coup d'œil : c'est ce qui dit combien
    d'enveloppes sortir du casier avant d'appeler la personne. */
-.compte-pill{
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  border:1px solid var(--brass);
-  color:var(--brass);
-  padding:2px 8px;
-  white-space:nowrap;
-}
+.compte-pill{--ton:var(--accent-texte);margin-left:0;}
 .fiche-retrait .status-list{margin-bottom:0;}
 .fiche-retrait .status-list div{border-bottom-color:var(--line);}
-.box-cell{font-family:var(--mono);font-size:12.5px;color:var(--slate);white-space:nowrap;}
+.box-cell{font-family:var(--mono);font-size:var(--tx-2);color:var(--ink-2);white-space:nowrap;}
 .fiche-autres{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
 .fiche-autres .hint{margin-bottom:8px;}
 .check-row{
@@ -1447,22 +1696,26 @@ tr.urgent{background:var(--danger-wash);}
   gap:8px;
   /* Une ligne à lire, pas une étiquette de champ : on annule la casse et la
      graisse des libellés de formulaire. */
-  font-family:var(--serif);
-  font-size:13.5px;
+  font-family:var(--sans);
+  font-size:var(--tx-3);
+  font-weight:400;
   text-transform:none;
   letter-spacing:0;
-  color:var(--navy);
+  color:var(--ink);
   margin-bottom:0;
-  padding:5px 0;
+  padding:6px 0;
   cursor:pointer;
 }
 .check-row input{margin:0;width:auto;}
+/* Les cases et les boutons radio prennent la couleur de l'accent : c'est
+   gratuit, natif, et ça évite de les redessiner. */
+input[type=checkbox], input[type=radio]{accent-color:var(--accent);}
 .fiche-retrait-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
 
 /* ---------- fiche d'un destinataire ---------- */
 #ficheDialog{max-width:640px;width:92vw;}
 .fiche h3{
-  font-family:var(--typewriter);
+  font-family:var(--display);
   font-size:17px;
   text-transform:none;
   letter-spacing:0.5px;
@@ -1471,20 +1724,9 @@ tr.urgent{background:var(--danger-wash);}
 .fiche .status-list{margin-bottom:0;}
 
 /* ---------- absences ---------- */
-.absence-tag{
-  display:inline-block;
-  font-family:var(--mono);
-  font-size:10px;
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--rust);
-  border:1px solid var(--rust);
-  padding:1px 6px;
-  margin-left:8px;
-  vertical-align:1px;
-}
+.absence-tag{--ton:var(--danger);}
 td.absence-edit{
-  background:var(--paper-dark);
+  background:var(--surface-2);
   padding:12px 6px;
   display:flex;
   gap:12px;
@@ -1497,19 +1739,20 @@ td.absence-edit label.inline{
   align-items:center;
   gap:6px;
   text-transform:none;
-  font-family:var(--serif);
-  font-size:13.5px;
-  color:var(--navy);
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  color:var(--ink);
 }
-td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:auto;font-size:14px;padding:6px 8px;}
+td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:auto;font-size:var(--tx-2);padding:7px 10px;}
 
 /* ---------- signature ---------- */
 #signatureDialog{max-width:620px;width:94vw;}
 #signaturePad{
   width:100%;
   height:180px;
-  border:1px solid var(--line);
-  background:var(--card);
+  border:1px dashed var(--bord);
+  border-radius:var(--r1);
+  background:var(--surface-2);
   touch-action:none;
   cursor:crosshair;
   display:block;
@@ -1517,9 +1760,10 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 .signature-vue{
   max-width:220px;
   border:1px solid var(--line);
+  border-radius:var(--r1);
   background:#fff;
   display:block;
-  margin-top:6px;
+  margin-top:8px;
 }
 
 /* ---------- feuille de casier (impression) ---------- */
@@ -1565,12 +1809,12 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
    sans se pencher, et sans confondre un 0 et un O. */
 .tel-cell{
   font-family:var(--mono);
-  font-size:15px;
+  font-size:var(--tx-3);
   font-weight:600;
-  color:var(--navy);
+  color:var(--ink);
   white-space:nowrap;
 }
-.tel-cell em{font-family:var(--serif);font-weight:400;color:var(--slate);font-size:13px;}
+.tel-cell em{font-family:var(--sans);font-weight:400;font-style:normal;color:var(--ink-2);font-size:var(--tx-2);}
 
 /* ---------- guichet : le repli des options secondaires ----------
    L'écran le plus utilisé de la journée ne garde déplié que ce qui sert à
@@ -1582,19 +1826,19 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
 }
 .guichet-plus > summary{
   cursor:pointer;
-  padding:10px 0;
-  font-family:var(--mono);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:.05em;
-  color:var(--slate);
+  padding:11px 0;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
   list-style:none;
+  transition:color var(--t1) var(--sortie);
 }
 .guichet-plus > summary::-webkit-details-marker{display:none;}
-.guichet-plus > summary::before{content:'▸ ';display:inline-block;transition:transform .18s ease;}
+.guichet-plus > summary::before{content:'▸ ';display:inline-block;transition:transform var(--t1) var(--sortie);}
 .guichet-plus[open] > summary::before{transform:rotate(90deg);}
-.guichet-plus > summary:hover{color:var(--navy);}
-.guichet-plus[open] > summary{color:var(--navy);}
+.guichet-plus > summary:hover{color:var(--accent-texte);}
+.guichet-plus[open] > summary{color:var(--ink);}
 .guichet-plus .pile,
 .guichet-plus .copies{margin-top:6px;}
 
@@ -1602,14 +1846,13 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
    Onze cartes à la suite, c'est un mur : on ne sait plus où chercher. La barre
    reprend le motif segmenté du guichet — même vocabulaire visuel, rien de
    nouveau à apprendre — et n'affiche qu'un groupe à la fois. */
-.reglages-sections{max-width:none;flex-wrap:wrap;margin-bottom:20px;}
-.reglages-sections button{flex:0 1 auto;}
+.reglages-sections{max-width:none;flex-wrap:wrap;margin-bottom:22px;}
+.reglages-sections button{flex:0 1 auto;padding:9px 16px;}
 .reglages-groupe[hidden]{display:none;}
-.reglages-groupe > .card{animation:cardIn .3s cubic-bezier(.2,.8,.3,1) both;}
 
 @media (max-width:640px){
   .reglages-sections{gap:4px;}
-  .reglages-sections button{font-size:11px;padding:8px 10px;}
+  .reglages-sections button{font-size:var(--tx-1);padding:8px 11px;}
 }
 
 /* ---------- postes du bureau ----------
@@ -1617,22 +1860,27 @@ td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:a
    vient chercher ici, elle doit se lire de loin et se copier d'un clic. */
 .poste-adresse{
   border:1px solid var(--line);
-  border-radius:8px;
-  padding:12px 14px;
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  padding:14px 16px;
   margin-bottom:10px;
 }
-.poste-adresse.principale{border-color:var(--navy);border-width:2px;}
+.poste-adresse.principale{
+  border-color:color-mix(in srgb, var(--a1) 40%, transparent);
+  background:color-mix(in srgb, var(--a1) 8%, var(--surface));
+}
 .poste-adresse-titre{
-  font-family:var(--mono);
-  font-size:10px;
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:700;
   text-transform:uppercase;
-  letter-spacing:.06em;
-  color:var(--slate);
-  margin-bottom:6px;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+  margin-bottom:7px;
 }
 .poste-adresse-url{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
 .poste-adresse-url code{font-family:var(--mono);font-size:17px;word-break:break-all;}
-.poste-adresse.principale .poste-adresse-url code{font-size:20px;font-weight:600;}
+.poste-adresse.principale .poste-adresse-url code{font-size:21px;font-weight:600;color:var(--accent-texte);}
 .poste-adresse .hint{margin:6px 0 0;}
 
 /* ---------- attestation d'élection de domicile ----------
