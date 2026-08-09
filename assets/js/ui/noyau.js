@@ -251,6 +251,80 @@
     return !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }
 
+  /* ═════════════ le thème ═════════════
+
+     Clair, sombre, ou celui du système. Trois états et non deux : « auto » est
+     le défaut, et c'est le bon — un poste de guichet suit l'éclairage de la
+     pièce via le réglage du système d'exploitation. Mais un agent qui travaille
+     le soir dans une salle éclairée au néon peut vouloir trancher, et son choix
+     doit alors l'emporter sur le système.
+
+     Le choix vit dans le stockage local, pas dans le registre : c'est une
+     préférence d'affichage propre à un poste. La partager entre les postes du
+     bureau reviendrait à imposer aux autres l'éclairage de sa propre pièce, et
+     à faire voyager sur le réseau quelque chose qui n'a rien à y faire. */
+
+  const CLE_THEME = 'bdc-theme';
+  const THEMES = ['auto', 'clair', 'sombre'];
+
+  /* La couleur de la barre du navigateur, sur téléphone et en application
+     installée. Ce sont les valeurs de `--bg` des deux thèmes ; elles sont
+     recopiées ici parce qu'une balise <meta> ne sait pas lire une variable
+     CSS. Le test de couleurs vérifie qu'elles ne divergent pas. */
+  const BARRE = { clair: '#F7F8FC', sombre: '#0B0F1A' };
+
+  /** Ce que la personne a choisi : 'auto', 'clair' ou 'sombre'. */
+  function themeChoisi() {
+    try {
+      const c = root.localStorage.getItem(CLE_THEME);
+      return THEMES.indexOf(c) > 0 ? c : 'auto';
+    } catch (e) {
+      /* Navigation privée, stockage refusé : on suit le système. */
+      return 'auto';
+    }
+  }
+
+  /* La résolution, séparée de son application : c'est la seule partie qui a une
+     règle, donc la seule qui se vérifie sans navigateur. */
+  function resoudreTheme(choix, systemeSombre) {
+    if (choix === 'clair' || choix === 'sombre') return choix;
+    return systemeSombre ? 'sombre' : 'clair';
+  }
+
+  /** Le thème réellement affiché, choix et système confondus. */
+  function themeResolu() {
+    const sombre = !!(root.matchMedia && root.matchMedia('(prefers-color-scheme: dark)').matches);
+    return resoudreTheme(themeChoisi(), sombre);
+  }
+
+  /* Applique un choix, le retient, et met la barre du navigateur d'accord.
+     En « auto » l'attribut est **retiré** plutôt que posé à une valeur : c'est
+     ce qui laisse la règle de média reprendre la main dans la feuille de
+     style. Poser data-theme="auto" figerait le thème du moment. */
+  function appliquerTheme(choix) {
+    const valide = THEMES.indexOf(choix) >= 0 ? choix : 'auto';
+    const racine = document.documentElement;
+    if (valide === 'auto') {
+      racine.removeAttribute('data-theme');
+    } else {
+      racine.setAttribute('data-theme', valide);
+    }
+    try {
+      if (valide === 'auto') root.localStorage.removeItem(CLE_THEME);
+      else root.localStorage.setItem(CLE_THEME, valide);
+    } catch (e) {
+      /* Sans stockage, le choix vaut pour la session : mieux que rien. */
+    }
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', BARRE[themeResolu()]);
+    return themeResolu();
+  }
+
+  /** Le choix suivant dans le tour : auto → clair → sombre → auto. */
+  function themeSuivant() {
+    return THEMES[(THEMES.indexOf(themeChoisi()) + 1) % THEMES.length];
+  }
+
   /* Le soulignement de l'onglet ouvert, placé sous le bon bouton.
      Il glisse d'un onglet à l'autre : six barres qu'on allume et qu'on éteint
      feraient clignoter, une barre qui se déplace dit d'où l'on vient. Elle
@@ -274,10 +348,15 @@
     const ici = bouton.getBoundingClientRect();
     const cadre = zone.getBoundingClientRect();
     const marge = 14;
+    const HAUTEUR = 3;
     const large = Math.max(24, ici.width - marge * 2);
     const x = ici.left - cadre.left - zone.clientLeft + (ici.width - large) / 2;
+    /* Le second axe : sur un écran étroit, les six onglets passent sur
+       plusieurs lignes et l'onglet ouvert n'est pas forcément sur la
+       dernière. */
+    const y = ici.bottom - cadre.top - zone.clientTop - HAUTEUR - 2;
     barre.style.width = large + 'px';
-    barre.style.transform = 'translateX(' + Math.round(x) + 'px)';
+    barre.style.transform = 'translate(' + Math.round(x) + 'px, ' + Math.round(y) + 'px)';
     const teinte = root.getComputedStyle(bouton).getPropertyValue('--teinte');
     if (teinte) barre.style.setProperty('--teinte', teinte.trim());
     barre.classList.add('pret');
@@ -346,6 +425,13 @@
     deLAntenne: deLAntenne,
     mouvementReduit: mouvementReduit,
     glisseOnglet: glisseOnglet,
-    majCompteur: majCompteur
+    majCompteur: majCompteur,
+    THEMES: THEMES,
+    BARRE_THEME: BARRE,
+    themeChoisi: themeChoisi,
+    resoudreTheme: resoudreTheme,
+    themeResolu: themeResolu,
+    appliquerTheme: appliquerTheme,
+    themeSuivant: themeSuivant
   };
 });

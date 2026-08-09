@@ -8,9 +8,12 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#F4F0E6",
-  "theme_color": "#16233F",
-  "categories": ["productivity", "utilities"],
+  "background_color": "#F7F8FC",
+  "theme_color": "#F7F8FC",
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "assets/icons/icon-192.png",

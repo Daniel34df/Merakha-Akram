@@ -971,9 +971,10 @@ tools/guide-nodejs.html      guide animé : installer Node.js sur Windows
 tools/enregistrer-guide.js   filme ce guide et produit une vidéo
 demarrer.cmd          lanceur Windows : démarre le serveur et ouvre l'application
 docs/                 installation Windows + Gmail, boîtes reliées, mise en https
-assets/css/style.css  feuille de style
+assets/css/style.css  feuille de style (jetons, deux thèmes, papier à part)
 assets/css/fonts.css  déclarations des polices embarquées
-assets/fonts/         polices (woff2, sous-ensembles latin) — 216 Ko
+assets/fonts/         polices variables (woff2, sous-ensembles latin) — 368 Ko
+assets/js/theme-tot.js  pose le thème choisi avant le premier pixel
 assets/js/util.js     fonctions partagées navigateur + serveur (recherche, CSV, gabarits)
 assets/js/xlsx.js     écriture de classeurs Excel, sans dépendance
 assets/js/store.js    persistance : serveur → localStorage → mémoire
@@ -992,7 +993,7 @@ tools/verifier/       vérifications de navigateur, une par défaut corrigé
 ```
 
 ```bash
-npm test     # 372 tests : utilitaires, API, comptes, domiciliation, appels, socle
+npm test     # 388 tests : utilitaires, API, comptes, domiciliation, appels, socle, couleurs
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 
@@ -1004,12 +1005,12 @@ Tout ce qui est calculable — règles de domiciliation, listes d'appels, bornes
 d'affichage, droits, filtrage par antenne — vit dans des modules chargeables des
 deux côtés et se teste là, vite et partout.
 
-Reste ce qui exige un écran. Huit parcours cliquent pour de vrai :
+Reste ce qui exige un écran. Neuf parcours cliquent pour de vrai :
 
 ```bash
 npm i                    # installe Playwright (outillage seulement)
 npx playwright install chromium
-npm run verifier         # les huit, chacun sur son serveur et sa base
+npm run verifier         # les neuf, chacun sur son serveur et sa base
 npm run verifier -- rappel   # un seul
 npm run parcours         # le parcours complet, qui s'imprime comme procédure
 ```
@@ -1017,8 +1018,9 @@ npm run parcours         # le parcours complet, qui s'imprime comme procédure
 Chacun garde fermé un défaut qui a réellement existé : un téléphone corrigé qui
 repartait inchangé, une suppression qu'on croyait être un effacement, un code de
 reprise utilisable depuis tout le réseau, une personne appelée une seule fois et
-jamais relancée, un appel qui ne comptait pas comme manifestation. Ce ne sont
-pas des démonstrations — ce sont des verrous.
+jamais relancée, un appel qui ne comptait pas comme manifestation, un thème
+choisi que la politique de sécurité du serveur empêchait de s'appliquer. Ce ne
+sont pas des démonstrations — ce sont des verrous.
 
 Playwright est une dépendance de **développement** : ni le serveur ni
 l'interface ne la chargent. Un poste de réception n'installe rien de tout cela.

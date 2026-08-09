@@ -315,6 +315,41 @@ header p{margin:0;color:var(--ink-2);font-size:var(--tx-2);}
 .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
 .header-badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
 .install-btn{padding:6px 12px;font-size:var(--tx-1);}
+/* La bascule de thème. Elle dit ce qu'elle fait en toutes lettres — « Système »,
+   « Clair », « Sombre » — plutôt qu'en pictogramme : un soleil et une lune ne
+   savent pas exprimer le troisième état, celui où l'on suit le système, et
+   c'est pourtant le plus courant. */
+.theme-btn{
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:600;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 12px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--ink-2);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:border-color var(--t1) var(--sortie), color var(--t1) var(--sortie),
+             background-color var(--t1) var(--sortie);
+}
+.theme-btn:hover{border-color:var(--a1);color:var(--accent-texte);}
+.theme-btn .theme-pastille{
+  width:11px;
+  height:11px;
+  border-radius:50%;
+  flex:0 0 auto;
+  /* Un demi-disque : la moitié claire, la moitié sombre. En « Système » les
+     deux se voient ; sur un choix explicite, la pastille prend la couleur du
+     thème retenu. */
+  background:linear-gradient(90deg, #F7F8FC 50%, #0B0F1A 50%);
+  border:1px solid var(--bord);
+}
+.theme-btn[data-choix="clair"] .theme-pastille{background:#F7F8FC;}
+.theme-btn[data-choix="sombre"] .theme-pastille{background:#0B0F1A;}
 .date-stamp{
   font-family:var(--mono);
   font-size:var(--tx-2);
@@ -433,11 +468,17 @@ nav button.active .tab-count{
    se déplace fait suivre le regard, et dit d'où l'on vient. */
 .nav-glisse{
   position:absolute;
-  /* `left:0` n'est pas décoratif : sans lui, un élément absolu garde sa
-     position statique — c'est-à-dire, dans une barre en flex, après le dernier
-     bouton. La barre partirait de la droite et tout le calcul serait faux. */
+  /* `left:0` et `top:0` ne sont pas décoratifs : sans eux, un élément absolu
+     garde sa position statique — c'est-à-dire, dans une barre en flex, après le
+     dernier bouton. La barre partirait du coin opposé et tout le calcul serait
+     faux.
+
+     Le placement se fait en deux axes, et le second n'est pas un luxe : sous
+     720 px la barre des six onglets passe sur trois lignes. Ancrée en bas, la
+     barre restait sous la dernière ligne pendant que l'onglet ouvert était sur
+     la deuxième. */
   left:0;
-  bottom:5px;
+  top:0;
   height:3px;
   border-radius:3px;
   background:linear-gradient(90deg, var(--teinte), var(--teinte-vif));

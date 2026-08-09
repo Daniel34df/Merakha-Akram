@@ -12,7 +12,11 @@
 <link rel="icon" href="assets/icons/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#16233F">
+<meta name="theme-color" content="#F7F8FC">
+<!-- Avant tout le reste : le thème choisi, posé avant le premier pixel.
+     Un fichier plutôt qu’un <script> en ligne — la politique de sécurité
+     du serveur (script-src 'self') refuse les seconds. -->
+<script src="assets/js/theme-tot.js"></script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Courrier">
 <link rel="stylesheet" href="assets/css/style.css">
@@ -214,6 +218,7 @@
       <div class="date-stamp" id="dateStamp"></div>
       <div class="header-badges">
         <button class="btn ghost small install-btn" id="installBtn" hidden>Installer l'application</button>
+        <button type="button" class="theme-btn" id="themeBtn" aria-live="polite">Thème</button>
         <div class="mode-badge" id="modeBadge" title="Mode de stockage">…</div>
         <div class="mode-badge hors-ligne" id="ligneBadge" hidden>Hors ligne</div>
         <select id="antenneActive" class="antenne-select" hidden aria-label="Antenne"></select>

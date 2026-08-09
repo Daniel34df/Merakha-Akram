@@ -5638,8 +5638,49 @@
     readMailboxReturn();
     renderInstallButton();
     registerServiceWorker();
+    renderTheme();
     placerLeSoulignement();
     if (!S.auth.required) nameInput.focus();
+  }
+
+  /* ═════════════ le thème ═════════════
+
+     Trois états dans un seul bouton : Système → Clair → Sombre → Système. Le
+     libellé dit lequel est en cours, et non lequel viendra — c'est un état
+     affiché, pas une promesse, et l'inverse est la première source de confusion
+     dans ce genre de bascule. */
+  const ETIQUETTES_THEME = { auto: 'Système', clair: 'Clair', sombre: 'Sombre' };
+
+  function renderTheme() {
+    const b = $('themeBtn');
+    if (!b) return;
+    const choix = ui.themeChoisi();
+    b.dataset.choix = choix;
+    b.innerHTML = '<span class="theme-pastille" aria-hidden="true"></span>' +
+      esc(ETIQUETTES_THEME[choix]);
+    b.title = 'Thème : ' + ETIQUETTES_THEME[choix].toLowerCase() +
+      (choix === 'auto' ? ' (celui de votre ordinateur)' : '') +
+      ' — cliquez pour changer';
+    b.setAttribute('aria-label', 'Thème d’affichage : ' + ETIQUETTES_THEME[choix] + '. Changer.');
+  }
+
+  if ($('themeBtn')) {
+    $('themeBtn').addEventListener('click', function () {
+      ui.appliquerTheme(ui.themeSuivant());
+      renderTheme();
+    });
+  }
+
+  /* En « Système », l'écran doit suivre l'ordinateur qui bascule tout seul au
+     coucher du soleil — sans quoi l'application reste claire jusqu'au prochain
+     rechargement. La barre du navigateur suit avec. */
+  if (root.matchMedia) {
+    const veille = root.matchMedia('(prefers-color-scheme: dark)');
+    const suivre = function () {
+      if (ui.themeChoisi() === 'auto') ui.appliquerTheme('auto');
+    };
+    if (veille.addEventListener) veille.addEventListener('change', suivre);
+    else if (veille.addListener) veille.addListener(suivre);
   }
 
   /* Le soulignement de l'onglet se calcule à partir de la position réelle du
