@@ -38,3 +38,6 @@ package-lock.json
 
 # Captures des vérifications de navigateur, quand on demande à les garder.
 captures/
+# Et celles qui atterrissent à côté des scripts : commun.js le dit lui-même,
+# « un script de vérification ne doit pas laisser de fichiers dans le dépôt ».
+tools/verifier/*.png
