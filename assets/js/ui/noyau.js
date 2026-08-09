@@ -234,6 +234,29 @@
     return util.dansAntenne(objet, view.antenneActive, antennes());
   }
 
+  /* ═════════════ les écrans, et comment ils s'appellent ═════════════
+
+     Chaque module d'écran s'inscrit ici au chargement ; les autres s'y
+     adressent **au moment de l'appel**, jamais au chargement. C'est ce qui
+     permet à deux écrans de se rendre service mutuellement sans que l'ordre des
+     balises <script> ne devienne une contrainte — et ce qui rend les liens
+     entre écrans visibles : un `ui.ecrans.registre.ouvrirFiche(...)` se
+     retrouve d'un coup de grep, un appel direct ne se voyait pas. */
+
+  const ecrans = {};
+
+  function inscrire(nom, api) {
+    ecrans[nom] = api;
+    return api;
+  }
+
+  /* Vrai quand le serveur exigera une session que nous n'avons pas : inutile
+     d'aller chercher des données qui reviendront en 401. Trois écrans posent
+     la question, aucun n'en est propriétaire. */
+  function sessionManquante() {
+    return S.auth.accountsExist && !S.auth.user;
+  }
+
   /* ═════════════ mouvement ═════════════
 
      Deux gestes que la feuille de style ne peut pas faire seule, parce qu'ils
@@ -423,6 +446,9 @@
     antennes: antennes,
     antenneImposee: antenneImposee,
     deLAntenne: deLAntenne,
+    ecrans: ecrans,
+    inscrire: inscrire,
+    sessionManquante: sessionManquante,
     mouvementReduit: mouvementReduit,
     glisseOnglet: glisseOnglet,
     majCompteur: majCompteur,

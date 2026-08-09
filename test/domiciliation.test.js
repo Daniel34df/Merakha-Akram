@@ -285,3 +285,32 @@ test('dernierPassage rend toujours une date, comme avant', function () {
   assert.equal(dom.dernierPassage(c, []), ilYA(5));
   assert.equal(typeof dom.dernierPassage(c, []), 'string');
 });
+
+/* ── comment la personne s'est manifestée, dit en français ──
+
+   Le libellé vivait dans l'interface, dans un seul des trois écrans qui
+   l'affichent. Il appartient à la notion : `derniereManifestation` rend un
+   moyen, et c'est ici qu'on sait comment il se dit. */
+
+test('chaque moyen de manifestation a son libellé', function () {
+  assert.equal(dom.libelleMoyen('place'), 'passage');
+  assert.equal(dom.libelleMoyen('telephone'), 'appel de sa part');
+  assert.equal(dom.libelleMoyen('retrait'), 'courrier retiré');
+  assert.equal(dom.libelleMoyen('ouverture'), 'ouverture du dossier');
+});
+
+test('les quatre moyens que le calcul rend sont tous nommés', function () {
+  /* Le vrai risque : ajouter un moyen dans `derniereManifestation` et oublier
+     son libellé. L'écran afficherait alors une étiquette vide, sans rien dire. */
+  const MOYENS = ['place', 'telephone', 'retrait', 'ouverture'];
+  MOYENS.forEach(function (m) {
+    assert.ok(dom.libelleMoyen(m), 'le moyen « ' + m + ' » n’a pas de libellé');
+  });
+  assert.deepEqual(Object.keys(dom.MOYENS).sort(), MOYENS.slice().sort());
+});
+
+test('un moyen inconnu ne rend rien, et surtout pas « undefined »', function () {
+  assert.equal(dom.libelleMoyen('autre'), '');
+  assert.equal(dom.libelleMoyen(undefined), '');
+  assert.equal(dom.libelleMoyen(null), '');
+});

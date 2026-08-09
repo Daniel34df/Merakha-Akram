@@ -288,8 +288,25 @@
     };
   }
 
+  /* Comment la personne s'est manifestée, dit en français.
+     `derniereManifestation` rend un des quatre moyens ci-dessus ; le libellé
+     vivait dans l'interface, à côté d'un seul des trois écrans qui l'affichent.
+     Il appartient à la notion, pas à l'écran — et ici il se teste. */
+  const MOYENS = {
+    place: 'passage',
+    telephone: 'appel de sa part',
+    retrait: 'courrier retiré',
+    ouverture: 'ouverture du dossier'
+  };
+
+  function libelleMoyen(moyen) {
+    return MOYENS[moyen] || '';
+  }
+
   return {
     DEFAUTS: DEFAUTS,
+    MOYENS: MOYENS,
+    libelleMoyen: libelleMoyen,
     echeance: echeance,
     derniereManifestation: derniereManifestation,
     dernierPassage: dernierPassage,

@@ -43,6 +43,7 @@ const SHELL = [
   './assets/js/ui/tableau.js',
   './assets/js/ui/noyau.js',
   './assets/js/ui/impression.js',
+  './assets/js/ui/domiciliation.js',
   './assets/js/app.js',
   './assets/icons/logo.svg',
   './assets/icons/icon-192.png',
