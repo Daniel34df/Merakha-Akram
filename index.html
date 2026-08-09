@@ -778,6 +778,15 @@
           <select id="gabaritLangue" class="langue-select"></select>
           <span class="hint" id="gabaritLangueEtat"></span>
         </div>
+        <label class="inline" style="margin:10px 0 4px;">
+          <input type="checkbox" id="setBilingue">
+          Joindre le français sous le message écrit dans une autre langue
+        </label>
+        <p class="hint" style="margin:0 0 14px;">
+          La personne montre souvent son message à quelqu'un qui ne lit pas sa langue —
+          un travailleur social, un autre guichet. Et l'agent qui l'envoie peut relire ce
+          qu'il envoie. Sans effet pour un destinataire francophone.
+        </p>
         <div class="gabarit-onglets" id="gabaritOnglets" role="tablist"></div>
         <p class="hint" id="gabaritEtat" style="margin:-4px 0 14px;"></p>
 
@@ -785,11 +794,11 @@
         <input type="text" id="setSubject">
         <label for="setBody">Corps du message</label>
         <textarea id="setBody" rows="8"></textarea>
-        <p class="hint">
-          Variables : <code>{nom}</code>, <code>{courriel}</code>, <code>{date}</code>, <code>{bureau}</code>,
-          <code>{type}</code> (« Colis »), <code>{article}</code> (« Un colis », en début de phrase),
-          <code>{article_min}</code> (« un colis », au milieu), <code>{code}</code> (code de retrait).
-        </p>
+        <!-- La liste vient de util.VARIABLES_MESSAGE : écrite en dur ici, elle
+             mentait dès qu'une variable était ajoutée — et on ne s'en apercevait
+             qu'en écrivant un gabarit qui ne marchait pas. -->
+        <p class="hint">Variables disponibles :</p>
+        <ul class="hint variables-gabarit" id="variablesGabarit"></ul>
         <div class="row-actions" id="gabaritActions" hidden>
           <button class="btn ghost small" id="gabaritEffacerBtn">Revenir au modèle général pour ce type</button>
         </div>

@@ -55,7 +55,9 @@
     // Gabarits par langue ; vide = tout le monde reçoit le message français.
     langues: {},
     // Antennes ; vide = un seul bureau, la notion n'apparaît pas.
-    antennes: []
+    antennes: [],
+    // Joindre le français sous le message rédigé dans une autre langue.
+    bilingue: false
   };
 
   const state = {

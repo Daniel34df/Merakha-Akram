@@ -469,26 +469,27 @@ async function sendResetCode(ctx, user, code) {
    boucle automatique, elle, n'a personne de connecté et utilise le serveur. */
 async function envoyerRelance(ctx, entree, currentUser) {
   const settings = ctx.db.data.settings;
-  const vars = {
-    nom: entree.name,
-    courriel: entree.email,
-    date: new Date().toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
-    bureau: settings.officeName
-  };
   const jours = Math.floor(reminders.joursEcoules(entree.date, Date.now()));
   const type = util.typeCourrier(entree.type);
-  vars.type = type.label;
-  vars.article = type.article;
-  vars.article_min = type.article.toLowerCase();
-  vars.code = entree.pickupCode || '';
 
   const destinataire = (ctx.db.data.contacts || []).find(function (c) {
     return c.id === entree.contactId || util.normalize(c.email) === util.normalize(entree.email);
   });
-  const gabarit = util.gabaritPour(settings, type.id, destinataire && destinataire.langue);
-  const subject = 'Rappel — ' + util.renderTemplate(gabarit.subject, vars);
+  // Une seule liste de variables, tenue dans util : voir variablesMessage.
+  const vars = util.variablesMessage({
+    contact: destinataire,
+    nom: entree.name,
+    courriel: entree.email,
+    type: entree.type,
+    bureau: settings.officeName,
+    code: entree.pickupCode || '',
+    jours: jours
+  });
+  const langueVisee = util.langue(destinataire && destinataire.langue).id;
+  const rendu = util.messagePour(settings, type.id, langueVisee, vars);
+  const subject = 'Rappel — ' + rendu.subject;
   const text =
-    util.renderTemplate(gabarit.body, vars) +
+    rendu.body +
     '\n\n— Rappel : ' +
     type.article.toLowerCase() +
     ' vous attend depuis ' +
@@ -2325,6 +2326,12 @@ async function handleApi(req, res, ctx, pathname) {
         langues: nettoyerLangues(
           body.langues !== undefined ? body.langues : db.data.settings.langues
         ),
+        /* Joindre le français sous le message écrit dans la langue du
+           destinataire. La personne montre souvent le message à quelqu'un qui
+           ne lit pas sa langue — et l'agent doit pouvoir relire ce qu'il
+           envoie. */
+        bilingue:
+          body.bilingue !== undefined ? !!body.bilingue : !!db.data.settings.bilingue,
         /* Durée de conservation des courriers terminés, en mois. 0 = illimitée.
            Bornée à dix ans : au-delà, ce n'est plus une durée de conservation,
            c'est un oubli de la fixer. */
@@ -2479,18 +2486,8 @@ async function handleApi(req, res, ctx, pathname) {
     }
 
     const settings = db.data.settings;
-    const vars = {
-      nom: name,
-      courriel: to,
-      date: new Date().toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
-      bureau: settings.officeName
-    };
     const type = util.typeCourrier(body.type);
     const code = genererCodeRetrait(db.data.history);
-    vars.type = type.label;
-    vars.article = type.article;
-    vars.article_min = type.article.toLowerCase();
-    vars.code = code;
 
     // Le gabarit du type l'emporte sur le modèle général ; ce que la requête
     // fournit explicitement l'emporte sur les deux.
@@ -2506,9 +2503,18 @@ async function handleApi(req, res, ctx, pathname) {
       return !!viseParCourriel && util.normalize(c.email) === viseParCourriel;
     });
     const langueVisee = util.langue(body.langue || (contactVise && contactVise.langue)).id;
-    const gabarit = util.gabaritPour(settings, type.id, langueVisee);
-    const subject = body.subject ? String(body.subject) : util.renderTemplate(gabarit.subject, vars);
-    const corpsBase = body.body ? String(body.body) : util.renderTemplate(gabarit.body, vars);
+    // Une seule liste de variables, tenue dans util : voir variablesMessage.
+    const vars = util.variablesMessage({
+      contact: contactVise,
+      nom: name,
+      courriel: to,
+      type: body.type,
+      bureau: settings.officeName,
+      code: code
+    });
+    const rendu = util.messagePour(settings, type.id, langueVisee, vars);
+    const subject = body.subject ? String(body.subject) : rendu.subject;
+    const corpsBase = body.body ? String(body.body) : rendu.body;
     // Le code voyage avec le message, quel que soit le gabarit choisi.
     const text = corpsBase + '\n\nCode de retrait : ' + code + '\nPrésentez-le au guichet.';
 

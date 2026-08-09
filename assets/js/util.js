@@ -280,6 +280,56 @@
     });
   }
 
+  /* Les variables qu'un gabarit peut employer.
+
+     Elles étaient construites en trois endroits — l'interface, la relance
+     automatique, et la route d'envoi — chacun avec sa propre copie. Trois
+     copies d'une même liste, c'est trois occasions de diverger : une variable
+     ajoutée d'un côté manquait ailleurs, sans que rien ne le signale.
+
+     {boite} est celle qui manquait partout : c'est pourtant le renseignement
+     le plus utile du message. « Votre courrier vous attend à la boîte B-12 »
+     évite une question au guichet. */
+  function variablesMessage(donnees) {
+    const d = donnees || {};
+    const type = typeCourrier(d.type);
+    const contact = d.contact || {};
+    return {
+      nom: d.nom !== undefined ? d.nom : contact.name || '',
+      courriel: d.courriel !== undefined ? d.courriel : contact.email || '',
+      // Le numéro de casier, tel qu'il est écrit sur la porte.
+      boite: d.boite !== undefined ? d.boite : contact.box || '',
+      telephone: d.telephone !== undefined ? d.telephone : contact.telephone || '',
+      date: formatJour(new Date().toISOString().slice(0, 10)),
+      bureau: d.bureau || 'Bureau du Courrier',
+      type: type.label,
+      article: type.article,
+      // « Un colis » ouvre une phrase ; « un colis » se glisse au milieu.
+      article_min: type.article.toLowerCase(),
+      code: d.code || '',
+      /* Échéance d'attestation et jours écoulés : vides pour un courrier, ils
+         servent aux messages qui concernent la domiciliation elle-même. */
+      echeance: d.echeance ? formatJour(d.echeance) : '',
+      jours: d.jours === undefined || d.jours === null ? '' : String(d.jours)
+    };
+  }
+
+  /** Les variables offertes aux gabarits, pour les afficher dans l'aide. */
+  const VARIABLES_MESSAGE = [
+    ['nom', 'le nom du destinataire'],
+    ['boite', 'son numéro de boîte'],
+    ['courriel', 'son adresse électronique'],
+    ['telephone', 'son téléphone'],
+    ['bureau', 'le nom de votre organisme'],
+    ['date', 'la date du jour'],
+    ['type', 'le type de courrier — Lettre, Colis…'],
+    ['article', '« Un courrier », « Un colis »… pour ouvrir une phrase'],
+    ['article_min', 'le même, en minuscule, au milieu d’une phrase'],
+    ['code', 'le code de retrait à quatre chiffres'],
+    ['echeance', 'la fin de validité de l’attestation'],
+    ['jours', 'le nombre de jours écoulés']
+  ];
+
   /* Gabarit à employer pour un type de courrier donné.
 
      Un recommandé n'appelle pas la même phrase qu'un prospectus : chaque type
@@ -315,6 +365,49 @@
       if (general2) return general2;
     }
     return complet(settings && settings.templates && settings.templates[typeId]) || general;
+  }
+
+  /* Le message rendu, éventuellement dans deux langues.
+
+     Un message part dans la langue du destinataire. C'est le bon choix — une
+     notification qu'on ne peut pas lire ne notifie rien — mais il a un revers
+     que le guichet connaît bien :
+
+       · la personne montre souvent le message à quelqu'un d'autre, un
+         travailleur social, un autre guichet, qui ne lit pas sa langue ;
+       · l'agent qui l'envoie ne peut pas relire ce qu'il envoie.
+
+     D'où l'option de joindre le français dessous, séparé d'un trait. Quand la
+     langue retenue est déjà le français, rien ne change : ni deuxième texte,
+     ni trait. C'est la règle qui garde le cas courant intact. */
+  const SEPARATEUR_LANGUES = '\n\n— — —\n\n';
+  const LANGUE_JOINTE = 'fr';
+
+  function messagePour(settings, typeId, langueId, vars, options) {
+    const opts = options || {};
+    const gabarit = gabaritPour(settings, typeId, langueId);
+    const rendu = {
+      subject: renderTemplate(gabarit.subject, vars),
+      body: renderTemplate(gabarit.body, vars)
+    };
+
+    const joindre = opts.bilingue !== undefined ? opts.bilingue : !!(settings && settings.bilingue);
+    const langue = langueId ? String(langueId) : LANGUE_JOINTE;
+    if (!joindre || langue === LANGUE_JOINTE) return rendu;
+
+    /* Le second texte est celui de la langue jointe. S'il est identique au
+       premier — le bureau n'a pas écrit de gabarit dans la langue du
+       destinataire, donc les deux retombent sur le même modèle — on ne le
+       répète pas : deux fois la même chose n'aide personne. */
+    const second = gabaritPour(settings, typeId, LANGUE_JOINTE);
+    const corpsSecond = renderTemplate(second.body, vars);
+    if (corpsSecond === rendu.body) return rendu;
+
+    return {
+      subject: rendu.subject,
+      body: rendu.body + SEPARATEUR_LANGUES + corpsSecond,
+      bilingue: true
+    };
   }
 
   /** Ne garde que les gabarits complets, sur des types connus. */
@@ -603,6 +696,10 @@
     uuid: uuid,
     renderTemplate: renderTemplate,
     gabaritPour: gabaritPour,
+    messagePour: messagePour,
+    variablesMessage: variablesMessage,
+    VARIABLES_MESSAGE: VARIABLES_MESSAGE,
+    SEPARATEUR_LANGUES: SEPARATEUR_LANGUES,
     nettoyerGabarits: nettoyerGabarits,
     sameContact: sameContact,
     matchesQuery: matchesQuery,

@@ -3738,7 +3738,21 @@
     renderPreview();
   }
 
+  /* L'aide des variables est construite depuis util.VARIABLES_MESSAGE plutôt
+     qu'écrite dans la page : une liste en dur ment dès qu'une variable est
+     ajoutée, et on ne s'en aperçoit qu'en écrivant un gabarit qui ne marche
+     pas. Un test compare les deux listes. */
+  function renderVariablesGabarit() {
+    const ul = $('variablesGabarit');
+    if (!ul) return;
+    ul.innerHTML = util.VARIABLES_MESSAGE.map(function (v) {
+      return '<li><code>{' + esc(v[0]) + '}</code> — ' + esc(v[1]) + '</li>';
+    }).join('');
+  }
+
   function fillSettingsForm() {
+    renderVariablesGabarit();
+    $('setBilingue').checked = !!S.settings.bilingue;
     $('setOffice').value = S.settings.officeName || '';
     $('setFrom').value = S.settings.from || '';
     $('setCc').value = S.settings.cc || '';
@@ -3828,7 +3842,8 @@
         cc: util.formatAddressList(cc.entries),
         bcc: util.formatAddressList(bcc.entries),
         templates: view.gabarits,
-        langues: view.gabaritsLangues
+        langues: view.gabaritsLangues,
+        bilingue: $('setBilingue').checked
       });
       fillSettingsForm();
       syncCopiesFromSettings(!view.copiesTouched);

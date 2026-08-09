@@ -972,12 +972,12 @@ Tout ce qui est calculable — règles de domiciliation, listes d'appels, bornes
 d'affichage, droits, filtrage par antenne — vit dans des modules chargeables des
 deux côtés et se teste là, vite et partout.
 
-Reste ce qui exige un écran. Six parcours cliquent pour de vrai :
+Reste ce qui exige un écran. Sept parcours cliquent pour de vrai :
 
 ```bash
 npm i                    # installe Playwright (outillage seulement)
 npx playwright install chromium
-npm run verifier         # les six, chacun sur son serveur et sa base
+npm run verifier         # les sept, chacun sur son serveur et sa base
 npm run verifier -- rappel   # un seul
 npm run parcours         # le parcours complet, qui s'imprime comme procédure
 ```

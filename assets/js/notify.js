@@ -16,34 +16,35 @@
     /* La langue vient du destinataire, sauf si l'appelant en impose une —
        l'aperçu des Réglages montre la langue en cours d'édition. */
     const langueId = util.langue(o.langue !== undefined ? o.langue : contact && contact.langue).id;
-    const vars = {
-      nom: contact.name,
-      courriel: contact.email,
-      date: new Date().toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
+    /* Les variables viennent de util : elles étaient recopiées ici, dans la
+       relance et dans la route d'envoi — trois listes à tenir d'accord. */
+    const vars = util.variablesMessage({
+      contact: contact,
+      type: o.type,
       bureau: settings.officeName || 'Bureau du Courrier',
-      // Le type voyage avec le message : c'est ce qui permet d'écrire
-      // « {article} vous attend » sans rédiger quatre variantes à la main.
-      type: type.label,
-      // « Un colis » ouvre une phrase ; « un colis » se glisse au milieu.
-      article: type.article,
-      article_min: type.article.toLowerCase(),
       code: o.code || ''
-    };
+    });
+
     /* Le gabarit propre au type l'emporte, sauf si l'appelant impose un texte
        (l'aperçu des réglages montre exactement ce qui est en train d'être
        écrit, pas ce qui serait choisi). */
-    const gabarit =
-      o.subject !== undefined || o.body !== undefined
-        ? { subject: o.subject !== undefined ? o.subject : settings.subject, body: o.body !== undefined ? o.body : settings.body }
-        : util.gabaritPour(settings, type.id, langueId);
+    const impose = o.subject !== undefined || o.body !== undefined;
+    const rendu = impose
+      ? {
+          subject: util.renderTemplate(o.subject !== undefined ? o.subject : settings.subject, vars),
+          body: util.renderTemplate(o.body !== undefined ? o.body : settings.body, vars)
+        }
+      : util.messagePour(settings, type.id, langueId, vars, { bilingue: o.bilingue });
+
     const pick = function (key) {
       return util.formatAddressList(
         util.parseAddressList(o[key] !== undefined ? o[key] : settings[key] || '').entries
       );
     };
     return {
-      subject: util.renderTemplate(gabarit.subject, vars),
-      body: util.renderTemplate(gabarit.body, vars),
+      subject: rendu.subject,
+      body: rendu.body,
+      bilingue: !!rendu.bilingue,
       from: pick('from'),
       cc: pick('cc'),
       bcc: pick('bcc')

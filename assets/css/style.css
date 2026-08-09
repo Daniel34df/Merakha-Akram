@@ -209,6 +209,19 @@ tbody tr:nth-child(n+5){animation-delay:0.1s;}
   white-space:nowrap;
 }
 
+/* La liste des variables d'un gabarit : deux colonnes quand la place le
+   permet, pour qu'elle se parcoure d'un coup d'oeil plutôt qu'en déroulant. */
+.variables-gabarit{
+  list-style:none;
+  margin:0 0 14px;
+  padding:0;
+  columns:2;
+  column-gap:28px;
+}
+.variables-gabarit li{margin:0 0 3px;break-inside:avoid;}
+.variables-gabarit code{font-weight:600;}
+@media (max-width:640px){ .variables-gabarit{columns:1;} }
+
 .card h2{
   font-family:var(--typewriter);
   font-size:15px;

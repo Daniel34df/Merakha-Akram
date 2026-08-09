@@ -7,7 +7,7 @@
  *
  * Ce que `node --test` ne peut pas faire : ouvrir un écran. La suite ordinaire
  * couvre tout ce qui est pur — et c'est là que va l'essentiel, parce que c'est
- * là que ça se vérifie vite et partout. Restent ces six parcours, qui cliquent
+ * là que ça se vérifie vite et partout. Restent ces sept parcours, qui cliquent
  * pour de vrai.
  *
  * Chacun tourne sur **son** serveur et **sa** base : les faire partager un
@@ -31,7 +31,8 @@ const SCRIPTS = [
   ['onglets', 'aucune erreur JS sur les six onglets, et les quatre documents s’impriment'],
   ['maitre', 'le code de reprise publié ne s’utilise que depuis le poste du serveur'],
   ['rappel', 'une personne sans courriel qui n’est pas venue revient dans la liste'],
-  ['appel-entrant', 'un appel de la personne compte comme manifestation']
+  ['appel-entrant', 'un appel de la personne compte comme manifestation'],
+  ['gabarits', 'le numéro de boîte dans les messages, et la seconde langue']
 ];
 
 const PORT_BASE = Number(process.env.PORT_BASE || 5490);

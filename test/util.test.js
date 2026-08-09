@@ -240,3 +240,116 @@ test('dansAntenne laisse tout passer quand aucune antenne n’est demandée', fu
   assert.equal(util.dansAntenne({ antenneId: 'sud' }, 'nord', liste), false);
   assert.equal(util.dansAntenne({}, 'nord', liste), true, 'l’ancien relève de la première');
 });
+
+/* ═══════════ les variables d'un message ═══════════
+
+   Elles étaient construites en trois endroits — l'interface, la relance
+   automatique, la route d'envoi — chacun avec sa copie. Trois listes à tenir
+   d'accord, donc trois occasions de diverger. {boite} manquait aux trois. */
+
+const CONTACT = { name: 'Amina Diallo', email: '', box: 'B-12', telephone: '06 12 34 56 78' };
+
+test('le numéro de boîte est offert aux gabarits', function () {
+  const v = util.variablesMessage({ contact: CONTACT, type: 'colis', bureau: 'Accueil', code: '4821' });
+  assert.equal(v.boite, 'B-12', 'c’est le renseignement le plus utile du message');
+  assert.equal(v.nom, 'Amina Diallo');
+  assert.equal(v.telephone, '06 12 34 56 78');
+  assert.equal(v.code, '4821');
+  assert.equal(v.type, 'Colis');
+  assert.equal(v.article, 'Un colis');
+  assert.equal(v.article_min, 'un colis');
+});
+
+test('une fiche sans boîte ne laisse pas « undefined » dans le message', function () {
+  const v = util.variablesMessage({ contact: { name: 'Omar' } });
+  assert.equal(v.boite, '');
+  assert.equal(v.courriel, '');
+  assert.equal(v.echeance, '');
+  assert.equal(v.jours, '');
+});
+
+test('l’appelant peut imposer un nom et une adresse', function () {
+  // La relance travaille sur une ligne d'historique, pas sur la fiche.
+  const v = util.variablesMessage({ contact: CONTACT, nom: 'Nom du courrier', courriel: 'a@ex.org' });
+  assert.equal(v.nom, 'Nom du courrier');
+  assert.equal(v.courriel, 'a@ex.org');
+  assert.equal(v.boite, 'B-12', 'le reste vient toujours de la fiche');
+});
+
+test('un gabarit qui emploie {boite} rend le numéro', function () {
+  const v = util.variablesMessage({ contact: CONTACT });
+  assert.equal(
+    util.renderTemplate('Votre courrier vous attend à la boîte {boite}.', v),
+    'Votre courrier vous attend à la boîte B-12.'
+  );
+});
+
+test('l’aide des réglages annonce exactement les variables qui existent', function () {
+  /* Si l'une des deux listes bouge sans l'autre, l'aide ment — et c'est le
+     genre de mensonge qu'on ne découvre qu'en écrivant un gabarit qui ne
+     marche pas. */
+  const offertes = Object.keys(util.variablesMessage({ contact: CONTACT })).sort();
+  const annoncees = util.VARIABLES_MESSAGE.map(function (v) { return v[0]; }).sort();
+  assert.deepEqual(annoncees, offertes);
+});
+
+/* ═══════════ le message dans deux langues ═══════════ */
+
+const REGLAGES = {
+  subject: 'Un courrier vous attend',
+  body: 'Bonjour {nom}, un courrier vous attend.',
+  langues: {
+    ar: { subject: 'بريد في انتظارك', body: 'مرحبا {nom}، لديك بريد.' }
+  }
+};
+
+test('sans l’option, le message part dans la seule langue du destinataire', function () {
+  const v = util.variablesMessage({ contact: CONTACT });
+  const m = util.messagePour(REGLAGES, 'lettre', 'ar', v);
+  assert.equal(m.body, 'مرحبا Amina Diallo، لديك بريد.');
+  assert.ok(!m.bilingue);
+});
+
+test('avec l’option, le français est joint dessous', function () {
+  /* La personne montre souvent le message à quelqu'un qui ne lit pas sa
+     langue — et l'agent doit pouvoir relire ce qu'il envoie. */
+  const v = util.variablesMessage({ contact: CONTACT });
+  const m = util.messagePour(REGLAGES, 'lettre', 'ar', v, { bilingue: true });
+  assert.ok(m.bilingue);
+  assert.ok(m.body.includes('لديك بريد'), 'la langue du destinataire vient en premier');
+  assert.ok(m.body.includes('Bonjour Amina Diallo'), 'le français suit');
+  assert.ok(m.body.indexOf('لديك بريد') < m.body.indexOf('Bonjour'), 'dans cet ordre');
+  assert.ok(m.body.includes(util.SEPARATEUR_LANGUES.trim()), 'séparés par un trait');
+});
+
+test('un destinataire francophone ne reçoit pas le message en double', function () {
+  const v = util.variablesMessage({ contact: CONTACT });
+  const m = util.messagePour(REGLAGES, 'lettre', 'fr', v, { bilingue: true });
+  assert.equal(m.body, 'Bonjour Amina Diallo, un courrier vous attend.');
+  assert.ok(!m.bilingue, 'le cas courant reste intact');
+});
+
+test('sans gabarit dans sa langue, le message n’est pas répété deux fois', function () {
+  /* Les deux retombent alors sur le modèle général : joindre « le français »
+     reviendrait à écrire deux fois la même chose. */
+  const v = util.variablesMessage({ contact: CONTACT });
+  const m = util.messagePour(REGLAGES, 'lettre', 'uk', v, { bilingue: true });
+  assert.equal(m.body, 'Bonjour Amina Diallo, un courrier vous attend.');
+  assert.ok(!m.bilingue);
+});
+
+test('l’option se lit aussi dans les réglages du bureau', function () {
+  const v = util.variablesMessage({ contact: CONTACT });
+  const avec = util.messagePour(Object.assign({ bilingue: true }, REGLAGES), 'lettre', 'ar', v);
+  assert.ok(avec.bilingue, 'pas besoin de le repréciser à chaque envoi');
+});
+
+test('le gabarit d’un type l’emporte, dans les deux langues', function () {
+  const reglages = Object.assign({}, REGLAGES, {
+    templates: { colis: { subject: 'Un colis', body: 'Un colis vous attend, {nom}.' } }
+  });
+  const v = util.variablesMessage({ contact: CONTACT, type: 'colis' });
+  const m = util.messagePour(reglages, 'colis', 'ar', v, { bilingue: true });
+  assert.ok(m.body.includes('لديك بريد'), 'la langue garde son texte');
+  assert.ok(m.body.includes('Un colis vous attend'), 'et le français prend celui du type');
+});
