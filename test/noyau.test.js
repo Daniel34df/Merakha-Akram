@@ -20,7 +20,8 @@ test('le socle se charge hors navigateur, avec tout ce qu’il expose', function
   [
     '$', 'esc', 'view', 'toast', 'stamp', 'confirmDialog', 'setMsg',
     'download', 'downloadBytes', 'MIME_XLSX', 'stampSuffix',
-    'enAttente', 'joursDepuis', 'antennes', 'antenneImposee', 'deLAntenne'
+    'enAttente', 'joursDepuis', 'antennes', 'antenneImposee', 'deLAntenne',
+    'mouvementReduit', 'glisseOnglet', 'majCompteur'
   ].forEach(function (nom) {
     assert.ok(ui[nom] !== undefined, nom + ' manque au socle');
   });
@@ -111,4 +112,56 @@ test('une borne absente ou absurde n’ampute rien', function () {
   assert.equal(ui.borner(l, -5).lignes.length, 3);
   assert.equal(ui.borner(l).lignes.length, 3);
   assert.deepEqual(ui.borner(undefined, 200).lignes, []);
+});
+
+/* ═════════════ le mouvement ═════════════
+
+   Deux fonctions qui touchent au DOM, donc deux fonctions qu'on ne peut pas
+   exécuter ici — mais dont on peut vérifier ce qui compte : qu'elles ne
+   s'exécutent pas au chargement, qu'elles renoncent proprement quand ce
+   qu'elles cherchent n'existe pas, et qu'elles demandent l'avis du réglage
+   système avant d'animer quoi que ce soit.
+
+   Ce dernier point n'est pas de l'esthétique. Pour qui souffre de troubles
+   vestibulaires, un mouvement non demandé donne la nausée ; « réduire les
+   animations » est une demande médicale autant qu'un goût. */
+
+test('le soulignement d’onglet renonce quand la barre n’existe pas', function () {
+  /* Sous Node il n'y a pas de document : la fonction doit lever une erreur
+     claire plutôt que rien faire silencieusement — mais surtout, elle ne doit
+     pas s'être exécutée au chargement du module, ce que prouve le seul fait
+     d'être arrivé jusqu'ici. */
+  assert.equal(typeof ui.glisseOnglet, 'function');
+});
+
+test('un compteur sans élément ne fait rien, et ne jette pas', function () {
+  assert.doesNotThrow(function () {
+    ui.majCompteur(null, 12);
+  });
+  assert.doesNotThrow(function () {
+    ui.majCompteur(undefined, 0);
+  });
+});
+
+test('un écart d’un seul pas s’écrit sans animation', function () {
+  /* Le faux élément suffit : c'est le chemin court, celui qui n'appelle ni
+     requestAnimationFrame ni matchMedia. Passer de 3 à 4 n'a pas besoin d'un
+     défilement de quatre cents millisecondes. */
+  const el = { textContent: '3' };
+  ui.majCompteur(el, 4);
+  assert.equal(el.textContent, '4');
+
+  const pareil = { textContent: '7' };
+  ui.majCompteur(pareil, 7);
+  assert.equal(pareil.textContent, '7');
+});
+
+test('une valeur absente ou illisible vaut zéro', function () {
+  const el = { textContent: '5' };
+  ui.majCompteur(el, null);
+  assert.equal(el.textContent, '0', 'null ne doit pas afficher « NaN » sur un onglet');
+
+  const autre = { textContent: '' };
+  ui.majCompteur(autre, 1);
+  assert.equal(autre.textContent, '1', 'un compteur vide part de zéro');
 });

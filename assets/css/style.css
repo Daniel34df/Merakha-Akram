@@ -275,7 +275,18 @@ header::after{
   left:0;right:0;bottom:0;
   height:2px;
   border-radius:2px;
-  background:linear-gradient(90deg, var(--a1), var(--a2) 45%, transparent);
+  /* Le dégradé fait deux fois la largeur et se déplace : le filet respire,
+     très lentement. Dix-huit secondes pour un aller-retour — assez lent pour
+     qu'on ne le surprenne jamais en train de bouger, assez présent pour que la
+     page ne soit pas tout à fait immobile. */
+  background:linear-gradient(90deg, var(--a1), var(--a2) 25%, var(--a1) 50%, var(--a2) 75%, var(--a1));
+  background-size:200% 100%;
+  animation:filetRespire 18s ease-in-out infinite;
+}
+@keyframes filetRespire{
+  0%{background-position:0% 50%;}
+  50%{background-position:100% 50%;}
+  100%{background-position:0% 50%;}
 }
 header h1{
   font-family:var(--display);
@@ -376,6 +387,10 @@ nav button{
   cursor:pointer;
   white-space:nowrap;
 }
+nav button{
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie),
+             box-shadow var(--t2) var(--sortie);
+}
 nav button:hover{color:var(--ink);background:color-mix(in srgb, var(--ink) 6%, transparent);}
 nav button.active{
   background:var(--surface);
@@ -410,33 +425,91 @@ nav button.active .tab-count{
   background:color-mix(in srgb, var(--teinte) 18%, transparent);
   color:var(--teinte);
 }
+.tab-count{transition:background-color var(--t2) var(--sortie), color var(--t2) var(--sortie);}
+
+/* Le soulignement qui glisse d'un onglet à l'autre.
+   Un seul élément, placé par `BC.ui.glisseOnglet()` en position et en largeur.
+   Six barres qu'on allume et qu'on éteint feraient clignoter ; une barre qui
+   se déplace fait suivre le regard, et dit d'où l'on vient. */
+.nav-glisse{
+  position:absolute;
+  /* `left:0` n'est pas décoratif : sans lui, un élément absolu garde sa
+     position statique — c'est-à-dire, dans une barre en flex, après le dernier
+     bouton. La barre partirait de la droite et tout le calcul serait faux. */
+  left:0;
+  bottom:5px;
+  height:3px;
+  border-radius:3px;
+  background:linear-gradient(90deg, var(--teinte), var(--teinte-vif));
+  box-shadow:0 0 12px color-mix(in srgb, var(--teinte) 55%, transparent);
+  pointer-events:none;
+  opacity:0;
+  transition:transform var(--t2) var(--sortie), width var(--t2) var(--sortie),
+             opacity var(--t1) var(--sortie), background-color var(--t2) var(--sortie);
+}
+.nav-glisse.pret{opacity:1;}
 
 .panel{display:none;}
-.panel.active{display:block;animation:panelIn 0.3s cubic-bezier(.2,.7,.3,1);}
-@keyframes panelIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+.panel.active{display:block;animation:panelIn var(--t3) var(--sortie);}
+@keyframes panelIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
 
-/* Les cartes d'un onglet entrent l'une après l'autre : le regard suit la page
-   au lieu de la recevoir d'un bloc. */
-.panel.active > .card{animation:cardIn 0.34s cubic-bezier(.2,.7,.3,1) backwards;}
-.panel.active > .card:nth-child(2){animation-delay:0.05s;}
-.panel.active > .card:nth-child(3){animation-delay:0.1s;}
-.panel.active > .card:nth-child(4){animation-delay:0.15s;}
-@keyframes cardIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+/* Les cartes d'un onglet entrent l'une après l'autre, au ressort : le regard
+   suit la page au lieu de la recevoir d'un bloc. La cascade s'arrête à la
+   quatrième — au-delà, l'attente devient plus longue que le service rendu. */
+.panel.active > .card,
+.reglages-groupe > .card{animation:cardIn var(--t3) var(--ressort) backwards;}
+.panel.active > .card:nth-child(2){animation-delay:60ms;}
+.panel.active > .card:nth-child(3){animation-delay:120ms;}
+.panel.active > .card:nth-child(4){animation-delay:180ms;}
+@keyframes cardIn{
+  from{opacity:0;transform:translateY(18px) scale(.985);}
+  to{opacity:1;transform:none;}
+}
 
-/* Lignes de tableau et résultats : même arrivée, très courte. */
-tbody tr{animation:rowIn 0.24s ease backwards;}
-tbody tr:nth-child(1){animation-delay:0.02s;}
-tbody tr:nth-child(2){animation-delay:0.04s;}
-tbody tr:nth-child(3){animation-delay:0.06s;}
-tbody tr:nth-child(4){animation-delay:0.08s;}
-tbody tr:nth-child(n+5){animation-delay:0.1s;}
-@keyframes rowIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+/* Lignes de tableau et résultats : même arrivée, très courte, et surtout
+   plafonnée. Au-delà de la quatrième, tout arrive ensemble — une liste de
+   dix mille courriers ne peut pas se permettre dix mille animations
+   décalées. */
+tbody tr{animation:rowIn var(--t2) var(--sortie) backwards;}
+tbody tr:nth-child(1){animation-delay:20ms;}
+tbody tr:nth-child(2){animation-delay:40ms;}
+tbody tr:nth-child(3){animation-delay:60ms;}
+tbody tr:nth-child(4){animation-delay:80ms;}
+tbody tr:nth-child(n+5){animation-delay:100ms;}
+@keyframes rowIn{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
 
-.result-row{animation:rowIn 0.28s ease backwards;}
-.suggestions{animation:sugIn 0.16s ease;}
-@keyframes sugIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
-.msg{animation:msgIn 0.25s ease;}
-@keyframes msgIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:none;}}
+/* Le survol d'une ligne.
+   En couleur de fond et en filet interne — jamais en `box-shadow` extérieure
+   ni en `transform`, qui obligeraient le navigateur à recomposer la table
+   entière. Le rendu de dix mille courriers était descendu de 1 478 ms à 37 ms ;
+   ce n'est pas un survol qui va le rendre. */
+tbody tr{transition:background-color var(--t1) var(--sortie);}
+tbody tr:hover{background:color-mix(in srgb, var(--teinte) 8%, transparent);}
+tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--teinte);}
+
+.result-row{
+  animation:rowIn var(--t2) var(--sortie) backwards;
+  transition:transform var(--t1) var(--sortie), border-color var(--t1) var(--sortie),
+             box-shadow var(--t2) var(--sortie);
+}
+.result-row:hover{
+  transform:translateY(-2px);
+  border-color:color-mix(in srgb, var(--a1) 35%, transparent);
+  box-shadow:var(--ombre-2);
+}
+.suggestions{animation:sugIn var(--t1) var(--sortie);}
+@keyframes sugIn{from{opacity:0;transform:translateY(-8px) scale(.99);}to{opacity:1;transform:none;}}
+.msg, .fiche-retrait{animation:msgIn var(--t2) var(--sortie);}
+@keyframes msgIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+.palette-boite{animation:paletteIn var(--t2) var(--ressort);}
+@keyframes paletteIn{from{opacity:0;transform:translateY(-16px) scale(.97);}to{opacity:1;transform:none;}}
+.toast{animation:toastIn var(--t3) var(--ressort);}
+@keyframes toastIn{from{opacity:0;transform:translateX(24px) scale(.96);}to{opacity:1;transform:none;}}
+
+/* Les cartes se soulèvent au passage. Elles sont peu nombreuses par écran :
+   l'ombre animée y est sans conséquence, contrairement aux lignes. */
+.card{transition:box-shadow var(--t2) var(--sortie);}
+.card:hover{box-shadow:var(--ombre-3);}
 
 /* ---------- cartes ---------- */
 .card{
@@ -1143,10 +1216,11 @@ td input{margin-bottom:0;font-size:var(--tx-2);padding:7px 10px;}
   box-shadow:0 0 0 3px color-mix(in srgb, var(--accent-2) 18%, transparent) inset,
              0 18px 50px rgba(0,0,0,.28);
 }
-.stamp-overlay.show .stamp{animation:stampDown 0.45s cubic-bezier(.2,.9,.3,1.3) forwards;}
+.stamp-overlay.show .stamp{animation:stampDown 520ms var(--ressort) forwards;}
 @keyframes stampDown{
-  0%{transform:scale(2.2) rotate(-18deg);opacity:0;}
-  60%{transform:scale(0.92) rotate(-12deg);opacity:1;}
+  0%{transform:scale(2.3) rotate(-22deg);opacity:0;}
+  55%{transform:scale(0.88) rotate(-12deg);opacity:1;}
+  75%{transform:scale(1.04) rotate(-11deg);opacity:1;}
   100%{transform:scale(1) rotate(-12deg);opacity:1;}
 }
 .stamp small{
@@ -1247,30 +1321,30 @@ footer.note{
   font-size:11.5px;
   letter-spacing:.02em;
   box-shadow:var(--ombre-2);
-  animation:majIn .34s cubic-bezier(.2,.8,.3,1) both;
+  animation:majIn var(--t3) var(--ressort) both;
 }
-.maj-distante.sortie{animation:majOut .38s ease both;}
+.maj-distante.sortie{animation:majOut var(--t3) var(--sortie) both;}
 .maj-point{
   width:7px;
   height:7px;
   border-radius:50%;
-  background:var(--accent-texte);
-  box-shadow:0 0 0 0 rgba(184,137,43,.65);
+  background:var(--a1);
+  box-shadow:0 0 0 0 color-mix(in srgb, var(--a1) 60%, transparent);
   animation:majPouls 1.9s ease-out infinite;
 }
-@keyframes majIn{from{opacity:0;transform:translateY(14px) scale(.96);}to{opacity:1;transform:none;}}
+@keyframes majIn{from{opacity:0;transform:translateY(16px) scale(.94);}to{opacity:1;transform:none;}}
 @keyframes majOut{to{opacity:0;transform:translateY(10px) scale(.98);}}
 @keyframes majPouls{
-  0%{box-shadow:0 0 0 0 rgba(184,137,43,.6);}
-  70%{box-shadow:0 0 0 7px rgba(184,137,43,0);}
-  100%{box-shadow:0 0 0 0 rgba(184,137,43,0);}
+  0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--a1) 60%, transparent);}
+  70%{box-shadow:0 0 0 8px transparent;}
+  100%{box-shadow:0 0 0 0 transparent;}
 }
 
 /* Le compteur qui vient de changer : une respiration, pas un clignotement. */
-.tab-count.vient-de-changer{animation:compteurChange 1.1s cubic-bezier(.2,.8,.3,1);}
+.tab-count.vient-de-changer{animation:compteurChange 1.1s var(--ressort);}
 @keyframes compteurChange{
   0%{transform:scale(1);}
-  22%{transform:scale(1.28);background:var(--accent-texte);color:#fff;}
+  22%{transform:scale(1.3);background:var(--accent);color:#fff;}
   100%{transform:scale(1);}
 }
 
@@ -1278,18 +1352,33 @@ footer.note{
   .maj-distante{left:14px;right:14px;bottom:14px;justify-content:center;}
 }
 
-/* Réglage système « réduire les animations » : on n'anime plus rien. */
+/* Réglage système « réduire les animations ».
+   La règle universelle coupe tout ce qui bouge, y compris ce qui a été ajouté
+   depuis — c'est pour ça qu'elle est écrite en `*` plutôt qu'en liste. Restent
+   trois cas où l'immobilité ne suffit pas : un élément dont l'état de départ
+   est invisible resterait invisible pour toujours. */
 @media (prefers-reduced-motion:reduce){
   *, *::before, *::after{
     animation-duration:0.001ms !important;
     animation-iteration-count:1 !important;
     transition-duration:0.001ms !important;
+    scroll-behavior:auto !important;
   }
+  /* Le tampon arrive posé, sans tomber. */
   .stamp{transform:rotate(-12deg);opacity:1;}
+  /* Le filet d'en-tête garde sa couleur et cesse de la promener. */
+  header::after{animation:none;background-size:100% 100%;}
   /* L'annonce reste lisible, elle cesse seulement de bouger : c'est une
      information, pas une décoration — la supprimer priverait la personne du
      seul indice qui explique pourquoi son écran a changé. */
-  .maj-point{animation:none;box-shadow:0 0 0 3px rgba(184,137,43,.35);}
+  .maj-point{animation:none;box-shadow:0 0 0 3px color-mix(in srgb, var(--a1) 40%, transparent);}
+  /* Le soulignement se pose sur le bon onglet sans le trajet. */
+  .nav-glisse{transition:none;}
+  /* Rien ne se soulève au survol : le déplacement est précisément ce dont on
+     ne veut pas ici. La couleur, elle, reste — c'est un repère, pas une
+     animation. */
+  .result-row:hover{transform:none;}
+  .btn:hover:not(:disabled), .btn:active:not(:disabled){transform:none;}
 }
 
 @media print{

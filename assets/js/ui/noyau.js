@@ -234,6 +234,98 @@
     return util.dansAntenne(objet, view.antenneActive, antennes());
   }
 
+  /* ═════════════ mouvement ═════════════
+
+     Deux gestes que la feuille de style ne peut pas faire seule, parce qu'ils
+     ont besoin de mesurer quelque chose : la position d'un onglet, et l'écart
+     entre deux nombres.
+
+     Les deux commencent par la même question — « est-ce que cette personne
+     veut que ça bouge ? ». Le réglage système « réduire les animations » n'est
+     pas une préférence esthétique : pour qui souffre de troubles vestibulaires,
+     un mouvement non demandé donne la nausée. La feuille de style le respecte
+     déjà ; ce qui est écrit en JavaScript doit le demander explicitement. */
+
+  /** Le réglage système « réduire les animations » est-il actif ? */
+  function mouvementReduit() {
+    return !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  /* Le soulignement de l'onglet ouvert, placé sous le bon bouton.
+     Il glisse d'un onglet à l'autre : six barres qu'on allume et qu'on éteint
+     feraient clignoter, une barre qui se déplace dit d'où l'on vient. Elle
+     prend au passage la teinte de l'onglet, lue sur le bouton lui-même — la
+     couleur est déclarée une seule fois, dans la feuille de style. */
+  function glisseOnglet(nom) {
+    const barre = document.getElementById('navGlisse');
+    if (!barre) return;
+    const bouton = document.querySelector('nav button[data-panel="' + nom + '"]');
+    /* Un onglet caché mesure zéro. Poser la barre à cheval sur rien la ferait
+       apparaître dans un coin : on la retire plutôt. */
+    if (!bouton || !bouton.offsetWidth) {
+      barre.classList.remove('pret');
+      return;
+    }
+    /* On mesure au rectangle plutôt qu'à `offsetLeft` : celui-ci se compte
+       depuis le bord *extérieur* du parent, alors qu'un élément absolu se pose
+       depuis l'intérieur de sa bordure. Un pixel d'écart, invisible mais faux —
+       et faux de la même façon à chaque onglet. */
+    const zone = barre.offsetParent || bouton.parentNode;
+    const ici = bouton.getBoundingClientRect();
+    const cadre = zone.getBoundingClientRect();
+    const marge = 14;
+    const large = Math.max(24, ici.width - marge * 2);
+    const x = ici.left - cadre.left - zone.clientLeft + (ici.width - large) / 2;
+    barre.style.width = large + 'px';
+    barre.style.transform = 'translateX(' + Math.round(x) + 'px)';
+    const teinte = root.getComputedStyle(bouton).getPropertyValue('--teinte');
+    if (teinte) barre.style.setProperty('--teinte', teinte.trim());
+    barre.classList.add('pret');
+  }
+
+  /* Un compteur d'onglet qui passe de 3 à 7 en défilant.
+     C'est le seul endroit où un chiffre change sans qu'on ait rien fait — un
+     courrier saisi au poste d'à côté. Le voir défiler dit « ça vient de
+     bouger » ; le voir sauter ne dit rien du tout.
+
+     Deux gardes : au-delà de six cents millisecondes on n'anime plus rien de
+     lisible, et un écart d'un seul pas ne mérite pas d'animation. */
+  function majCompteur(el, valeur) {
+    if (!el) return;
+    const cible = Number(valeur) || 0;
+    const depart = Number(el.textContent) || 0;
+    if (el._compteur) {
+      root.cancelAnimationFrame(el._compteur);
+      el._compteur = null;
+    }
+    /* Quatre raisons de ne pas animer, et la dernière n'est pas théorique :
+       ce module se charge aussi sous Node, où `requestAnimationFrame` n'existe
+       pas. Un compteur qui refuse de s'écrire parce qu'il ne peut pas défiler
+       serait un compteur faux — le chiffre passe d'abord, l'animation ensuite. */
+    if (depart === cible ||
+        Math.abs(cible - depart) < 2 ||
+        mouvementReduit() ||
+        typeof root.requestAnimationFrame !== 'function') {
+      el.textContent = String(cible);
+      return;
+    }
+    const duree = 420;
+    const debut = (root.performance && root.performance.now) ? root.performance.now() : Date.now();
+    const pas = function (maintenant) {
+      const t = Math.min(1, (maintenant - debut) / duree);
+      // Décélération : le chiffre ralentit en arrivant, il ne s'arrête pas net.
+      const adouci = 1 - Math.pow(1 - t, 3);
+      el.textContent = String(Math.round(depart + (cible - depart) * adouci));
+      if (t < 1) {
+        el._compteur = root.requestAnimationFrame(pas);
+      } else {
+        el._compteur = null;
+        el.textContent = String(cible);
+      }
+    };
+    el._compteur = root.requestAnimationFrame(pas);
+  }
+
   return {
     $: $,
     esc: esc,
@@ -251,6 +343,9 @@
     borner: borner,
     antennes: antennes,
     antenneImposee: antenneImposee,
-    deLAntenne: deLAntenne
+    deLAntenne: deLAntenne,
+    mouvementReduit: mouvementReduit,
+    glisseOnglet: glisseOnglet,
+    majCompteur: majCompteur
   };
 });

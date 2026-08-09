@@ -55,6 +55,7 @@
     document.querySelectorAll('.panel').forEach(function (p) {
       p.classList.toggle('active', p.id === 'panel-' + name);
     });
+    ui.glisseOnglet(name);
     if (root.location.hash !== '#' + name) {
       history.replaceState(null, '', '#' + name);
     }
@@ -1613,7 +1614,7 @@
       return enAttente(h) && deLAntenne(h);
     });
     $('countAttente').textContent = attente.length;
-    $('tabCountAttente').textContent = attente.length;
+    ui.majCompteur($('tabCountAttente'), attente.length);
 
     if (attente.length === 0) {
       box.innerHTML = '<div class="empty">Aucun courrier en attente. Tout est retiré.</div>';
@@ -1924,7 +1925,7 @@
       return etatCourrier(h) === 'clos';
     });
     $('countDossier').textContent = signales.length;
-    $('tabCountDossier').textContent = signales.length;
+    ui.majCompteur($('tabCountDossier'), signales.length);
 
     /* Bilan des relances : c'est le chiffre qui dit si relancer sert à quelque
        chose, et qui répond à « qui a récupéré, qui n'a pas ». */
@@ -2276,7 +2277,7 @@
   async function renderDomiciliation() {
     if (S.mode !== 'serveur' || sessionManquante()) {
       view.domiciliation = null;
-      $('tabCountDomiciliation').textContent = '0';
+      ui.majCompteur($('tabCountDomiciliation'), 0);
       $('renouvelerTable').innerHTML =
         '<div class="empty">Le suivi des domiciliations demande le registre partagé.</div>';
       $('sansPassageTable').innerHTML = '';
@@ -2293,7 +2294,7 @@
     const d = view.domiciliation;
 
     // Le compteur de l'onglet additionne ce qui demande une action.
-    $('tabCountDomiciliation').textContent = String(d.aRenouveler.length + d.sansPassage.length);
+    ui.majCompteur($('tabCountDomiciliation'), d.aRenouveler.length + d.sansPassage.length);
 
     renderActives();
 
@@ -3059,7 +3060,7 @@
   function renderContacts() {
     const duBureau = S.contacts.filter(deLAntenne);
     $('countContacts').textContent = duBureau.length;
-    $('tabCountContacts').textContent = duBureau.length;
+    ui.majCompteur($('tabCountContacts'), duBureau.length);
     const box = $('contactsTable');
     const list = visibleContacts();
 
@@ -5637,7 +5638,26 @@
     readMailboxReturn();
     renderInstallButton();
     registerServiceWorker();
+    placerLeSoulignement();
     if (!S.auth.required) nameInput.focus();
+  }
+
+  /* Le soulignement de l'onglet se calcule à partir de la position réelle du
+     bouton : il faut donc le replacer chaque fois que cette position change.
+     Trois moments, et ils comptent tous les trois — au démarrage, quand les
+     polices variables finissent d'arriver (les libellés changent alors de
+     largeur), et au redimensionnement, où les six boutons se répartissent
+     autrement. Sans le dernier, la barre reste sous l'ancien onglet dès qu'on
+     tourne une tablette. */
+  function placerLeSoulignement() {
+    const actif = document.querySelector('nav button[data-panel].active');
+    if (actif) ui.glisseOnglet(actif.dataset.panel);
+  }
+  root.addEventListener('resize', placerLeSoulignement);
+  /* Les polices variables arrivent après le premier rendu : les libellés
+     changent alors de largeur, et la barre se retrouve décalée. */
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(placerLeSoulignement);
   }
 
   start();
