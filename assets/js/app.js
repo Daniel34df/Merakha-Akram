@@ -45,6 +45,7 @@
   const deLAntenne = ui.deLAntenne;
   const enAttente = ui.enAttente;
   const joursDepuis = ui.joursDepuis;
+  const tableau = root.BC.tableau.tableau;
 
   /* ═════════════ navigation ═════════════ */
 
@@ -1452,41 +1453,43 @@
       ? combien('prevenir') + ' à prévenir · ' + rappels + ' à rappeler'
       : '';
 
-    $('appelsTable').innerHTML =
-      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Téléphone</th>' +
-      '<th>Boîte</th><th>Arrivé</th><th>Appels</th><th></th></tr></thead><tbody>' +
-      liste
-        .map(function (l) {
-          const h = l.entree;
-          const c = S.contacts.find(function (x) {
-            return x.id === h.contactId;
-          });
-          const tel = h.telephone || (c && c.telephone) || '';
-          const jours = joursDepuis(h.date);
-          const rappel = l.motif === 'rappeler';
-          return (
-            '<tr><td><strong>' + esc(h.name) + '</strong>' +
+    $('appelsTable').innerHTML = tableau({
+      colonnes: [
+        'Nom',
+        // Le numéro en gros : c'est ce qu'on recopie sur le clavier.
+        { titre: 'Téléphone', classe: 'tel-cell' },
+        { titre: 'Boîte', classe: 'box-cell' },
+        { titre: 'Arrivé' },
+        { titre: 'Appels', classe: 'attente-cell' },
+        { titre: '', classe: 'actions' }
+      ],
+      lignes: liste,
+      ligne: function (l) {
+        const h = l.entree;
+        const c = S.contacts.find(function (x) {
+          return x.id === h.contactId;
+        });
+        const tel = h.telephone || (c && c.telephone) || '';
+        const jours = joursDepuis(h.date);
+        const rappel = l.motif === 'rappeler';
+        return [
+          '<strong>' + esc(h.name) + '</strong>' +
             (rappel
               ? '<span class="absence-tag">à rappeler — prévenue il y a ' + l.depuis + ' j</span>'
-              : '') +
-            '</td>' +
-            // Le numéro en gros : c'est ce qu'on recopie sur le clavier.
-            '<td class="tel-cell">' + (tel ? esc(tel) : '<em>aucun numéro</em>') + '</td>' +
-            '<td class="box-cell">' + esc((c && c.box) || '—') + '</td>' +
-            '<td class="attente-cell' + (jours >= 7 ? ' vieux' : '') + '">' +
-            (jours === 0 ? 'aujourd’hui' : 'il y a ' + jours + ' j') + '</td>' +
-            '<td class="attente-cell">' +
-            (l.tentatives ? l.tentatives + ' appel(s)' : '—') +
-            '</td>' +
-            '<td class="actions">' +
-            '<button class="link-btn" data-appel-joint="' + esc(h.id) + '">' +
+              : ''),
+          tel ? esc(tel) : '<em>aucun numéro</em>',
+          esc((c && c.box) || '—'),
+          {
+            html: jours === 0 ? 'aujourd’hui' : 'il y a ' + jours + ' j',
+            classe: 'attente-cell' + (jours >= 7 ? ' vieux' : '')
+          },
+          l.tentatives ? l.tentatives + ' appel(s)' : '—',
+          '<button class="link-btn" data-appel-joint="' + esc(h.id) + '">' +
             (rappel ? 'Rappelée' : 'Prévenue') + '</button>' +
-            '<button class="link-btn" data-appel-vain="' + esc(h.id) + '">Sans réponse</button>' +
-            '</td></tr>'
-          );
-        })
-        .join('') +
-      '</tbody></table></div>';
+            '<button class="link-btn" data-appel-vain="' + esc(h.id) + '">Sans réponse</button>'
+        ];
+      }
+    });
   }
 
   /* ── quand c'est la personne qui appelle ──────────────────────────────
@@ -1647,37 +1650,35 @@
       '<p class="hint" style="margin-bottom:12px;">' +
       (jourMax >= 7 ? 'Le plus ancien attend depuis ' + jourMax + ' jours.' : 'Rien de très ancien.') +
       '</p>' +
-      '<div class="table-scroll"><table><thead><tr><th>Attente</th><th>N° boîte</th><th>Nom</th><th>Code</th><th></th></tr></thead><tbody>' +
-      anciens
-        .map(function (h) {
+      tableau({
+        colonnes: [
+          { titre: 'Attente', classe: 'attente-cell' },
+          { titre: 'N° boîte', classe: 'box-cell' },
+          'Nom',
+          { titre: 'Code', classe: 'box-cell' },
+          { titre: '', classe: 'actions' }
+        ],
+        lignes: anciens,
+        attrsLigne: function (h) {
+          return h.urgent ? ' class="urgent"' : joursDepuis(h.date) >= 7 ? ' class="vieux"' : '';
+        },
+        ligne: function (h) {
           const contact = S.contacts.find(function (c) {
             return c.id === h.contactId;
           });
           const jours = joursDepuis(h.date);
-          return (
-            '<tr' +
-            (h.urgent ? ' class="urgent"' : jours >= 7 ? ' class="vieux"' : '') +
-            '><td class="attente-cell">' +
-            (jours === 0 ? 'aujourd’hui' : jours + ' j') +
-            '</td><td class="box-cell">' +
-            ((contact && contact.box) || '—') +
-            '</td><td>' +
-            esc(h.name) +
-            (h.urgent ? '<span class="urgent-tag">urgent</span>' : '') +
-            '</td><td class="box-cell">' +
-            esc(h.pickupCode || '—') +
-            '</td><td class="actions">' +
-            '<button class="link-btn" data-pickup="' +
-            esc(h.id) +
-            '">Remettre</button>' +
-            (store.canSendAutomatically()
-              ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
-              : '') +
-            '</td></tr>'
-          );
-        })
-        .join('') +
-      '</tbody></table></div>';
+          return [
+            jours === 0 ? 'aujourd’hui' : jours + ' j',
+            (contact && contact.box) || '—',
+            esc(h.name) + (h.urgent ? '<span class="urgent-tag">urgent</span>' : ''),
+            esc(h.pickupCode || '—'),
+            '<button class="link-btn" data-pickup="' + esc(h.id) + '">Remettre</button>' +
+              (store.canSendAutomatically()
+                ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
+                : '')
+          ];
+        }
+      });
     brancherSuivi(box);
   }
 
@@ -1739,14 +1740,17 @@
         .join('') +
       '</dl>' +
       (courriers.length
-        ? '<h3 class="sous-titre">Ses courriers</h3><div class="table-scroll" style="max-height:38vh;">' +
-          '<table><thead><tr><th>Reçu le</th><th>Type</th><th>État</th><th>Code</th></tr></thead><tbody>' +
-          courriers
-            .slice()
-            .sort(function (a, b) {
+        ? '<h3 class="sous-titre">Ses courriers</h3>' +
+          tableau({
+            colonnes: ['Reçu le', 'Type', 'État', { titre: 'Code', classe: 'box-cell' }],
+            style: 'max-height:38vh;',
+            lignes: courriers.slice().sort(function (a, b) {
               return new Date(b.date) - new Date(a.date);
-            })
-            .map(function (h) {
+            }),
+            attrsLigne: function (h) {
+              return etatCourrier(h) === 'signale' ? ' class="vieux"' : '';
+            },
+            ligne: function (h) {
               const etat = etatCourrier(h);
               const libelle = {
                 attente: 'En attente',
@@ -1756,23 +1760,15 @@
                 clos: 'Classé',
                 echec: 'Échec'
               }[etat];
-              return (
-                '<tr' +
-                (etat === 'signale' ? ' class="vieux"' : '') +
-                '><td>' +
-                esc(util.formatDateTime(h.date)) +
-                '</td><td>' +
-                esc(util.typeCourrier(h.type).label) +
-                '</td><td>' +
+              return [
+                esc(util.formatDateTime(h.date)),
+                esc(util.typeCourrier(h.type).label),
                 esc(libelle) +
-                (etat === 'attente' || etat === 'relance' ? ' (' + joursDepuis(h.date) + ' j)' : '') +
-                '</td><td class="box-cell">' +
-                (enAttente(h) && h.pickupCode ? esc(h.pickupCode) : '—') +
-                '</td></tr>'
-              );
-            })
-            .join('') +
-          '</tbody></table></div>'
+                  (etat === 'attente' || etat === 'relance' ? ' (' + joursDepuis(h.date) + ' j)' : ''),
+                enAttente(h) && h.pickupCode ? esc(h.pickupCode) : '—'
+              ];
+            }
+          })
         : '<p class="hint">Aucun courrier reçu pour l’instant.</p>');
 
     /* L'attestation ne se propose que pour une domiciliation en cours : sur la
@@ -1952,69 +1948,61 @@
       'À vous de décider : le remettre en main propre, le renvoyer, ou le classer.';
 
     const box = $('dossierTable');
-    if (signales.length === 0) {
-      box.innerHTML = '<div class="empty">Aucun courrier à traiter. Tout est retiré ou en cours.</div>';
-    } else {
-      box.innerHTML =
-        '<div class="table-scroll"><table><thead><tr><th>Attente</th><th>N° boîte</th><th>Nom</th><th>Courriel</th><th>Relances</th><th></th></tr></thead><tbody>' +
-        signales
-          .slice()
-          .sort(function (a, b) {
-            return new Date(a.date) - new Date(b.date);
-          })
-          .map(function (h) {
-            const contact = S.contacts.find(function (c) {
-              return c.id === h.contactId;
-            });
-            return (
-              '<tr class="vieux"><td class="attente-cell">' +
-              joursDepuis(h.date) +
-              ' j</td><td class="box-cell">' +
-              ((contact && contact.box) || '—') +
-              '</td><td>' +
-              esc(h.name) +
-              '</td><td>' +
-              esc(h.email) +
-              '</td><td class="attente-cell">' +
-              (h.reminderCount || 0) +
-              '</td><td class="actions">' +
-              '<button class="link-btn" data-pickup="' + esc(h.id) + '">Récupéré</button>' +
-              (store.canSendAutomatically()
-                ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
-                : '') +
-              '<button class="link-btn danger" data-close="' + esc(h.id) + '">Classer</button>' +
-              '</td></tr>'
-            );
-          })
-          .join('') +
-        '</tbody></table></div>';
+    box.innerHTML = tableau({
+      colonnes: [
+        { titre: 'Attente', classe: 'attente-cell' },
+        { titre: 'N° boîte', classe: 'box-cell' },
+        'Nom',
+        'Courriel',
+        { titre: 'Relances', classe: 'attente-cell' },
+        { titre: '', classe: 'actions' }
+      ],
+      lignes: signales.slice().sort(function (a, b) {
+        return new Date(a.date) - new Date(b.date);
+      }),
+      attrsLigne: function () {
+        return ' class="vieux"';
+      },
+      ligne: function (h) {
+        const contact = S.contacts.find(function (c) {
+          return c.id === h.contactId;
+        });
+        return [
+          joursDepuis(h.date) + ' j',
+          (contact && contact.box) || '—',
+          esc(h.name),
+          esc(h.email),
+          h.reminderCount || 0,
+          '<button class="link-btn" data-pickup="' + esc(h.id) + '">Récupéré</button>' +
+            (store.canSendAutomatically()
+              ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
+              : '') +
+            '<button class="link-btn danger" data-close="' + esc(h.id) + '">Classer</button>'
+        ];
+      },
+      vide: 'Aucun courrier à traiter. Tout est retiré ou en cours.'
+    });
+    if (signales.length) {
       brancherSuivi(box);
       brancherCloture(box);
     }
 
     const closBox = $('closedTable');
-    closBox.innerHTML = classes.length
-      ? '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Reçu le</th><th>Classé le</th><th>Motif</th><th></th></tr></thead><tbody>' +
-        classes
-          .map(function (h) {
-            return (
-              '<tr><td>' +
-              esc(h.name) +
-              '</td><td>' +
-              esc(util.formatDateTime(h.date)) +
-              '</td><td>' +
-              esc(util.formatDateTime(h.closedAt)) +
-              '</td><td>' +
-              esc(h.closeReason || '—') +
-              (h.closedBy ? ' <span class="hint">(' + esc(h.closedBy) + ')</span>' : '') +
-              '</td><td class="actions"><button class="link-btn" data-unclose="' +
-              esc(h.id) +
-              '">Rouvrir</button></td></tr>'
-            );
-          })
-          .join('') +
-        '</tbody></table></div>'
-      : '<div class="empty">Aucun courrier classé.</div>';
+    closBox.innerHTML = tableau({
+      colonnes: ['Nom', 'Reçu le', 'Classé le', 'Motif', { titre: '', classe: 'actions' }],
+      lignes: classes,
+      ligne: function (h) {
+        return [
+          esc(h.name),
+          esc(util.formatDateTime(h.date)),
+          esc(util.formatDateTime(h.closedAt)),
+          esc(h.closeReason || '—') +
+            (h.closedBy ? ' <span class="hint">(' + esc(h.closedBy) + ')</span>' : ''),
+          '<button class="link-btn" data-unclose="' + esc(h.id) + '">Rouvrir</button>'
+        ];
+      },
+      vide: 'Aucun courrier classé.'
+    });
     brancherCloture(closBox);
   }
 
@@ -2397,55 +2385,56 @@
   });
 
   function tableauDomiciliation(lignes, colonne) {
-    const entete =
-      colonne === 'echeance'
-        ? '<th>Échéance</th><th>État</th>'
-        : '<th>Dernier passage</th><th>Sans nouvelles</th>';
-    return (
-      '<div class="table-scroll"><table><thead><tr><th>N° boîte</th><th>Nom</th>' +
-      entete +
-      '<th></th></tr></thead><tbody>' +
-      lignes
-        .map(function (l) {
-          const e = l.etat;
-          const pill = ETAT_DOMI[e.etat] || ETAT_DOMI.aucune;
-          const cellules =
-            colonne === 'echeance'
-              ? '<td class="attente-cell">' +
-                (e.echeance ? esc(util.formatJour(e.echeance)) : '—') +
-                '</td><td><span class="status-pill ' + pill[0] + '">' + pill[1] + '</span></td>'
-              : '<td class="attente-cell">' +
-                (e.dernierPassage ? esc(util.formatJour(e.dernierPassage.slice(0, 10))) : '—') +
+    /* Deux listes, deux façons de dire le temps qui passe : l'attestation qui
+       expire, ou l'absence qui dure. Le reste des colonnes est le même. */
+    const parEcheance = colonne === 'echeance';
+    return tableau({
+      colonnes: [
+        { titre: 'N° boîte', classe: 'box-cell' },
+        'Nom',
+        parEcheance
+          ? { titre: 'Échéance', classe: 'attente-cell' }
+          : { titre: 'Dernier passage', classe: 'attente-cell' },
+        parEcheance ? 'État' : 'Sans nouvelles',
+        { titre: '', classe: 'actions' }
+      ],
+      lignes: lignes,
+      ligne: function (l) {
+        const e = l.etat;
+        const pill = ETAT_DOMI[e.etat] || ETAT_DOMI.aucune;
+        const deuxTiers = parEcheance
+          ? [
+              e.echeance ? esc(util.formatJour(e.echeance)) : '—',
+              '<span class="status-pill ' + pill[0] + '">' + pill[1] + '</span>'
+            ]
+          : [
+              (e.dernierPassage ? esc(util.formatJour(e.dernierPassage.slice(0, 10))) : '—') +
                 (libelleMoyen(e.dernierMoyen)
                   ? '<span class="absence-tag">' + esc(libelleMoyen(e.dernierMoyen)) + '</span>'
-                  : '') +
-                '</td><td class="attente-cell' + (e.absenceDepassee ? ' vieux' : '') + '">' +
-                (e.joursSansPassage === null ? '—' : e.joursSansPassage + ' j') +
-                (e.absenceDepassee ? ' — seuil dépassé' : '') +
-                '</td>';
-          return (
-            '<tr><td class="box-cell">' +
-            esc(l.box || '—') +
-            '</td><td>' +
-            esc(l.name) +
-            '</td>' +
-            cellules +
-            '<td class="actions">' +
-            '<button class="link-btn" data-domifiche="' + esc(l.id) + '">Fiche</button>' +
+                  : ''),
+              {
+                html: (e.joursSansPassage === null ? '—' : e.joursSansPassage + ' j') +
+                  (e.absenceDepassee ? ' — seuil dépassé' : ''),
+                classe: 'attente-cell' + (e.absenceDepassee ? ' vieux' : '')
+              }
+            ];
+        return [
+          esc(l.box || '—'),
+          esc(l.name),
+          deuxTiers[0],
+          deuxTiers[1],
+          '<button class="link-btn" data-domifiche="' + esc(l.id) + '">Fiche</button>' +
             '<button class="link-btn" data-attestation="' + esc(l.id) + '">Attestation</button>' +
             '<button class="link-btn" data-renouveler="' + esc(l.id) + '">Renouveler</button>' +
             /* Prévenir la personne, pas seulement le signaler à l'équipe. Le
                sujet suit la liste : échéance d'attestation ou absence. */
             '<button class="link-btn" data-avis="' + esc(l.id) + '" data-sujet="' +
-            (colonne === 'echeance' ? 'renouvellement' : 'absence') + '">Prévenir</button>' +
+            (parEcheance ? 'renouvellement' : 'absence') + '">Prévenir</button>' +
             '<button class="link-btn" data-passage="' + esc(l.id) + '">Noter un passage</button>' +
-            '<button class="link-btn danger" data-clore="' + esc(l.id) + '">Clore</button>' +
-            '</td></tr>'
-          );
-        })
-        .join('') +
-      '</tbody></table></div>'
-    );
+            '<button class="link-btn danger" data-clore="' + esc(l.id) + '">Clore</button>'
+        ];
+      }
+    });
   }
 
   function renderRapport(r) {
@@ -2702,25 +2691,25 @@
   }
 
   function tableauStats(st) {
-    const ligne = function (titre, p) {
-      return (
-        '<tr><td>' +
-        titre +
-        '</td><td class="attente-cell">' +
-        p.recus +
-        '</td><td class="attente-cell">' +
-        p.retires +
-        '</td><td class="attente-cell">' +
-        (p.taux === null ? '—' : p.taux + ' %') +
-        '</td></tr>'
-      );
-    };
+    const PERIODES = [
+      ['7 derniers jours', st.semaine],
+      ['30 derniers jours', st.mois],
+      ['12 derniers mois', st.annee]
+    ];
     return (
-      '<div class="table-scroll"><table><thead><tr><th>Période</th><th>Reçus</th><th>Retirés</th><th>Taux</th></tr></thead><tbody>' +
-      ligne('7 derniers jours', st.semaine) +
-      ligne('30 derniers jours', st.mois) +
-      ligne('12 derniers mois', st.annee) +
-      '</tbody></table></div>' +
+      tableau({
+        colonnes: [
+          'Période',
+          { titre: 'Reçus', classe: 'attente-cell' },
+          { titre: 'Retirés', classe: 'attente-cell' },
+          { titre: 'Taux', classe: 'attente-cell' }
+        ],
+        lignes: PERIODES,
+        ligne: function (r) {
+          const p = r[1];
+          return [r[0], p.recus, p.retires, p.taux === null ? '—' : p.taux + ' %'];
+        }
+      }) +
       '<dl class="status-list" style="margin-top:16px;">' +
       [
         ['Total consigné', String(st.total)],
@@ -2734,13 +2723,18 @@
         .join('') +
       '</dl>' +
       (st.boitesActives && st.boitesActives.length
-        ? '<h3 class="sous-titre">Boîtes les plus actives</h3><div class="table-scroll"><table><tbody>' +
-          st.boitesActives
-            .map(function (b) {
-              return '<tr><td class="box-cell">' + esc(b.boite) + '</td><td class="attente-cell">' + b.courriers + '</td></tr>';
-            })
-            .join('') +
-          '</tbody></table></div>'
+        ? '<h3 class="sous-titre">Boîtes les plus actives</h3>' +
+          /* Deux colonnes sans intitulé : le numéro de boîte se lit tout seul,
+             et le nombre à côté ne demande pas d'explication. */
+          tableau({
+            lignes: st.boitesActives,
+            ligne: function (b) {
+              return [
+                { html: esc(b.boite), classe: 'box-cell' },
+                { html: b.courriers, classe: 'attente-cell' }
+              ];
+            }
+          })
         : '')
     );
   }
@@ -2753,26 +2747,19 @@
     if (carte.hidden) return;
     try {
       const data = await store.loadJournal(100);
-      $('journalTable').innerHTML = data.entrees.length
-        ? '<div class="table-scroll"><table><thead><tr><th>Quand</th><th>Qui</th><th>Action</th><th>Sur</th></tr></thead><tbody>' +
-          data.entrees
-            .map(function (e) {
-              return (
-                '<tr><td class="attente-cell">' +
-                esc(util.formatDateTime(e.at)) +
-                '</td><td>' +
-                esc(e.qui || '—') +
-                '</td><td>' +
-                esc(e.action) +
-                '</td><td>' +
-                esc(e.cible) +
-                (e.details ? ' <span class="hint">' + esc(e.details) + '</span>' : '') +
-                '</td></tr>'
-              );
-            })
-            .join('') +
-          '</tbody></table></div>'
-        : '<div class="empty">Aucune action consignée pour l’instant.</div>';
+      $('journalTable').innerHTML = tableau({
+        colonnes: [{ titre: 'Quand', classe: 'attente-cell' }, 'Qui', 'Action', 'Sur'],
+        lignes: data.entrees,
+        ligne: function (e) {
+          return [
+            esc(util.formatDateTime(e.at)),
+            esc(e.qui || '—'),
+            esc(e.action),
+            esc(e.cible) + (e.details ? ' <span class="hint">' + esc(e.details) + '</span>' : '')
+          ];
+        },
+        vide: 'Aucune action consignée pour l’instant.'
+      });
     } catch (err) {
       $('journalTable').innerHTML = '<div class="empty">Journal indisponible.</div>';
     }
@@ -3073,44 +3060,37 @@
       return;
     }
 
-    box.innerHTML =
+    box.innerHTML = tableau({
       /* Le téléphone a sa colonne : pour une bonne part du public, c'est le
          seul moyen de joindre quelqu'un, et le registre ne le montrait nulle
          part — il fallait ouvrir la fiche pour savoir si la personne était
          joignable du tout. */
-      '<div class="table-scroll"><table><thead><tr><th>N° boîte</th><th>Nom</th><th>Courriel</th>' +
-      '<th>Téléphone</th><th></th></tr></thead><tbody>' +
-      list
-        .map(function (c) {
-          if (c.id === view.editingId) {
-            return (
-              '<tr data-row="' +
-              esc(c.id) +
-              '">' +
-              '<td><input type="text" class="edit-box" value="' +
-              esc(c.box || '') +
-              '"></td>' +
-              '<td><input type="text" class="edit-name" value="' +
-              esc(c.name) +
-              '"></td>' +
-              '<td><input type="email" class="edit-email" value="' +
-              esc(c.email) +
-              '"></td>' +
-              '<td><input type="text" class="edit-telephone" value="' +
-              esc(c.telephone || '') +
-              '"></td>' +
+      colonnes: [
+        { titre: 'N° boîte', classe: 'box-cell' },
+        'Nom',
+        'Courriel',
+        'Téléphone',
+        { titre: '', classe: 'actions' }
+      ],
+      lignes: list,
+      ligne: function (c) {
+        /* La fiche en cours de correction sort sur deux lignes : les champs,
+           puis les absences en dessous. C'est le seul tableau irrégulier de
+           l'application, et la seule chose qui justifie l'échappatoire. */
+        if (c.id === view.editingId) {
+          return {
+            brut:
+              '<tr data-row="' + esc(c.id) + '">' +
+              '<td><input type="text" class="edit-box" value="' + esc(c.box || '') + '"></td>' +
+              '<td><input type="text" class="edit-name" value="' + esc(c.name) + '"></td>' +
+              '<td><input type="email" class="edit-email" value="' + esc(c.email) + '"></td>' +
+              '<td><input type="text" class="edit-telephone" value="' + esc(c.telephone || '') + '"></td>' +
               '<td class="actions">' +
-              '<button class="link-btn" data-save="' +
-              esc(c.id) +
-              '">Enregistrer</button>' +
+              '<button class="link-btn" data-save="' + esc(c.id) + '">Enregistrer</button>' +
               '<button class="link-btn" data-cancel="1">Annuler</button></td></tr>' +
-              '<tr data-absence="' +
-              esc(c.id) +
-              '"><td colspan="5" class="absence-edit">' +
+              '<tr data-absence="' + esc(c.id) + '"><td colspan="5" class="absence-edit">' +
               '<label>Absent·e jusqu’au</label>' +
-              '<input type="date" class="edit-absent" value="' +
-              esc(c.absentUntil || '') +
-              '">' +
+              '<input type="date" class="edit-absent" value="' + esc(c.absentUntil || '') + '">' +
               '<label class="inline"><input type="checkbox" class="edit-departed"' +
               (c.departed ? ' checked' : '') +
               '> a quitté l’organisme</label>' +
@@ -3124,54 +3104,32 @@
                 )
                 .map(function (autre) {
                   return (
-                    '<option value="' +
-                    esc(autre.id) +
-                    '"' +
-                    (c.substituteId === autre.id ? ' selected' : '') +
-                    '>' +
-                    esc(autre.name) +
-                    '</option>'
+                    '<option value="' + esc(autre.id) + '"' +
+                    (c.substituteId === autre.id ? ' selected' : '') + '>' +
+                    esc(autre.name) + '</option>'
                   );
                 })
                 .join('') +
               '</select></td></tr>'
-            );
-          }
-          return (
-            '<tr>' +
-            '<td class="box-cell">' +
-            (c.box ? esc(c.box) : '—') +
-            '</td><td>' +
-            esc(c.name) +
+          };
+        }
+        return [
+          c.box ? esc(c.box) : '—',
+          esc(c.name) +
             (util.presence(c).etat !== 'present'
               ? '<span class="absence-tag">' + esc(util.presence(c).message) + '</span>'
-              : '') +
-            '</td><td>' +
-            (c.email ? esc(c.email) : '<span class="hint">—</span>') +
-            '</td><td>' +
-            (c.telephone ? esc(c.telephone) : '<span class="hint">—</span>') +
-            '</td>' +
-            '<td class="actions">' +
-            '<button class="link-btn" data-fiche="' +
-            esc(c.id) +
-            '">Fiche</button>' +
-            '<button class="link-btn" data-notify="' +
-            esc(c.id) +
-            '">Notifier</button>' +
-            '<button class="link-btn" data-edit="' +
-            esc(c.id) +
-            '">Modifier</button>' +
-            '<button class="link-btn danger" data-del="' +
-            esc(c.id) +
-            '">Sortir</button>' +
-            '<button class="link-btn danger" data-effacer="' +
-            esc(c.id) +
-            '" title="Efface la fiche, son courrier et son nom au journal">Effacer</button>' +
-            '</td></tr>'
-          );
-        })
-        .join('') +
-      '</tbody></table></div>';
+              : ''),
+          c.email ? esc(c.email) : '<span class="hint">—</span>',
+          c.telephone ? esc(c.telephone) : '<span class="hint">—</span>',
+          '<button class="link-btn" data-fiche="' + esc(c.id) + '">Fiche</button>' +
+            '<button class="link-btn" data-notify="' + esc(c.id) + '">Notifier</button>' +
+            '<button class="link-btn" data-edit="' + esc(c.id) + '">Modifier</button>' +
+            '<button class="link-btn danger" data-del="' + esc(c.id) + '">Sortir</button>' +
+            '<button class="link-btn danger" data-effacer="' + esc(c.id) +
+            '" title="Efface la fiche, son courrier et son nom au journal">Effacer</button>'
+        ];
+      }
+    });
 
     box.querySelectorAll('button[data-edit]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -3497,9 +3455,25 @@
           '<button class="link-btn" id="historyToutBtn">affichez tout</button> — ' +
           'l’affichage sera plus lent.</p>'
         : '') +
-      '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Type</th><th>Date</th><th>Attente</th><th>Suivi</th><th></th></tr></thead><tbody>' +
-      dessinees
-        .map(function (h) {
+      tableau({
+        colonnes: [
+          'Nom',
+          'Type',
+          'Date',
+          { titre: 'Attente', classe: 'attente-cell' },
+          /* Ces deux intitulés sont décalés d'un cran : « Suivi » surmonte les
+             boutons, et la pastille d'état — qui est *le* suivi — n'a pas
+             d'intitulé du tout. Le défaut est antérieur à ce remaniement, qui
+             ne doit rien changer ; il est corrigé juste après, seul, pour qu'on
+             puisse le voir. */
+          { titre: 'Suivi', classe: 'actions' },
+          { titre: '', classe: 'actions' }
+        ],
+        lignes: dessinees,
+        attrsLigne: function (h) {
+          return enAttente(h) && joursDepuis(h.date) >= 7 ? ' class="vieux"' : '';
+        },
+        ligne: function (h) {
           const pill = ETAT_PILL[etatCourrier(h)] || STATUS_PILL[h.status] || STATUS_PILL['envoyé'];
           const copies = [];
           if (h.cc) copies.push('Cc : ' + h.cc);
@@ -3508,40 +3482,29 @@
           const jours = joursDepuis(h.date);
           const relances = h.reminderCount || 0;
 
-          return (
-            '<tr' +
-            (attente && jours >= 7 ? ' class="vieux"' : '') +
-            '><td' +
-            (copies.length ? ' title="' + esc(copies.join(' · ')) + '"' : '') +
-            '>' +
-            esc(h.name) +
-            (relances ? '<span class="relance-tag">' + relances + ' relance' + (relances > 1 ? 's' : '') + '</span>' : '') +
-            '</td><td>' +
-            esc(util.typeCourrier(h.type).label) +
-            '</td><td>' +
-            esc(util.formatDateTime(h.date)) +
-            '</td><td class="attente-cell">' +
-            (attente ? (jours === 0 ? 'aujourd’hui' : jours + ' j') : '—') +
-            '</td><td class="actions">' +
-            (attente
+          return [
+            {
+              html: esc(h.name) +
+                (relances
+                  ? '<span class="relance-tag">' + relances + ' relance' + (relances > 1 ? 's' : '') + '</span>'
+                  : ''),
+              attrs: copies.length ? 'title="' + esc(copies.join(' · ')) + '"' : null
+            },
+            esc(util.typeCourrier(h.type).label),
+            esc(util.formatDateTime(h.date)),
+            attente ? (jours === 0 ? 'aujourd’hui' : jours + ' j') : '—',
+            attente
               ? '<button class="link-btn" data-pickup="' + esc(h.id) + '">Marquer récupéré</button>' +
                 (S.mode === 'serveur' && store.canSendAutomatically()
                   ? '<button class="link-btn" data-remind="' + esc(h.id) + '">Relancer</button>'
                   : '')
               : '<span class="status-pill">Récupéré</span>' +
                 (h.remisA ? '<span class="porteur-tag" title="Retiré par un tiers">par ' + esc(h.remisA) + '</span>' : '') +
-                '<button class="link-btn" data-unpickup="' + esc(h.id) + '">Annuler</button>') +
-            '</td><td class="actions"><span class="status-pill ' +
-            pill[0] +
-            '" title="' +
-            esc(pill[2]) +
-            '">' +
-            pill[1] +
-            '</span></td></tr>'
-          );
-        })
-        .join('') +
-      '</tbody></table></div>';
+                '<button class="link-btn" data-unpickup="' + esc(h.id) + '">Annuler</button>',
+            '<span class="status-pill ' + pill[0] + '" title="' + esc(pill[2]) + '">' + pill[1] + '</span>'
+          ];
+        }
+      });
 
     /* Voir tout ce qui est là, quand on le demande vraiment. Le choix ne dure
        que le temps de la visite : au prochain chargement, l'affichage repart
@@ -4540,27 +4503,32 @@
         boite.innerHTML = '<div class="empty">Aucune copie sur le serveur pour l’instant.</div>';
         return;
       }
-      boite.innerHTML =
-        '<div class="table-scroll"><table><thead><tr><th>Date</th><th>Destinataires</th>' +
-        '<th>Courriers</th><th></th></tr></thead><tbody>' +
-        data.sauvegardes
-          .map(function (sv) {
-            if (sv.illisible) {
-              return (
-                '<tr><td class="attente-cell">' + esc(util.formatJour(sv.jour)) +
+      boite.innerHTML = tableau({
+        colonnes: [
+          { titre: 'Date', classe: 'attente-cell' },
+          'Destinataires',
+          'Courriers',
+          { titre: '', classe: 'actions' }
+        ],
+        lignes: data.sauvegardes,
+        ligne: function (sv) {
+          /* Une copie qu'on n'arrive pas à ouvrir se dit sur toute la largeur :
+             il n'y a rien à compter, et il ne faut surtout pas proposer de la
+             restaurer. */
+          if (sv.illisible) {
+            return {
+              brut: '<tr><td class="attente-cell">' + esc(util.formatJour(sv.jour)) +
                 '</td><td colspan="3"><em>fichier illisible</em></td></tr>'
-              );
-            }
-            return (
-              '<tr><td class="attente-cell">' + esc(util.formatJour(sv.jour)) +
-              '</td><td>' + sv.destinataires +
-              '</td><td>' + sv.courriers +
-              '</td><td class="actions"><button class="link-btn danger" data-restaurer="' +
-              esc(sv.fichier) + '">Restaurer</button></td></tr>'
-            );
-          })
-          .join('') +
-        '</tbody></table></div>';
+            };
+          }
+          return [
+            esc(util.formatJour(sv.jour)),
+            sv.destinataires,
+            sv.courriers,
+            '<button class="link-btn danger" data-restaurer="' + esc(sv.fichier) + '">Restaurer</button>'
+          ];
+        }
+      });
 
       boite.querySelectorAll('button[data-restaurer]').forEach(function (b) {
         b.addEventListener('click', function () {
@@ -4657,29 +4625,24 @@
       const responsable = data.responsableId === S.auth.user.id;
       $('usersList').innerHTML =
         '<h3 class="sous-titre">Comptes du bureau (' + data.users.length + ')</h3>' +
-        '<div class="table-scroll"><table><thead><tr><th>Nom</th><th>Courriel</th><th>Boîte reliée</th><th></th></tr></thead><tbody>' +
-        data.users
-          .map(function (u) {
+        tableau({
+          colonnes: ['Nom', 'Courriel', { titre: 'Boîte reliée', classe: 'box-cell' }, { titre: '', classe: 'actions' }],
+          lignes: data.users,
+          ligne: function (u) {
             const soi = u.id === S.auth.user.id;
-            return (
-              '<tr><td>' +
+            return [
               esc(u.name) +
-              (u.id === data.responsableId ? '<span class="relance-tag">responsable</span>' : '') +
-              '</td><td>' +
-              esc(u.email) +
-              '</td><td class="box-cell">' +
-              (u.mailbox ? esc(u.mailbox) : '—') +
-              '</td><td class="actions">' +
+                (u.id === data.responsableId ? '<span class="relance-tag">responsable</span>' : ''),
+              esc(u.email),
+              u.mailbox ? esc(u.mailbox) : '—',
               (responsable && !soi
                 ? '<button class="link-btn danger" data-rmuser="' + esc(u.id) + '">Retirer l’accès</button>'
                 : soi
                   ? '<span class="hint">vous</span>'
-                  : '') +
-              '</td></tr>'
-            );
-          })
-          .join('') +
-        '</tbody></table></div>' +
+                  : '')
+            ];
+          }
+        }) +
         (responsable
           ? ''
           : '<p class="hint" style="margin-top:10px;">Seul le compte responsable — le premier créé — peut retirer un accès.</p>');
@@ -4988,29 +4951,25 @@
     $('postesAlertes').innerHTML = alertes.join('');
 
     const postes = vue.postes || [];
-    $('postesListe').innerHTML = postes.length
-      ? '<div class="table-scroll"><table><thead><tr><th>Poste</th><th>Accès</th>' +
-        '<th>Antenne</th><th>Relié depuis</th></tr></thead><tbody>' +
-        postes
-          .map(function (p) {
-            const antenne = p.antenneId
-              ? (antennes().find(function (a) {
-                  return a.id === p.antenneId;
-                }) || {}).nom || p.antenneId
-              : '—';
-            return (
-              '<tr><td><strong>' + esc(p.nom) + '</strong>' +
-              (p.moi ? ' <span class="status-pill">ce poste</span>' : '') +
-              '</td><td>' +
-              (p.role === 'responsable' ? 'responsable' : 'agent ' + esc(p.identifiant)) +
-              '</td><td>' + esc(antenne) + '</td><td class="attente-cell">' +
-              esc(util.formatDateTime(p.depuis)) +
-              '</td></tr>'
-            );
-          })
-          .join('') +
-        '</tbody></table></div>'
-      : '<div class="empty">Aucun poste relié — pas même celui-ci, ce qui est anormal.</div>';
+    $('postesListe').innerHTML = tableau({
+      colonnes: ['Poste', 'Accès', 'Antenne', { titre: 'Relié depuis', classe: 'attente-cell' }],
+      lignes: postes,
+      ligne: function (p) {
+        const antenne = p.antenneId
+          ? (antennes().find(function (a) {
+              return a.id === p.antenneId;
+            }) || {}).nom || p.antenneId
+          : '—';
+        return [
+          '<strong>' + esc(p.nom) + '</strong>' +
+            (p.moi ? ' <span class="status-pill">ce poste</span>' : ''),
+          p.role === 'responsable' ? 'responsable' : 'agent ' + esc(p.identifiant),
+          esc(antenne),
+          esc(util.formatDateTime(p.depuis))
+        ];
+      },
+      vide: 'Aucun poste relié — pas même celui-ci, ce qui est anormal.'
+    });
   }
 
   $('postesCard').addEventListener('click', function (e) {
@@ -5064,27 +5023,26 @@
 
     const liste = antennes();
     $('countAntennes').textContent = liste.length;
-    $('antennesListe').innerHTML = liste.length
-      ? '<div class="table-scroll"><table><thead><tr><th>Antenne</th><th>Adresse</th>' +
-        '<th>Destinataires</th><th>En attente</th><th></th></tr></thead><tbody>' +
-        liste
-          .map(function (a) {
+    $('antennesListe').innerHTML = tableau({
+      colonnes: ['Antenne', 'Adresse', 'Destinataires', 'En attente', { titre: '', classe: 'actions' }],
+      lignes: liste,
+      vide: 'Un seul bureau. Ajoutez une antenne si vous en tenez plusieurs.',
+      ligne: function (a) {
             const dest = S.contacts.filter(function (c) {
               return util.dansAntenne(c, a.id, liste);
             }).length;
             const attente = S.history.filter(function (h) {
               return enAttente(h) && util.dansAntenne(h, a.id, liste);
             }).length;
-            return (
-              '<tr><td><strong>' + esc(a.nom) + '</strong></td><td>' + esc(a.adresse || '—') +
-              '</td><td>' + dest + '</td><td>' + attente +
-              '</td><td class="actions"><button class="link-btn danger" data-antenne-del="' +
-              esc(a.id) + '">Retirer</button></td></tr>'
-            );
-          })
-          .join('') +
-        '</tbody></table></div>'
-      : '<div class="empty">Un seul bureau. Ajoutez une antenne si vous en tenez plusieurs.</div>';
+            return [
+              '<strong>' + esc(a.nom) + '</strong>',
+              esc(a.adresse || '—'),
+              dest,
+              attente,
+              '<button class="link-btn danger" data-antenne-del="' + esc(a.id) + '">Retirer</button>'
+            ];
+      }
+    });
 
     $('antennesListe').querySelectorAll('button[data-antenne-del]').forEach(function (b) {
       b.addEventListener('click', function () {
