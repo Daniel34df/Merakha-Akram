@@ -879,6 +879,57 @@ registre.
 
 ---
 
+## Signature du créateur et intégrité
+
+L'application est **créée par AKRAM MERAKHA**, et cette origine est
+vérifiable. Chaque version publiée est accompagnée d'un manifeste
+(`signature.json`) : la liste des fichiers livrés, leur empreinte SHA-256, et
+un **sceau Ed25519**. Le sceau se pose avec une clé privée que seul le créateur
+détient ; l'application n'embarque que la clé publique, qui ne permet que de
+vérifier.
+
+Au démarrage, le serveur relit les fichiers et compare. Une version conforme le
+dit dans *Réglages → Contrôle → À propos* ; une version modifiée y affiche un
+code d'incident (`INTEGRITY-001`, `SECURITY-001`) et **ferme les fonctions
+sensibles** — la configuration, les comptes, les exports, la restauration, les
+effacements.
+
+Trois choix méritent d'être dits, parce qu'ils protègent le bureau autant que
+le logiciel :
+
+- **aucune donnée n'est jamais détruite.** Une compromission verrouille des
+  fonctions, elle n'efface ni le registre, ni les sauvegardes, ni le journal.
+  Ce registre porte les noms et les adresses de gens sans logement ; le protéger
+  passe avant la protection du logiciel qui le tient ;
+- **le guichet reste ouvert.** Inscrire un courrier reçu, le remettre, prévenir
+  quelqu'un : rien de cela ne se ferme. Une affaire d'intégrité est entre le
+  créateur et l'administrateur, pas une raison de renvoyer quelqu'un sans le
+  courrier qui lui ouvre ses droits ;
+- **le déblocage est hors ligne**, par le code maître, réservé au responsable.
+  Une vérification qui passerait par internet ferait d'une panne de box un
+  bureau fermé.
+
+Ce que cette signature **ne** prétend **pas** faire : empêcher une modification.
+Le contrôle s'exécute sur la machine de qui pourrait vouloir le contourner, et
+il est lui-même un des fichiers vérifiés. Elle rend la falsification
+*détectable et non rentable* — pas impossible. Elle attrape aussi ce qui arrive
+bien plus souvent qu'un adversaire : une copie sur clé interrompue, une mise à
+jour à moitié appliquée, un fichier corrompu par un disque fatigué.
+
+Pour sceller une version (réservé au créateur, la clé privée ne doit jamais
+entrer dans le dépôt) :
+
+```bash
+node tools/signer.js --creer-cles cles/            # une seule fois
+# recopier cles/cle-publique.pem dans CLE_PUBLIQUE (server/signature.js)
+node tools/signer.js --cle cles/cle-privee.pem     # à chaque version
+```
+
+Les polices embarquées restent sous leur licence libre (SIL OFL), indépendante
+de la licence du logiciel : voir [`assets/fonts/LICENCES.md`](assets/fonts/LICENCES.md).
+
+---
+
 ## Configuration
 
 Toutes les variables sont facultatives ; voir `.env.example`.
@@ -991,11 +1042,14 @@ assets/js/util.js     fonctions partagées navigateur + serveur (recherche, CSV,
 assets/js/xlsx.js     écriture de classeurs Excel, sans dépendance
 assets/js/store.js    persistance : serveur → localStorage → mémoire
 assets/js/attente.js  file des écritures faites hors ligne, rejouées au retour
+assets/js/boites.js   les casiers : numéro, statut, titulaires, capacité
 assets/js/notify.js   composition du message, mailto, presse-papiers
 assets/js/app.js      interface (onglets, registre, historique, réglages)
 server/app.js         serveur HTTP et API JSON
 server/db.js          fichier JSON, écritures atomiques et sérialisées
 server/idempotence.js une écriture rejouée n'est pas exécutée deux fois
+server/signature.js   signature du créateur, intégrité des fichiers (Ed25519)
+tools/signer.js       scelle une version publiée avec la clé privée du créateur
 server/mailer.js      envoi SMTP (nodemailer, optionnel) et mode essai
 server/auth.js        mots de passe scrypt, sessions, limitation des tentatives
 server/secrets.js     chiffrement des identifiants au repos (AES-256-GCM)
@@ -1007,8 +1061,8 @@ tools/verifier/       vérifications de navigateur, une par défaut corrigé
 ```
 
 ```bash
-npm test     # 474 tests : utilitaires, API, comptes, domiciliation, appels, socle,
-             #             couleurs, rejeu, casiers
+npm test     # 502 tests : utilitaires, API, comptes, domiciliation, appels, socle,
+             #             couleurs, rejeu, casiers, signature
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

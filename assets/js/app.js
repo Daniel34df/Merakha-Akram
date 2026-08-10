@@ -205,6 +205,85 @@
     }
   }
 
+  /* Qui a créé l'application, quelle version, et son intégrité. La carte se
+     remplit d'un appel au serveur ; elle ne verrouille rien elle-même — c'est
+     le serveur qui décide, cet écran ne fait que le montrer et proposer le
+     déblocage au responsable. */
+  const ETIQUETTE_INTEGRITE = {
+    verifiee: 'Vérifiée',
+    'non-signee': 'Non signée',
+    'non-serveur': 'Non vérifiable sur ce poste',
+    compromise: 'Intégrité compromise',
+    revoquee: 'Version révoquée'
+  };
+
+  async function renderApropos() {
+    const liste = $('aproposList');
+    if (!liste) return;
+    let s;
+    try {
+      s = await store.chargerSignature();
+    } catch (e) {
+      liste.innerHTML = '<div><dt>À propos</dt><dd>Indisponible pour l’instant.</dd></div>';
+      return;
+    }
+    const rows = [
+      ['Application', s.application || 'Bureau du Courrier'],
+      ['Créé par', s.createur || 'AKRAM MERAKHA'],
+      ['Version', s.version || '—']
+    ];
+    if (s.identifiant) rows.push(['Identifiant de version', s.identifiant]);
+    if (s.empreinte) rows.push(['Empreinte', s.empreinte.slice(0, 16) + '…']);
+    rows.push(['Intégrité', ETIQUETTE_INTEGRITE[s.etat] || s.etat || '—']);
+    liste.innerHTML = rows
+      .map(function (r) {
+        return '<div><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd></div>';
+      })
+      .join('');
+
+    /* L'alerte, et le déblocage. On n'affiche jamais de bouton « effacer » ici :
+       le cahier des charges l'interdit (§13), et une compromission ne doit
+       toucher aucune donnée. Le seul geste proposé est de débloquer avec le
+       code maître — réservé au responsable. */
+    const zone = $('integriteAlerte');
+    if (!s.verrouille) {
+      zone.innerHTML = '';
+      return;
+    }
+    const peutDebloquer = S.auth.user && roles.peut(S.auth.user, 'reglages');
+    zone.innerHTML =
+      '<div class="msg error" style="margin-top:10px;">' +
+      '<strong>Application verrouillée' + (s.code ? ' · ' + esc(s.code) : '') + '.</strong> ' +
+      esc(s.message || '') +
+      '<br>Les fonctions sensibles sont fermées. <strong>Aucune donnée n’est touchée</strong> : ' +
+      'le registre, les sauvegardes et le journal restent intacts, et le guichet reste ouvert.' +
+      (peutDebloquer
+        ? '<div class="row-actions" style="margin-top:10px;">' +
+          '<input type="password" id="integriteCode" class="filter-input" ' +
+          'inputmode="numeric" placeholder="Code maître" autocomplete="off" style="max-width:180px;">' +
+          '<button class="btn" id="integriteDebloquer">Débloquer</button>' +
+          '</div><div id="integriteMsg"></div>'
+        : '<br><span class="hint">Un responsable peut débloquer avec le code maître.</span>') +
+      '</div>';
+
+    const btn = $('integriteDebloquer');
+    if (btn) {
+      btn.addEventListener('click', function () {
+        ui.pendant(btn, (async function () {
+          try {
+            const ok = await store.debloquerIntegrite($('integriteCode').value);
+            if (ok) {
+              toast('Application débloquée jusqu’au prochain redémarrage.', 'ok');
+              await renderApropos();
+            }
+          } catch (e) {
+            setMsg('integriteMsg', 'error', esc(e.message));
+          }
+        })());
+      });
+    }
+  }
+
   function renderStatus() {
     const rows = [
       ['Stockage', (MODE_LABEL[S.mode] || {}).text + ' (' + S.mode + ')'],
@@ -4290,6 +4369,8 @@
     renderSectionsReglages();
     // « Postes du bureau » interroge le serveur : elle ne se charge qu'affichée.
     if (view.sectionReglages === 'bureau') renderPostes(true);
+    // « À propos » et l'intégrité interrogent aussi le serveur : à la demande.
+    if (view.sectionReglages === 'controle') renderApropos();
   });
 
   $('suiviSections').addEventListener('click', function (e) {

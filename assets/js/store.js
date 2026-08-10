@@ -839,6 +839,26 @@
     return api('/stats');
   }
 
+  /* La signature du créateur et l'intégrité de l'application. En mode local il
+     n'y a pas de serveur pour l'attester : on rend un état « non vérifiable »
+     plutôt que d'échouer, et l'écran le dit simplement. */
+  async function chargerSignature() {
+    if (state.mode !== 'serveur') {
+      return { etat: 'non-serveur', createur: 'AKRAM MERAKHA', application: 'Bureau du Courrier', verrouille: false };
+    }
+    return api('/signature');
+  }
+
+  /* Déblocage administrateur par le code maître, hors ligne. Rend `true` si
+     l'application a été déverrouillée jusqu'au prochain redémarrage. */
+  async function debloquerIntegrite(code) {
+    const r = await api('/signature/debloquer', {
+      method: 'POST',
+      body: JSON.stringify({ code: String(code || '') })
+    });
+    return !!(r && r.deverrouille);
+  }
+
   async function loadJournal(limite) {
     return api('/journal?limite=' + (limite || 100));
   }
@@ -1271,6 +1291,8 @@
     listerSauvegardes: listerSauvegardes,
     restaurerSauvegarde: restaurerSauvegarde,
     loadStats: loadStats,
+    chargerSignature: chargerSignature,
+    debloquerIntegrite: debloquerIntegrite,
     loadDomiciliation: loadDomiciliation,
     loadReseau: loadReseau,
     noterAppel: noterAppel,

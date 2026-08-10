@@ -17,6 +17,7 @@ const domiciliation = require('../assets/js/domiciliation.js');
 const roles = require('../assets/js/roles.js');
 const reseau = require('./reseau.js');
 const idem = require('./idempotence.js');
+const signature = require('./signature.js');
 
 const VERSION = '1.2.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -1435,10 +1436,73 @@ async function handleApi(req, res, ctx, pathname) {
   const { db, mailer } = ctx;
   const method = req.method;
 
+  /* ── la signature du créateur ──
+
+     Qui a fait ce logiciel, quelle version tourne ici, et son intégrité
+     a-t-elle été vérifiée. Ouvert sans session : c'est une carte de visite,
+     et refuser de dire qui a écrit l'application n'aurait aucun sens. Les
+     écarts détaillés, eux, ne sortent qu'au responsable — la liste des
+     fichiers modifiés est un plan pour qui voudrait recommencer. */
+  if (pathname === '/api/signature' && method === 'GET') {
+    const e = ctx.integrite;
+    const compte = auth.userFromRequest(db, req);
+    return sendJson(res, 200, {
+      createur: e.createur,
+      application: e.application,
+      version: e.version || VERSION,
+      identifiant: e.identifiant || '',
+      empreinte: e.empreinte || '',
+      cree: e.cree || '',
+      etat: e.etat,
+      code: e.code,
+      message: e.message,
+      verrouille: !!e.verrouille && !ctx.deverrouille,
+      deverrouille: !!ctx.deverrouille,
+      ecarts: roles.estResponsable(compte) ? (e.ecarts || []) : undefined
+    });
+  }
+
+  /* Le déblocage administrateur du §11. Hors ligne, par le code maître : une
+     vérification qui passerait par le réseau ferait d'une panne de box un
+     bureau fermé. Il ne survit pas au redémarrage — la vérification repasse
+     alors, et c'est le but : déverrouiller n'est pas réparer. */
+  if (pathname === '/api/signature/debloquer' && method === 'POST') {
+    const corps = await readBody(req);
+    const frein = ctx.throttle.check('integrite');
+    if (frein.blocked) {
+      throw Object.assign(
+        new Error('Trop de tentatives. Réessayez dans ' + Math.ceil(frein.retryInSeconds / 60) + ' minute(s).'),
+        { status: 429 }
+      );
+    }
+    if (!auth.verifierCodeMaitre(db, corps && corps.code)) {
+      ctx.throttle.fail('integrite');
+      await consigner(db, {
+        qui: null,
+        action: 'déblocage refusé — code maître incorrect',
+        cible: ctx.integrite.code || 'intégrité',
+        details: ''
+      });
+      throw Object.assign(new Error('Code incorrect'), { status: 401 });
+    }
+    ctx.throttle.succeed('integrite');
+    ctx.deverrouille = true;
+    await consigner(db, {
+      qui: (auth.userFromRequest(db, req) || {}).name || 'code maître',
+      action: 'application débloquée par un responsable',
+      cible: ctx.integrite.code || 'intégrité',
+      details: 'jusqu’au prochain redémarrage — ' + (ctx.integrite.message || '')
+    });
+    return sendJson(res, 200, { deverrouille: true, jusqua: 'redémarrage' });
+  }
+
   if (pathname === '/api/health' && method === 'GET') {
     return sendJson(res, 200, {
       app: 'bureau-du-courrier',
       version: VERSION,
+      // Signature du créateur, portée jusque dans l'état de santé (§1).
+      createur: signature.CREATEUR,
+      integrite: ctx.integrite.etat,
       smtp: mailer.enabled,
       mailMode: mailer.mode,
       mailReason: mailer.reason || null,
@@ -2730,8 +2794,24 @@ function createServer(options) {
     port: options.port || 0,
     protocole: options.protocole || 'http',
     // L'adresse d'écoute, pour savoir si le serveur sort de cette machine.
-    hote: options.hote || ''
+    hote: options.hote || '',
+    /* L'état de la signature du créateur, relu une fois au démarrage. Le
+       relire à chaque requête coûterait la lecture de soixante-douze fichiers
+       par appel ; un fichier modifié pendant que le serveur tourne sera vu au
+       prochain démarrage, ce qui est le moment où il est réellement chargé. */
+    integrite: options.integrite || signature.inspecter(rootDir, { version: VERSION }),
+    /* Déverrouillage administrateur, en mémoire seulement : il ne survit pas
+       au redémarrage, et c'est voulu — la vérification doit repasser. */
+    deverrouille: false
   });
+
+  if (ctx.integrite.verrouille) {
+    console.warn(
+      '[signature] ' + ctx.integrite.code + ' — ' + ctx.integrite.message +
+      ' Les fonctions sensibles sont fermées ; le guichet reste ouvert.' +
+      ' Aucune donnée n’est touchée.'
+    );
+  }
 
   const srv = http.createServer(async function (req, res) {
     const pathname = new URL(req.url, 'http://localhost').pathname;
@@ -2754,6 +2834,35 @@ function createServer(options) {
         // Le cookie est déjà SameSite=Lax ; ce contrôle ferme le cas des
         // requêtes forgées qui contourneraient cette protection.
         throw Object.assign(new Error('Requête refusée : origine étrangère'), { status: 403 });
+      }
+
+      /* L'intégrité de l'application. Quand elle n'est pas vérifiée, les
+         fonctions sensibles se ferment — la configuration, les comptes, les
+         exports, la restauration, les effacements.
+
+         Ce qui reste ouvert est délibéré et se lit dans `signature.js` : le
+         guichet, la remise, l'inscription de quelqu'un qui se présente. Une
+         intégrité compromise est une affaire entre le créateur et
+         l'administrateur ; ce n'est pas une raison pour qu'une personne sans
+         logement reparte sans le courrier qui lui ouvre la CAF.
+
+         Et rien n'est détruit. Jamais. Le registre, les sauvegardes et le
+         journal restent intacts : c'est par eux que passe la récupération. */
+      if (ctx.integrite.verrouille && !ctx.deverrouille &&
+          signature.estSensible(req.method, pathname)) {
+        await consigner(ctx.db, {
+          qui: (auth.userFromRequest(ctx.db, req) || {}).name || null,
+          action: 'fonction sensible refusée — intégrité',
+          cible: req.method + ' ' + pathname,
+          details: ctx.integrite.code + ' · ' + ctx.integrite.message
+        }).catch(function () {});
+        throw Object.assign(
+          new Error(
+            'Application verrouillée : ' + ctx.integrite.message +
+            ' Les données ne sont pas touchées. Un responsable peut débloquer avec le code maître.'
+          ),
+          { status: 423, code: 'integrite', incident: ctx.integrite.code }
+        );
       }
 
       /* Le rejeu d'une file hors ligne. Si cette écriture porte l'identifiant
@@ -2786,7 +2895,13 @@ function createServer(options) {
       const status = err.status || 500;
       if (status >= 500 && status !== 502 && status !== 503) console.error(err);
       if (!res.headersSent) {
-        sendJson(res, status, { error: err.message, code: err.code || undefined, record: err.record || undefined });
+        sendJson(res, status, {
+          error: err.message,
+          code: err.code || undefined,
+          // Le code d'incident se dicte au téléphone : « INTEGRITY-001 ».
+          incident: err.incident || undefined,
+          record: err.record || undefined
+        });
       }
     }
   });
