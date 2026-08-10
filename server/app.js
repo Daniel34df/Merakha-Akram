@@ -22,7 +22,7 @@ const boites = require('../assets/js/boites.js');
 const reference = require('../assets/js/reference.js');
 const colisMod = require('../assets/js/colis.js');
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
 
 const MIME = {
