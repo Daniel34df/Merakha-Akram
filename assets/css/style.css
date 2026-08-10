@@ -2228,3 +2228,17 @@ body.impression-casier .feuille-casier{display:block;}
 .etat-occupee{color:var(--accent-texte);font-weight:600;}
 .etat-reservee, .etat-suspendue{color:var(--warn);font-weight:600;}
 .etat-horsservice{color:var(--danger);font-weight:600;}
+
+/* Le flux de la caméra du scanner. Une bande large et basse : on présente une
+   étiquette de casier, pas un portrait — et c'est la bande centrale que le
+   décodeur lit. */
+.scan-video{
+  display:block;
+  width:100%;
+  max-height:38vh;
+  margin-top:10px;
+  border-radius:var(--r1);
+  border:1px solid var(--bord);
+  background:#000;
+  object-fit:cover;
+}

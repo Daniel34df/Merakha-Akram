@@ -264,6 +264,7 @@
 
       <div class="row-actions">
         <button class="btn" id="validerBtn">Valider</button>
+        <button class="btn ghost" type="button" data-ouvrir-scan="1">Scanner</button>
         <button class="btn ghost" id="clearSearchBtn">Effacer</button>
         <span class="hint">Entrée pour valider · ↑↓ pour parcourir les suggestions</span>
       </div>
@@ -342,6 +343,7 @@
         <input type="text" id="pickupCode" inputmode="numeric" maxlength="4"
                pattern="[0-9]*" class="code-input" placeholder="0000" autocomplete="off">
         <button class="btn" id="pickupCodeBtn">Vérifier</button>
+        <button class="btn ghost" type="button" data-ouvrir-scan="1">Scanner</button>
       </div>
       <div id="pickupMsg"></div>
       <div id="pickupDetail" aria-live="polite"></div>
@@ -1082,6 +1084,35 @@
   Mis à jour depuis un autre poste
 </div>
 
+<!-- Le scanner. Le champ EST la douchette : un lecteur de comptoir tape le
+     code puis « Entrée », comme un clavier — rien à installer, rien à
+     autoriser, et ça marche en http. La caméra vient en plus, si le navigateur
+     la donne. -->
+<dialog id="scanDialog" class="fiche">
+  <form method="dialog"><button class="fiche-fermer" aria-label="Fermer">×</button></form>
+  <h3>Scanner un code</h3>
+  <div id="scanEtat"></div>
+  <form id="scanForm" class="retrait-row">
+    <input type="text" id="scanChamp" class="filter-input" autocomplete="off"
+           placeholder="Douchette, ou saisie : casier, code de retrait, nom…">
+    <button class="btn" type="submit">Chercher</button>
+  </form>
+  <p class="hint">
+    Un lecteur de comptoir USB tape le code ici tout seul. Il lit les étiquettes
+    de casier que l'application imprime, et les codes des transporteurs.
+  </p>
+  <div id="scanCameraBloc" hidden>
+    <div class="row-actions">
+      <button class="btn ghost" type="button" id="scanCameraBtn">Allumer la caméra</button>
+      <label class="link-btn" for="scanFichier">Lire une photo</label>
+      <input type="file" id="scanFichier" accept="image/*" hidden>
+    </div>
+    <video id="scanVideo" class="scan-video" playsinline muted></video>
+  </div>
+  <canvas id="scanCanevas" hidden></canvas>
+  <div id="scanResultat" aria-live="polite"></div>
+</dialog>
+
 <dialog id="casierDialog" class="fiche">
   <form method="dialog"><button class="fiche-fermer" aria-label="Fermer">×</button></form>
   <div id="casierDialogCorps"></div>
@@ -1238,6 +1269,7 @@
 <script src="assets/js/codebarres.js"></script>
 <script src="assets/js/xlsx.js"></script>
 <script src="assets/js/boites.js"></script>
+<script src="assets/js/scanner.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/notify.js"></script>
 <!-- Le socle avant les écrans, l'impression avant app.js : l'ordre de ces
@@ -1248,6 +1280,7 @@
 <!-- Les écrans, puis app.js qui les assemble et les démarre. -->
 <script src="assets/js/ui/domiciliation.js"></script>
 <script src="assets/js/ui/casiers.js"></script>
+<script src="assets/js/ui/scanner.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>

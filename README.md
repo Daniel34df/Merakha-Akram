@@ -428,6 +428,47 @@ d'accueil lui-même.
 
 ---
 
+## Scanner un code
+
+Un bouton **Scanner** au guichet et à la remise (ou **Ctrl+B**). On y présente
+une étiquette de casier, un code de retrait, une référence de courrier ou un
+nom ; l'application ouvre ce qui correspond.
+
+Trois façons de lire, de la plus universelle à la plus confortable — et
+**aucune n'ajoute de dépendance**, le projet en a toujours zéro.
+
+**1. La douchette USB.** Un lecteur de comptoir à une vingtaine d'euros se
+comporte comme un clavier : on vise, ça bipe, le code est tapé et validé. C'est
+pour ça que le champ de saisie est au centre de l'écran avec le curseur dedans,
+et non relégué en bas. Aucune permission, aucun https, tous les navigateurs, et
+il lit tout — Code 39, Code 128, EAN, QR selon le modèle. C'est la voie qui
+marche toujours.
+
+**2. La caméra.** Disponible **sans rien installer sur le poste qui héberge
+l'application** : `localhost` et `127.0.0.1` sont des origines de confiance pour
+les navigateurs. Un bureau à un poste a donc la caméra immédiatement. Les
+*autres* postes du réseau, eux, ont besoin d'un certificat — voir
+[`docs/mise-en-service-https.md`](docs/mise-en-service-https.md) ; sans lui,
+l'écran le dit et propose la douchette plutôt que d'afficher un bouton mort.
+
+**3. Une photo déposée**, pour qui scanne avec son téléphone et envoie l'image.
+
+Ce que le décodeur embarqué lit : le **Code 39**, donc les étiquettes que
+l'application imprime elle-même — casiers et attestations. Le module savait déjà
+les écrire ; il sait maintenant les relire, en retournant la même table. Quand
+le navigateur fournit `BarcodeDetector` (Android, ChromeOS, Safari récent), les
+QR et les codes des transporteurs s'ajoutent gratuitement — mais rien n'en
+dépend : cette API est absente de Firefox et de bien des Chromium, et un scanner
+qui ne repose que sur elle ne marche que chez son auteur.
+
+Deux refus délibérés, parce qu'un scanner qui se trompe est pire qu'un scanner
+absent : ce qui n'est pas un code valide rend « aucun résultat » plutôt qu'une
+approximation, et quand plusieurs personnes correspondent à un nom, l'écran les
+liste — choisir à la place de l'agent, c'est remettre le courrier d'Amina à
+Amine.
+
+---
+
 ## Feuille de casier
 
 Le bouton **Feuille de casier** imprime la liste des courriers en attente triée
@@ -1084,6 +1125,8 @@ assets/js/xlsx.js     écriture de classeurs Excel, sans dépendance
 assets/js/store.js    persistance : serveur → localStorage → mémoire
 assets/js/attente.js  file des écritures faites hors ligne, rejouées au retour
 assets/js/boites.js   les casiers : numéro, statut, titulaires, capacité
+assets/js/codebarres.js Code 39 : écrire les étiquettes, et les relire
+assets/js/scanner.js  ce qu'un code scanné désigne, et ce que le poste sait lire
 assets/js/notify.js   composition du message, mailto, presse-papiers
 assets/js/app.js      interface (onglets, registre, historique, réglages)
 server/app.js         serveur HTTP et API JSON
@@ -1098,13 +1141,14 @@ server/google.js      autorisation Gmail (OAuth 2.0)
 server/reminders.js   courriers en attente et relances automatiques
 test/                 tests (node:test), sans dépendance
 assets/js/ui/casiers.js le plan du local : cases, états, historique
+assets/js/ui/scanner.js douchette, caméra, photo déposée
 tools/verifier/       vérifications de navigateur, une par défaut corrigé
 .github/workflows/    intégration continue : npm test sur Node 20.12 et 22
 ```
 
 ```bash
-npm test     # 522 tests : utilitaires, API, comptes, domiciliation, appels, socle,
-             #             couleurs, rejeu, casiers, signature
+npm test     # 549 tests : utilitaires, API, comptes, domiciliation, appels, socle,
+             #             couleurs, rejeu, casiers, signature, scanner
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

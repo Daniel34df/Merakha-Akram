@@ -35,7 +35,8 @@ const SCRIPTS = [
   ['gabarits', 'le numéro de boîte dans les messages, et la seconde langue'],
   ['avis', 'prévenir une personne au sujet de sa domiciliation, sans créer de courrier'],
   ['apparence', 'le thème se retient, le soulignement suit, et le papier ne suit pas l’écran'],
-  ['casiers', 'le plan du local : l’état s’écrit, et le miroir tient d’un écran à l’autre']
+  ['casiers', 'le plan du local : l’état s’écrit, et le miroir tient d’un écran à l’autre'],
+  ['scanner', 'la douchette au centre, la caméra en plus, et jamais de choix fait à notre place']
 ];
 
 const PORT_BASE = Number(process.env.PORT_BASE || 5490);
