@@ -203,10 +203,16 @@ test('le tour des thèmes revient à son point de départ', function () {
 });
 
 test('la couleur de la barre du navigateur ne diverge pas du fond de page', function () {
-  /* Une balise <meta> ne sait pas lire une variable CSS : ces deux valeurs sont
-     recopiées à la main dans le socle et dans le script de pré-peinture de
-     index.html. Trois copies, donc trois occasions de diverger — et la
-     divergence se voit sur un téléphone, en haut de l'écran. */
+  /* Une balise <meta> ne sait pas lire une variable CSS, et un manifeste PWA
+     non plus : la même valeur est recopiée à la main dans le socle, dans le
+     script de pré-peinture, dans `index.html` et dans `manifest.webmanifest`.
+     Quatre copies, donc quatre occasions de diverger — et la divergence se
+     voit sur un téléphone, en haut de l'écran.
+
+     Il y en avait bien quatre, et ce test n'en surveillait que trois : le
+     manifeste a suivi la refonte de palette avec un cran de retard, si bien
+     que l'application installée s'ouvrait sur l'ancien fond avant de repeindre
+     au premier rendu. */
   const fs = require('node:fs');
   const path = require('node:path');
   const RACINE = path.join(__dirname, '..');
@@ -235,6 +241,18 @@ test('la couleur de la barre du navigateur ne diverge pas du fond de page', func
     'la balise theme-color de départ doit être celle du thème clair'
   );
 
+  const manifeste = JSON.parse(
+    fs.readFileSync(path.join(RACINE, 'manifest.webmanifest'), 'utf8')
+  );
+  assert.equal(
+    manifeste.theme_color.toUpperCase(), ui.BARRE_THEME.clair.toUpperCase(),
+    'le manifeste PWA annonce une autre couleur de barre que le socle'
+  );
+  assert.equal(
+    manifeste.background_color.toUpperCase(), ui.BARRE_THEME.clair.toUpperCase(),
+    'l’écran de lancement de l’application installée n’est pas au fond de la page'
+  );
+
   /* Le script de pré-peinture doit être un fichier, chargé avant la feuille de
      style. En ligne, la politique de sécurité du serveur (script-src 'self')
      le refuse et le thème choisi n'est jamais appliqué : la vérification
@@ -247,4 +265,68 @@ test('la couleur de la barre du navigateur ne diverge pas du fond de page', func
     !/<script(?![^>]*\ssrc=)[^>]*>[\s\S]*?localStorage/.test(html),
     'un script en ligne touche au stockage : la CSP du serveur le refusera'
   );
+});
+
+/* ── l'attente : squelettes et boutons occupés ──
+
+   Deux ajouts que le document réclame (§34, §52) et qui répondent à la même
+   chose : le guichet ne doit jamais se demander si son geste est parti. */
+
+test('un squelette réserve la place, il ne la décrit pas', function () {
+  /* Il est décoratif au sens strict : un lecteur d'écran qui le lirait
+     annoncerait quatre lignes vides à quelqu'un qui attend un tableau. */
+  const html = ui.squelette(3);
+  assert.match(html, /^<div class="squelette" aria-hidden="true">/);
+  assert.equal((html.match(/squelette-ligne/g) || []).length, 3);
+  assert.ok(html.indexOf('Chargement') < 0);
+});
+
+test('le nombre de lignes d’un squelette est borné', function () {
+  assert.equal((ui.squelette(999).match(/squelette-ligne/g) || []).length, 12,
+    'douze lignes grises suffisent à réserver une page ; cent en font une');
+  assert.equal((ui.squelette(-4).match(/squelette-ligne/g) || []).length, 1);
+  /* Zéro et « rien » donnent la même chose, et c'est voulu : on pose un
+     squelette avant de savoir combien de lignes viendront, jamais après. */
+  assert.equal((ui.squelette().match(/squelette-ligne/g) || []).length, 3);
+  assert.equal((ui.squelette(0).match(/squelette-ligne/g) || []).length, 3);
+});
+
+test('les lignes ont des largeurs inégales : sinon ça ne ressemble pas à du texte', function () {
+  const html = ui.squelette(4);
+  const largeurs = (html.match(/width:(\d+)%/g) || []);
+  assert.equal(largeurs.length, 4);
+  assert.ok(new Set(largeurs).size > 1);
+  assert.match(ui.squelette(2, [50, 30]), /width:50%.*width:30%/);
+});
+
+test('un bouton occupé se relâche même quand l’envoi échoue', function () {
+  /* C'est le cas qui compte : un serveur en panne laissait sinon le guichet
+     avec un bouton mort jusqu'au rechargement de la page. */
+  const faux = { attrs: {}, disabled: false,
+    setAttribute: function (k, v) { this.attrs[k] = v; },
+    removeAttribute: function (k) { delete this.attrs[k]; } };
+
+  const echec = ui.pendant(faux, Promise.reject(new Error('serveur injoignable')));
+  assert.equal(faux.attrs['aria-busy'], 'true');
+  assert.equal(faux.disabled, true);
+  return echec.then(
+    function () { throw new Error('la promesse aurait dû échouer'); },
+    function (e) {
+      assert.equal(e.message, 'serveur injoignable', 'l’erreur remonte à l’appelant');
+      assert.equal(faux.attrs['aria-busy'], undefined);
+      assert.equal(faux.disabled, false);
+    }
+  );
+});
+
+test('un bouton occupé rend la valeur de la promesse', async function () {
+  const faux = { attrs: {}, disabled: false,
+    setAttribute: function (k, v) { this.attrs[k] = v; },
+    removeAttribute: function (k) { delete this.attrs[k]; } };
+  assert.equal(await ui.pendant(faux, Promise.resolve('fait')), 'fait');
+  assert.equal(faux.disabled, false);
+});
+
+test('sans bouton, l’attente ne fait rien de fâcheux', async function () {
+  assert.equal(await ui.pendant(null, Promise.resolve(7)), 7);
 });

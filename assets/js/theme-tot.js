@@ -24,7 +24,7 @@
     if (choix !== 'clair' && choix !== 'sombre') return;
     document.documentElement.setAttribute('data-theme', choix);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', choix === 'sombre' ? '#0B0F1A' : '#F7F8FC');
+    if (meta) meta.setAttribute('content', choix === 'sombre' ? '#0F172A' : '#F8FAFC');
   } catch (e) {
     /* Navigation privée, stockage refusé : on suit le système, comme par défaut. */
   }

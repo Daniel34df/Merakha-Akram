@@ -1094,7 +1094,7 @@
       message.body += '\n\n(Ce courrier est adressé à ' + opts.pour + ', dont vous assurez le relais.)';
     }
     const mailto = notify.mailtoUrl(contact, message);
-    if (btn) btn.disabled = true;
+    ui.occupe(btn, true);
 
     let auto = false;
     let failure = null;
@@ -1158,13 +1158,13 @@
       renderSerie();
       $('searchResults').innerHTML = '';
       $('courrierUrgent').checked = false;
-      if (btn) btn.disabled = false;
+      ui.occupe(btn, false);
       nameInput.focus();
       return;
     }
     // En traitement de pile, on ne remplace pas l'écran à chaque envoi.
     if (opts.silencieux) {
-      if (btn) btn.disabled = false;
+      ui.occupe(btn, false);
       return;
     }
 
@@ -1221,7 +1221,7 @@
       }, 2000);
     });
 
-    if (btn) btn.disabled = false;
+    ui.occupe(btn, false);
     nameInput.focus();
   }
 
@@ -1555,7 +1555,7 @@
     });
 
     const btn = $('appelEntrantBtn');
-    btn.disabled = true;
+    ui.occupe(btn, true);
     try {
       await store.enregistrerPassage(c.id, '', { moyen: 'telephone' });
       for (const h of siens) {
@@ -1574,7 +1574,7 @@
     } catch (err) {
       setMsg('appelEntrantMsg', 'error', esc(err.message));
     } finally {
-      btn.disabled = false;
+      ui.occupe(btn, false);
     }
   });
 
@@ -1866,7 +1866,7 @@
     }
 
     const btn = $('fedEnregistrerBtn');
-    btn.disabled = true;
+    ui.occupe(btn, true);
     try {
       await store.updateContact(id, {
         name: nom,
@@ -1893,7 +1893,7 @@
     } catch (err) {
       setMsg('fedMsg', 'error', esc(err.message));
     } finally {
-      btn.disabled = false;
+      ui.occupe(btn, false);
     }
   });
 
@@ -3012,14 +3012,14 @@
     });
     racine.querySelectorAll('[data-remind]').forEach(function (btn) {
       btn.addEventListener('click', async function () {
-        btn.disabled = true;
+        ui.occupe(btn, true);
         btn.textContent = 'Envoi…';
         try {
           const r = await store.relancer(btn.dataset.remind);
           toast('Relance envoyée depuis ' + r.sentBy + '.', 'ok');
         } catch (err) {
           toast('Relance impossible : ' + err.message, 'error');
-          btn.disabled = false;
+          ui.occupe(btn, false);
           btn.textContent = 'Relancer';
         }
       });
@@ -3314,7 +3314,7 @@
 
   $('saveOrganismeBtn').addEventListener('click', async function () {
     const btn = $('saveOrganismeBtn');
-    btn.disabled = true;
+    ui.occupe(btn, true);
     try {
       await store.saveSettings({
         // Le nom du bureau a rejoint sa carte d'identité : il se range avec
@@ -3328,7 +3328,7 @@
     } catch (err) {
       setMsg('organismeMsg', 'error', 'Enregistrement impossible : ' + esc(err.message));
     } finally {
-      btn.disabled = false;
+      ui.occupe(btn, false);
     }
   });
 

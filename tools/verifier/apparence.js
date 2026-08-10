@@ -47,6 +47,45 @@ const PAPIER = {
   await page.setViewportSize({ width: 1280, height: 900 });
   await C.ouvrirLeBureau(page);
 
+  /* ---- 0. le texte est visible ----
+
+     Une vérification qu'on n'imagine pas avoir à écrire, jusqu'au jour où le
+     titre de l'application disparaît. Il était peint d'un dégradé découpé à la
+     forme des lettres (`background-clip:text` + `color:transparent`). Le
+     dégradé a été retiré ; le découpage est resté, et un texte transparent
+     sans rien derrière ne s'affiche pas du tout.
+
+     Rien ne l'aurait dit : le HTML est intact, l'empreinte est identique au
+     caractère près, aucune erreur en console, et les tests de contraste
+     calculent des jetons que la règle n'utilisait plus. Seul un œil sur une
+     capture l'a vu. Ce contrôle-ci le voit désormais tout seul. */
+  console.log('\n0. Le texte s’affiche');
+
+  const peints = await page.evaluate(() => {
+    const sortie = [];
+    document.querySelectorAll('h1, h2, nav button[data-panel], .btn').forEach((el) => {
+      if (!el.offsetParent && el.tagName !== 'H1') return; // caché : hors sujet
+      const s = getComputedStyle(el);
+      const alpha = /rgba?\([^)]*,\s*([\d.]+)\s*\)/.exec(s.color);
+      if (s.color === 'transparent' || (alpha && Number(alpha[1]) < 0.5)) {
+        sortie.push((el.id || el.tagName) + ' : ' + s.color);
+      }
+    });
+    return sortie;
+  });
+  ok(peints.length === 0, 'aucun texte n’est peint en transparent' +
+    (peints.length ? ' — ' + peints.join(', ') : ''));
+
+  const titre = await page.evaluate(() => {
+    const h = document.querySelector('header h1');
+    if (!h) return null;
+    const r = h.getBoundingClientRect();
+    return { texte: h.textContent.trim(), largeur: Math.round(r.width), hauteur: Math.round(r.height) };
+  });
+  ok(!!titre && titre.texte.length > 0, 'le titre de l’application a un texte : ' + (titre && titre.texte));
+  ok(!!titre && titre.hauteur > 10 && titre.largeur > 40,
+    'et il occupe une place réelle (' + (titre ? titre.largeur + '×' + titre.hauteur : '?') + ' px)');
+
   /* ---- 1. le thème ---- */
   console.log('\n1. Le thème se choisit, et il se retient');
 

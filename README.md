@@ -1007,7 +1007,8 @@ tools/verifier/       vérifications de navigateur, une par défaut corrigé
 ```
 
 ```bash
-npm test     # 433 tests : utilitaires, API, comptes, domiciliation, appels, socle, couleurs, rejeu
+npm test     # 474 tests : utilitaires, API, comptes, domiciliation, appels, socle,
+             #             couleurs, rejeu, casiers
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 

@@ -121,7 +121,8 @@ const TEXTE = [
   ['--info', '--surface'],
   ['--danger', '--danger-wash'],
   ['--ok', '--ok-wash'],
-  ['--warn', '--warn-wash']
+  ['--warn', '--warn-wash'],
+  ['--info', '--info-wash']
 ];
 
 /* Non-texte : 3:1. Ce qui doit se distinguer sans se lire.
@@ -135,14 +136,15 @@ const TEXTE = [
 const NON_TEXTE = [
   ['--bord', '--surface'],
   ['--bord', '--surface-2'],
-  ['--a1', '--bg'],
-  ['--a1', '--surface'],
-  ['--h-guichet', '--surface'],
-  ['--h-remise', '--surface'],
-  ['--h-registre', '--surface'],
-  ['--h-suivi', '--surface'],
-  ['--h-domiciliation', '--surface'],
-  ['--h-reglages', '--surface']
+  ['--accent', '--bg'],
+  ['--accent', '--surface'],
+  /* Les teintes vives ne portent jamais de mot : une pastille, une jauge, un
+     filet. La norme ne leur demande donc que 3:1 — mais elle le leur demande,
+     parce qu'une jauge qu'on ne distingue pas du fond ne dit rien. */
+  ['--ok-vif', '--surface'],
+  ['--warn-vif', '--surface'],
+  ['--danger-vif', '--surface'],
+  ['--info-vif', '--surface']
 ];
 
 /* Aplats qui portent du texte blanc : boutons, pastilles, en-têtes. */
@@ -165,7 +167,7 @@ test('le texte atteint AA sur tous les fonds où il se pose', function () {
   });
 });
 
-test('les filets et les teintes d’onglet se distinguent du fond', function () {
+test('les filets, l’accent et les teintes vives se distinguent du fond', function () {
   THEMES.forEach(function (t) {
     const nom = t[0];
     const table = t[1];
@@ -263,6 +265,53 @@ test('les règles du papier ne piochent que dans les jetons du papier', function
       !fautif,
       'règle du papier « ' + tete.trim() + ' » : ' + fautif +
         ' vient de l’écran, il faut un jeton --p-* ou --print-*'
+    );
+  });
+});
+
+/* ── la feuille tient debout ──
+
+   Un `}` en trop, et le navigateur jette en silence tout ce qui suit jusqu'à
+   la prochaine règle qu'il sait relire. Rien ne plante, rien ne s'affiche en
+   rouge : quelques règles disparaissent, et on s'en aperçoit des semaines plus
+   tard sur un écran qu'on regarde rarement.
+
+   C'est arrivé en retirant deux animations en boucle : leurs `@keyframes`
+   avaient des accolades imbriquées, la coupe en a laissé la moitié. */
+test('les accolades de la feuille de style s’équilibrent', function () {
+  let profondeur = 0;
+  let ligne = 1;
+  const enTrop = [];
+  for (let i = 0; i < CSS.length; i++) {
+    const c = CSS[i];
+    if (c === '\n') ligne++;
+    else if (c === '{') profondeur++;
+    else if (c === '}') {
+      profondeur--;
+      if (profondeur < 0) {
+        enTrop.push(ligne);
+        profondeur = 0;
+      }
+    }
+  }
+  assert.deepEqual(enTrop, [], 'accolade fermante orpheline, ligne(s) : ' + enTrop.join(', '));
+  assert.equal(profondeur, 0, profondeur + ' bloc(s) jamais refermé(s)');
+});
+
+/* Le document écarte les animations de fond et les rotations permanentes
+   (§50). Une seule exception tient : ce qui tourne pendant qu'on attend, et
+   disparaît avec son objet — le disque d'un bouton parti, la pulsation d'un
+   squelette. Elles ne durent que le temps d'une requête. */
+test('rien ne tourne en boucle, sauf pendant une attente', function () {
+  const boucles = [];
+  const re = /animation:([^;]*infinite[^;]*);/g;
+  let m;
+  while ((m = re.exec(CSS))) boucles.push(m[1].trim());
+  const permises = ['squeletteBat', 'boutonTourne'];
+  boucles.forEach(function (a) {
+    assert.ok(
+      permises.some(function (p) { return a.indexOf(p) >= 0; }),
+      'animation en boucle non prévue : « ' + a + ' »'
     );
   });
 });

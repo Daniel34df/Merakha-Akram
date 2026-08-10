@@ -12,7 +12,7 @@
 <link rel="icon" href="assets/icons/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#F7F8FC">
+<meta name="theme-color" content="#F8FAFC">
 <!-- Avant tout le reste : le thème choisi, posé avant le premier pixel.
      Un fichier plutôt qu’un <script> en ligne — la politique de sécurité
      du serveur (script-src 'self') refuse les seconds. -->
@@ -463,7 +463,7 @@
         </div>
       </div>
       <div id="importMsg"></div>
-      <div id="contactsTable"><div class="empty">Chargement…</div></div>
+      <div id="contactsTable"><div class="squelette" aria-hidden="true"><div class="squelette-ligne" style="width:92%"></div><div class="squelette-ligne" style="width:74%"></div><div class="squelette-ligne" style="width:84%"></div><div class="squelette-ligne" style="width:66%"></div><div class="squelette-ligne" style="width:78%"></div></div></div>
     </div>
   </section>
 
@@ -485,7 +485,7 @@
           </div>
         </div>
         <p class="hint" id="dossierExplication"></p>
-        <div id="dossierTable"><div class="empty">Chargement…</div></div>
+        <div id="dossierTable"><div class="squelette" aria-hidden="true"><div class="squelette-ligne" style="width:88%"></div><div class="squelette-ligne" style="width:70%"></div><div class="squelette-ligne" style="width:80%"></div></div></div>
       </div>
 
       <div class="card">
@@ -524,14 +524,14 @@
             <button class="btn ghost small danger" id="clearHistoryBtn">Vider</button>
           </div>
         </div>
-        <div id="historyTable"><div class="empty">Chargement…</div></div>
+        <div id="historyTable"><div class="squelette" aria-hidden="true"><div class="squelette-ligne" style="width:92%"></div><div class="squelette-ligne" style="width:74%"></div><div class="squelette-ligne" style="width:84%"></div><div class="squelette-ligne" style="width:66%"></div><div class="squelette-ligne" style="width:78%"></div></div></div>
       </div>
     </div>
 
     <div class="reglages-groupe" data-groupe="chiffres" hidden>
       <div class="card">
         <h2>Statistiques</h2>
-        <div id="statsCorps"><div class="empty">Chargement…</div></div>
+        <div id="statsCorps"><div class="squelette" aria-hidden="true"><div class="squelette-ligne" style="width:60%"></div><div class="squelette-ligne" style="width:84%"></div><div class="squelette-ligne" style="width:72%"></div></div></div>
       </div>
     </div>
   </section>
@@ -1016,7 +1016,7 @@
         <p class="hint" style="margin-bottom:12px;">
           Qui a ajouté, modifié ou supprimé quoi. Les 100 dernières actions.
         </p>
-        <div id="journalTable"><div class="empty">Chargement…</div></div>
+        <div id="journalTable"><div class="squelette" aria-hidden="true"><div class="squelette-ligne" style="width:90%"></div><div class="squelette-ligne" style="width:68%"></div><div class="squelette-ligne" style="width:82%"></div><div class="squelette-ligne" style="width:74%"></div></div></div>
       </div>
       <div class="card" id="systemeCard">
         <h2>État du système</h2>

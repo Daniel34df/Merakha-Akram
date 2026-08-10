@@ -274,6 +274,67 @@
     return !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }
 
+  /* ═════════════ l'attente ═════════════
+
+     Deux façons de dire « ça arrive », et elles ne servent pas au même moment.
+
+     Un **squelette** remplit la place que le contenu prendra. Ce n'est pas de
+     la décoration : un tableau qui apparaît d'un coup fait sauter la page, et
+     le clic qu'on avait commencé à viser tombe sur autre chose. Le mot
+     « Chargement… » ne réserve rien du tout.
+
+     Un **bouton occupé** dit que le geste est parti. Sans lui, un envoi lent
+     ressemble à un clic manqué, et on reclique — d'où deux notifications pour
+     un seul courrier. La file hors ligne sait maintenant les dédoublonner,
+     mais la deuxième pression reste une seconde perdue au guichet. */
+
+  /* Des lignes grises à la place d'un tableau qui n'est pas encore là.
+     `largeurs` donne le dessin : des pourcentages, pour que ça ressemble à du
+     texte et non à des barres égales. */
+  function squelette(lignes, largeurs) {
+    const n = Math.max(1, Math.min(12, Number(lignes) || 3));
+    const l = Array.isArray(largeurs) && largeurs.length ? largeurs : [92, 74, 84, 66];
+    let out = '<div class="squelette" aria-hidden="true">';
+    for (let i = 0; i < n; i++) {
+      out += '<div class="squelette-ligne" style="width:' + l[i % l.length] + '%"></div>';
+    }
+    return out + '</div>';
+  }
+
+  /* Le même état, posé et retiré à la main. Sept endroits de l'application
+     désactivaient déjà leur bouton pendant l'envoi ; ils disaient donc « pas
+     maintenant » sans jamais dire « c'est parti ». Un bouton grisé et un bouton
+     occupé se ressemblent à l'écran et ne veulent pas dire la même chose. */
+  function occupe(bouton, oui) {
+    if (!bouton) return;
+    bouton.disabled = !!oui;
+    if (oui) bouton.setAttribute('aria-busy', 'true');
+    else bouton.removeAttribute('aria-busy');
+  }
+
+  /* Marque un bouton occupé le temps d'une promesse, et le relâche quoi qu'il
+     arrive — y compris quand la promesse échoue, sans quoi un serveur en panne
+     laisserait le guichet avec un bouton mort jusqu'au rechargement. */
+  function pendant(bouton, promesse) {
+    if (!bouton) return promesse;
+    bouton.setAttribute('aria-busy', 'true');
+    bouton.disabled = true;
+    const relacher = function () {
+      bouton.removeAttribute('aria-busy');
+      bouton.disabled = false;
+    };
+    return Promise.resolve(promesse).then(
+      function (v) {
+        relacher();
+        return v;
+      },
+      function (e) {
+        relacher();
+        throw e;
+      }
+    );
+  }
+
   /* ═════════════ le thème ═════════════
 
      Clair, sombre, ou celui du système. Trois états et non deux : « auto » est
@@ -294,7 +355,7 @@
      installée. Ce sont les valeurs de `--bg` des deux thèmes ; elles sont
      recopiées ici parce qu'une balise <meta> ne sait pas lire une variable
      CSS. Le test de couleurs vérifie qu'elles ne divergent pas. */
-  const BARRE = { clair: '#F7F8FC', sombre: '#0B0F1A' };
+  const BARRE = { clair: '#F8FAFC', sombre: '#0F172A' };
 
   /** Ce que la personne a choisi : 'auto', 'clair' ou 'sombre'. */
   function themeChoisi() {
@@ -450,6 +511,9 @@
     inscrire: inscrire,
     sessionManquante: sessionManquante,
     mouvementReduit: mouvementReduit,
+    squelette: squelette,
+    occupe: occupe,
+    pendant: pendant,
     glisseOnglet: glisseOnglet,
     majCompteur: majCompteur,
     THEMES: THEMES,
