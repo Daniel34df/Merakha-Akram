@@ -38,7 +38,8 @@ const SCRIPTS = [
   ['casiers', 'le plan du local : l’état s’écrit, et le miroir tient d’un écran à l’autre'],
   ['scanner', 'la douchette au centre, la caméra en plus, et jamais de choix fait à notre place'],
   ['doublons', 'l’avertissement paraît pendant la saisie, prévient sans bloquer, et la référence suit'],
-  ['bord', 'le relevé du jour : calme quand c’est calme, et chaque chiffre mène à son dossier']
+  ['bord', 'le relevé du jour : calme quand c’est calme, et chaque chiffre mène à son dossier'],
+  ['colis', 'l’emplacement demandé quand le colis ne rentre pas, et rien qui sorte chez le transporteur']
 ];
 
 const PORT_BASE = Number(process.env.PORT_BASE || 5490);

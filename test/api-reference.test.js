@@ -150,3 +150,44 @@ test('le préfixe choisi par le bureau tient, et n’est pas remis à COUR au pr
     assert.equal(encore.body.referencePrefixe, 'CRETEI');
   });
 });
+
+/* ── le colis ── */
+
+test('les détails d’un colis survivent à l’aller-retour et au redémarrage', function () {
+  /* Un colis encombrant dont l'emplacement se perd en route reste au registre
+     avec son code de retrait, et devient introuvable pour tout le monde sauf
+     pour celui qui l'a posé. */
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const r = await t.call('POST', '/api/history', {
+      name: 'Jean Dupont',
+      type: 'colis',
+      colis: {
+        poids: '12,5', longueur: 60, largeur: 40, hauteur: 30,
+        suivi: '6a 1234 5678 9fr', emplacement: '  étagère du fond  '
+      }
+    });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.colis.poids, 12.5, 'la virgule décimale est lue');
+    assert.equal(r.body.colis.suivi, '6A123456789FR', 'le numéro est normalisé');
+    assert.equal(r.body.colis.transporteur, 'colissimo', 'deviné du numéro');
+    assert.equal(r.body.colis.emplacement, 'étagère du fond');
+
+    const relu = new Db(t.fichier);
+    await relu.load();
+    assert.deepEqual(relu.data.history[0].colis, r.body.colis);
+  });
+});
+
+test('un courrier ordinaire ne porte pas de colis vide', function () {
+  /* Un objet vide laisserait croire que quelqu'un a rempli quelque chose. */
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const r = await t.call('POST', '/api/history', { name: 'Jean Dupont' });
+    assert.equal(r.body.colis, null);
+    const vide = await t.call('POST', '/api/history', {
+      name: 'Jean Dupont', type: 'colis', colis: { poids: '', suivi: '  ' }
+    });
+    assert.equal(vide.body.colis, null);
+  });
+});

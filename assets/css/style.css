@@ -1088,6 +1088,38 @@ td.box-cell{font-family:var(--mono);font-size:var(--tx-2);color:var(--ink-2);whi
 .msg ul{margin:8px 0 0;padding-left:20px;}
 .msg a{color:var(--accent-texte);font-weight:600;}
 
+/* ---------- le colis ---------- */
+/* Ces champs n'existent que pour un colis, et ils sont nombreux. Une grille
+   qui s'adapte plutôt qu'une colonne : sept champs empilés repousseraient le
+   bouton « Valider » hors de l'écran, et c'est lui qu'on vient chercher. */
+.colis-champs{
+  margin:12px 0 4px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:var(--r2);
+  background:var(--surface-2);
+}
+.colis-grille{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+  gap:10px 12px;
+}
+.colis-grille label{margin-bottom:2px;}
+/* Le transporteur sur deux colonnes : « La Poste — Colissimo » ne tient pas
+   dans 150 px, et un nom tronqué dans un menu déroulant ne se lit qu'en
+   l'ouvrant. Les cotes, elles, sont des nombres à deux chiffres. */
+.colis-grille > :first-child{grid-column:span 2;}
+@media (max-width: 520px){
+  .colis-grille > :first-child{grid-column:auto;}
+}
+/* L'emplacement se détache : c'est le seul champ dont l'absence rend le colis
+   introuvable, et il n'apparaît que quand il compte vraiment. */
+#colisEmplacementBloc{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+
 /* ---------- le relevé du jour ---------- */
 /* Une bande, pas une page. Elle passe au-dessus du champ de saisie du Guichet
    et ne doit pas le repousser : d'où une seule ligne de puces qui s'enroule, et

@@ -20,6 +20,7 @@ const idem = require('./idempotence.js');
 const signature = require('./signature.js');
 const boites = require('../assets/js/boites.js');
 const reference = require('../assets/js/reference.js');
+const colisMod = require('../assets/js/colis.js');
 
 const VERSION = '1.2.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -2470,6 +2471,11 @@ async function handleApi(req, res, ctx, pathname) {
         flaggedAt: null,
         closedAt: null,
         type: util.typeCourrier(body.type).id,
+        /* Le colis n'est pas une lettre : il occupe de la place. Ces champs
+           n'existent que pour lui, et `nettoyer` rend null quand rien n'a été
+           saisi — un objet vide laisserait croire que quelqu'un a rempli
+           quelque chose. */
+        colis: colisMod.nettoyer(body.colis),
         pickupCode: String(body.pickupCode || '') || genererCodeRetrait(db.data.history)
       };
       /* Le nom suffit. Exiger un courriel ici refusait d'inscrire le courrier
@@ -3045,6 +3051,7 @@ async function handleApi(req, res, ctx, pathname) {
       flaggedAt: null,
       closedAt: null,
       type: type.id,
+      colis: colisMod.nettoyer(body.colis),
       pickupCode: code
     };
 

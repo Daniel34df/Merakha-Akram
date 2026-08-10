@@ -1256,6 +1256,11 @@
         email: contact.email,
         subject: message.subject,
         type: message.type || 'lettre',
+        /* Les détails du colis voyagent avec le courrier, y compris dans la
+           file hors ligne : c'est là qu'ils comptent le plus. Un colis inscrit
+           pendant une coupure réseau et rejoué sans son emplacement serait un
+           colis posé quelque part sans que personne sache où. */
+        colis: message.colis || null,
         urgent: !!message.urgent,
         cc: message.cc || '',
         bcc: message.bcc || '',
@@ -1276,6 +1281,7 @@
         subject: message.subject,
         body: message.body,
         type: message.type || 'lettre',
+        colis: message.colis || null,
         urgent: !!message.urgent,
         from: message.from || '',
         cc: message.cc || '',

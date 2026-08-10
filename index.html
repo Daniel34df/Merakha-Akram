@@ -272,6 +272,51 @@
       <label for="typeCourrier">Type de courrier</label>
       <div class="search-modes" id="typeCourrier" role="radiogroup" aria-label="Type de courrier"></div>
 
+      <!-- Un colis n'est pas une lettre : il occupe de la place. Ces champs
+           n'apparaissent que pour lui, et rien n'y est obligatoire — sauf
+           l'emplacement, et seulement quand le colis ne tient pas dans un
+           casier. Voir assets/js/colis.js. -->
+      <div class="colis-champs" id="colisChamps" hidden>
+        <div class="colis-grille">
+          <div>
+            <label for="colisTransporteur">Transporteur</label>
+            <select id="colisTransporteur" class="langue-select"></select>
+          </div>
+          <div id="colisNomBloc" hidden>
+            <label for="colisTransporteurNom">Nom du transporteur</label>
+            <input type="text" id="colisTransporteurNom" placeholder="Transports Diallo" autocomplete="off">
+          </div>
+          <div>
+            <label for="colisSuivi">N° de suivi</label>
+            <input type="text" id="colisSuivi" placeholder="6A 1234 5678 9FR" autocomplete="off">
+            <span class="hint" id="colisSuiviAide"></span>
+          </div>
+          <div>
+            <label for="colisPoids">Poids (kg)</label>
+            <input type="text" id="colisPoids" placeholder="2,5" inputmode="decimal" autocomplete="off">
+          </div>
+          <div>
+            <label for="colisL">Longueur (cm)</label>
+            <input type="text" id="colisL" placeholder="40" inputmode="numeric" autocomplete="off">
+          </div>
+          <div>
+            <label for="colisl">Largeur (cm)</label>
+            <input type="text" id="colisl" placeholder="30" inputmode="numeric" autocomplete="off">
+          </div>
+          <div>
+            <label for="colisH">Hauteur (cm)</label>
+            <input type="text" id="colisH" placeholder="20" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+        <!-- Demandé seulement quand le colis ne rentre pas dans un casier :
+             une question posée pour rien apprend à ne pas répondre. -->
+        <div id="colisEmplacementBloc" hidden>
+          <label for="colisEmplacement">Où est-il rangé ?</label>
+          <input type="text" id="colisEmplacement" placeholder="étagère du fond, à droite" autocomplete="off">
+          <span class="hint" id="colisEmplacementAide"></span>
+        </div>
+      </div>
+
       <div class="row-actions">
         <button class="btn" id="validerBtn">Valider</button>
         <button class="btn ghost" type="button" data-ouvrir-scan="1">Scanner</button>
@@ -1287,6 +1332,7 @@
 <script src="assets/js/boites.js"></script>
 <script src="assets/js/reference.js"></script>
 <script src="assets/js/bord.js"></script>
+<script src="assets/js/colis.js"></script>
 <script src="assets/js/doublons.js"></script>
 <script src="assets/js/scanner.js"></script>
 <script src="assets/js/store.js"></script>

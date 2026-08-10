@@ -26,6 +26,7 @@
   const notify = root.BC.notify;
   const doublons = root.BC.doublons;
   const reference = root.BC.reference;
+  const colis = root.BC.colis;
   const ui = root.BC.ui;
   const impression = root.BC.impression;
   const S = store.state;
@@ -554,8 +555,91 @@
             b.classList.toggle('active', actif);
             b.setAttribute('aria-checked', actif ? 'true' : 'false');
           });
+        majColis();
       });
     });
+
+  /* ═════════════ le colis ═════════════ */
+
+  /* Ce que l'écran lit dans les champs. Le nettoyage est fait par le module —
+     le même que le serveur emploie, pour que les deux côtés soient d'accord
+     sur ce qu'est un poids et sur ce qu'est un colis vide. */
+  function colisSaisi() {
+    if (view.typeCourrier !== 'colis') return null;
+    return colis.nettoyer({
+      transporteur: $('colisTransporteur').value,
+      transporteurNom: $('colisTransporteurNom').value,
+      suivi: $('colisSuivi').value,
+      poids: $('colisPoids').value,
+      longueur: $('colisL').value,
+      largeur: $('colisl').value,
+      hauteur: $('colisH').value,
+      emplacement: $('colisEmplacement').value
+    });
+  }
+
+  function majColis() {
+    const estColis = view.typeCourrier === 'colis';
+    $('colisChamps').hidden = !estColis;
+    if (!estColis) return;
+
+    /* Le transporteur se devine du numéro : l'agent lit l'étiquette, il ne
+       devrait pas avoir à retrouver dans une liste ce que le numéro dit déjà.
+       Mais on ne remplace jamais un choix fait à la main — deviner par-dessus
+       une correction serait la défaire sous les doigts de celui qui la tape. */
+    const suivi = $('colisSuivi').value;
+    const devine = colis.deviner(suivi);
+    const choisi = $('colisTransporteur');
+    const aide = $('colisSuiviAide');
+    if (devine && !choisi.value) choisi.value = devine;
+    /* La phrase est décidée sur l'état, pas sur ce qui vient d'arriver. Écrite
+       au moment où l'on devine, elle disparaissait à la frappe suivante — le
+       poids tapé après le numéro effaçait « Transporteur reconnu », et l'agent
+       ne savait plus si le choix venait de lui ou de l'application. */
+    if (devine && choisi.value === devine) {
+      aide.textContent = 'Transporteur reconnu : ' + colis.transporteur(devine).label + '.';
+    } else if (suivi.trim() && !devine && !choisi.value) {
+      aide.textContent = 'Transporteur non reconnu — choisissez-le dans la liste.';
+    } else {
+      aide.textContent = '';
+    }
+    $('colisNomBloc').hidden = $('colisTransporteur').value !== 'autre';
+
+    /* L'emplacement n'est demandé que quand le colis ne tient pas dans un
+       casier. C'est la seule chose sans laquelle il devient introuvable : il
+       reste au registre, avec son code de retrait, et personne ne sait où il
+       est posé. */
+    const c = {
+      poids: $('colisPoids').value, longueur: $('colisL').value,
+      largeur: $('colisl').value, hauteur: $('colisH').value
+    };
+    const gros = colis.encombrant(c);
+    $('colisEmplacementBloc').hidden = !gros;
+    $('colisEmplacementAide').textContent = gros
+      ? 'Ce colis ne tient pas dans un casier. Sans emplacement, seul celui qui l’a posé saura le retrouver.'
+      : '';
+  }
+
+  ['colisSuivi', 'colisPoids', 'colisL', 'colisl', 'colisH'].forEach(function (id) {
+    $(id).addEventListener('input', majColis);
+  });
+  $('colisTransporteur').addEventListener('change', majColis);
+
+  $('colisTransporteur').innerHTML =
+    '<option value="">— transporteur —</option>' +
+    colis.TRANSPORTEURS.map(function (t) {
+      return '<option value="' + esc(t.id) + '">' + esc(t.label) + '</option>';
+    }).join('');
+
+  /* Après un envoi, les champs se vident : le colis suivant n'a rien à voir
+     avec celui-ci, et un numéro de suivi resté en place serait recopié sur le
+     mauvais courrier. */
+  function viderColis() {
+    ['colisSuivi', 'colisPoids', 'colisL', 'colisl', 'colisH', 'colisEmplacement', 'colisTransporteurNom']
+      .forEach(function (id) { $(id).value = ''; });
+    $('colisTransporteur').value = '';
+    majColis();
+  }
 
   /* ═════════════ signature de remise ═════════════ */
 
@@ -726,6 +810,17 @@
        s'efface plutôt que d'afficher un tiret sans objet. */
     if (record.reference) {
       lignes.push(ligneFiche('Référence', record.reference, 'reference-cell'));
+    }
+    /* Le colis, et d'abord où il est. L'agent a quelqu'un devant lui : il doit
+       savoir où aller le chercher avant de savoir qui l'a livré. Un colis
+       encombrant sans emplacement le dit franchement plutôt que de laisser une
+       ligne vide qu'on prendrait pour « rien à signaler ». */
+    if (record.colis) {
+      const ligneColis = colis.resume(record.colis);
+      if (ligneColis) lignes.push(ligneFiche('Colis', ligneColis, 'colis-cell'));
+      if (colis.encombrant(record.colis) && !record.colis.emplacement) {
+        lignes.push(ligneFiche('Emplacement', 'Non noté — cherchez dans le local', 'colis-cell'));
+      }
     }
     if (record.urgent) {
       lignes.push(ligneFiche('Urgence', 'Courrier signalé urgent à la réception'));
@@ -906,6 +1001,10 @@
   $('clearSearchBtn').addEventListener('click', function () {
     nameInput.value = '';
     $('searchResults').innerHTML = '';
+    /* Les champs du colis partent avec le reste : « Effacer » qui laisserait
+       un numéro de suivi en place le recopierait sur le courrier suivant, et
+       personne ne s'en apercevrait avant que quelqu'un réclame son colis. */
+    viderColis();
     hideSuggestions();
     nameInput.focus();
   });
@@ -1199,6 +1298,9 @@
     // Le type est passé à la composition : c'est lui qui choisit le gabarit.
     const message = notify.compose(contact, S.settings, Object.assign({ type: type }, copies));
     message.type = type;
+    /* Les détails du colis suivent le courrier. `opts.colis` sert à la pile et
+       à la saisie en série, qui n'ont pas les champs de l'écran sous la main. */
+    message.colis = opts.colis !== undefined ? opts.colis : (type === 'colis' ? colisSaisi() : null);
     message.urgent = opts.urgent !== undefined ? !!opts.urgent : !!$('courrierUrgent').checked;
     if (opts.pour) {
       message.body += '\n\n(Ce courrier est adressé à ' + opts.pour + ', dont vous assurez le relais.)';
