@@ -5095,6 +5095,14 @@
     ouvrirFiche: function (id) {
       return ouvrirFiche(id);
     },
+    /* Le Registre a deux sections. Un appelant qui sait laquelle il veut — le
+       relevé du jour, quand on clique « 2 casiers en désaccord » — doit
+       atterrir dessus : ouvrir le Registre sur les destinataires obligerait à
+       un second clic pour arriver là où le chiffre promettait de mener. */
+    ouvrirSection: function (id) {
+      view.sectionRegistre = id;
+      renderSectionsRegistre();
+    },
     remplirLangues: function (select, choisie) {
       return remplirLangues(select, choisie);
     }
@@ -5125,6 +5133,10 @@
     renderStats();
     renderJournal();
     ecrans.domiciliation.render();
+    /* Le relevé du jour se refait avec le reste : il n'a de valeur que s'il
+       est à jour, et un chiffre figé sur un écran qu'on regarde le matin est
+       pire que pas de chiffre du tout. */
+    ecrans.bord.render();
     renderAgents();
     renderAntennes();
     renderCarteAntennes();
