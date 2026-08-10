@@ -228,6 +228,22 @@ Marche à suivre complète : [`docs/connexion-boite-mail.md`](docs/connexion-boi
 
 ## Utilisation
 
+**Le relevé du jour** — en haut du Guichet, une bande dit ce qui appelle une
+action aujourd'hui : domiciliations expirées, personnes à prévenir, courriers
+qui traînent, casiers en désaccord. Tout cela existait déjà, mais réparti sur
+cinq écrans qu'on n'ouvre pas cinq fois par jour — et ce qui se voit rarement
+finit par ne plus se voir.
+
+Chaque chiffre est cliquable et mène à l'écran concerné : un tableau de bord
+qui affiche « 2 domiciliations expirées » sans mener aux deux dossiers oblige
+à les chercher à la main, et on ne le fait pas. Le mot est écrit à côté du
+chiffre, jamais remplacé par une couleur seule.
+
+Une journée calme affiche une ligne calme. Une rubrique dont le bureau ne se
+sert pas — les casiers, si le plan du local n'a jamais été ouvert — n'apparaît
+pas du tout, plutôt que d'afficher zéro : « 0 casier plein » se lirait comme
+une vérification faite, et ce n'en est pas une.
+
 **Guichet** — on tape le nom inscrit sur la lettre. La recherche ignore les
 accents, la casse et l'ordre des mots (« tremblay elodie » trouve « Élodie
 Tremblay ») et propose les correspondances dès deux caractères. Si le nom est
@@ -362,6 +378,70 @@ Le **Cci** est invisible pour les destinataires, mais reste affiché au guichet
 et dans l'historique : c'est la trace interne de l'envoi.
 
 ---
+
+## La référence d'un courrier
+
+Chaque courrier inscrit reçoit une référence : **COUR-2026-000042**. Elle se
+dicte au téléphone, se note au crayon sur une enveloppe, s'imprime en Code 39
+et se rescanne — et elle ne désigne qu'un seul courrier, pour toujours : même
+retiré, même archivé, même six ans plus tard.
+
+Le code de retrait à quatre chiffres ne peut pas jouer ce rôle. Il prouve, au
+moment du retrait, qu'on est bien la personne attendue, puis cesse de vouloir
+dire quoi que ce soit — il est court, donc il se répète.
+
+Le compteur repart à un chaque année, ce qui garde le numéro lisible. Quand le
+bureau a plusieurs antennes, chacune tire son préfixe de son nom et compte de
+son côté ; sinon le préfixe se règle dans Réglages.
+
+Une référence collée dans le filtre du Suivi ramène son courrier, retiré ou
+non. C'est le geste au téléphone : la personne lit le numéro qu'elle a noté,
+l'agent le colle.
+
+## Deux fiches pour une même personne
+
+L'agent tape un nom, ne le trouve pas — la fiche existe sous « Jean DUPOND »,
+ou « Dupont Jean », ou avec un espace en trop — et en crée une deuxième. À
+partir de là le courrier arrive tantôt sur l'une, tantôt sur l'autre, et la
+personne se voit refuser un courrier qui est là, sous son autre nom. Pour une
+domiciliation, les deux fiches ont chacune leur échéance, et celle qui compte
+n'est pas forcément celle qu'on regarde le jour de la radiation.
+
+L'application **prévient pendant la saisie**, avant l'enregistrement — après,
+la deuxième fiche existe déjà. Trois signaux, du plus sûr au plus douteux : le
+même courriel, le même téléphone (« +33 6 12 34 56 78 » et « 06 12 34 56 78 »
+sont le même numéro), un nom très proche. Le motif est écrit en toutes lettres.
+
+Elle **ne bloque rien et ne fusionne rien**. Deux frères d'un même foyer
+portent le même nom de famille, et fusionner deux dossiers de deux personnes
+serait bien pire qu'un doublon. C'est l'agent qui a la personne devant lui.
+
+## Les colis
+
+Un colis se distingue d'une lettre sur un point : **il occupe de la place**.
+Une lettre va dans le casier et y reste. Un colis de quinze kilos ne rentre
+dans aucun casier ; il est posé quelque part dans le local, et si personne n'a
+noté où, il est introuvable pour tout le monde sauf pour celui qui l'a posé.
+
+Quand on choisit le type « Colis », le guichet ouvre quelques champs :
+transporteur, numéro de suivi, poids et dimensions. Rien n'y est obligatoire —
+sauf **l'emplacement**, et seulement quand le colis dépasse cinq kilos ou
+trente-cinq centimètres sur une cote. Une seule cote suffit : un tube d'un
+mètre pèse deux kilos et ne rentre nulle part. Demander « où l'avez-vous mis »
+pour une boîte qui tient dans B-012 serait une question pour rien.
+
+Le transporteur se devine du numéro de suivi — l'agent lit l'étiquette, il n'a
+pas à retrouver dans une liste ce que le numéro dit déjà. La proposition ne
+remplace jamais un choix fait à la main.
+
+**Rien n'est consulté chez le transporteur.** Un suivi appelé automatiquement
+dirait à un tiers, à chaque affichage de la liste, que telle personne
+domiciliée à telle adresse attend tel colis. L'application fabrique un lien ;
+l'ouvrir est le geste de l'agent.
+
+Sur la fiche de remise, l'emplacement passe avant le transporteur : quelqu'un
+attend au comptoir, et ce qu'il faut d'abord, c'est savoir où aller le
+chercher.
 
 ## Absences et remplaçants
 
@@ -1125,6 +1205,10 @@ assets/js/xlsx.js     écriture de classeurs Excel, sans dépendance
 assets/js/store.js    persistance : serveur → localStorage → mémoire
 assets/js/attente.js  file des écritures faites hors ligne, rejouées au retour
 assets/js/boites.js   les casiers : numéro, statut, titulaires, capacité
+assets/js/reference.js  « COUR-2026-000042 » : le numéro qui désigne un courrier
+assets/js/doublons.js   les fiches qui se ressemblent — prévenir, jamais fusionner
+assets/js/colis.js    poids, transporteur, suivi, et surtout : où il est rangé
+assets/js/bord.js     le relevé du jour : ce qui appelle une action aujourd'hui
 assets/js/codebarres.js Code 39 : écrire les étiquettes, et les relire
 assets/js/scanner.js  ce qu'un code scanné désigne, et ce que le poste sait lire
 assets/js/notify.js   composition du message, mailto, presse-papiers
@@ -1141,14 +1225,16 @@ server/google.js      autorisation Gmail (OAuth 2.0)
 server/reminders.js   courriers en attente et relances automatiques
 test/                 tests (node:test), sans dépendance
 assets/js/ui/casiers.js le plan du local : cases, états, historique
+assets/js/ui/bord.js    la bande du relevé, en haut du Guichet
 assets/js/ui/scanner.js douchette, caméra, photo déposée
 tools/verifier/       vérifications de navigateur, une par défaut corrigé
 .github/workflows/    intégration continue : npm test sur Node 20.12 et 22
 ```
 
 ```bash
-npm test     # 549 tests : utilitaires, API, comptes, domiciliation, appels, socle,
-             #             couleurs, rejeu, casiers, signature, scanner
+npm test     # 610 tests : utilitaires, API, comptes, domiciliation, appels, socle,
+             #             couleurs, rejeu, casiers, signature, scanner, référence,
+             #             doublons, colis, relevé du jour
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 
@@ -1160,12 +1246,12 @@ Tout ce qui est calculable — règles de domiciliation, listes d'appels, bornes
 d'affichage, droits, filtrage par antenne — vit dans des modules chargeables des
 deux côtés et se teste là, vite et partout.
 
-Reste ce qui exige un écran. Neuf parcours cliquent pour de vrai :
+Reste ce qui exige un écran. Quatorze parcours cliquent pour de vrai :
 
 ```bash
 npm i                    # installe Playwright (outillage seulement)
 npx playwright install chromium
-npm run verifier         # les neuf, chacun sur son serveur et sa base
+npm run verifier         # les quatorze, chacun sur son serveur et sa base
 npm run verifier -- rappel   # un seul
 npm run parcours         # le parcours complet, qui s'imprime comme procédure
 ```
