@@ -61,6 +61,13 @@
         'd’attestation, noter les passages et voir le rapport annuel.'
     },
     {
+      id: 'casiers',
+      label: 'Casiers — attribuer et libérer',
+      detail:
+        'Voir le plan du local, donner une boîte à quelqu’un, la rendre, ' +
+        'signaler une serrure cassée.'
+    },
+    {
       id: 'exports',
       label: 'Exporter et imprimer',
       detail: 'Sortir le registre en Excel ou en CSV, imprimer les feuilles.'
@@ -85,6 +92,10 @@
        responsable peut la refermer, mais la refuser par défaut reviendrait à
        empêcher l'agent de faire ce pour quoi il est au guichet. */
     domiciliation: true,
+    /* Ouvert, pour la même raison que la domiciliation : donner une boîte à
+       quelqu'un qui s'inscrit est le geste d'accueil lui-même. Le refuser par
+       défaut obligerait à déranger le responsable à chaque arrivée. */
+    casiers: true,
     exports: false,
     reglages: false
   };

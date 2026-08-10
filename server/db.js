@@ -7,6 +7,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const idem = require('./idempotence.js');
+const boites = require('../assets/js/boites.js');
 
 const DEFAULT_SETTINGS = {
   subject: 'Un courrier vous attend',
@@ -34,6 +35,10 @@ const DEFAULT_SETTINGS = {
   /* Antennes : plusieurs points d'accueil partageant un serveur. Vide = un seul
      bureau, et l'application ne montre rien de cette notion. */
   antennes: [],
+  /* Comment le bureau numérote ses casiers. Un bureau écrit « B-001 », un
+     autre « 142 » tout court, un troisième « A-01 » par étage — c'est ce qui
+     est peint sur les portes du local, pas une convention qu'on impose. */
+  numerotation: Object.assign({}, boites.NUMEROTATION_DEFAUT),
   /* Durée de conservation des courriers terminés, en mois. 0 = illimitée.
      Un registre qui garde tout indéfiniment expose bien plus qu'il ne devrait
      le jour d'une fuite ; c'est aussi une obligation. */
@@ -62,6 +67,10 @@ function emptyDb() {
        ligne après avoir perdu la réponse. Ne contient aucune donnée
        personnelle : voir `server/idempotence.js`. */
     operations: [],
+    /* Le plan du local : une entrée par casier. Voir `assets/js/boites.js` —
+       un numéro n'est plus une chaîne posée sur une fiche, mais un objet qui
+       dure, avec son statut et la suite de ses titulaires. */
+    boites: [],
     // Empreinte du code maître : jamais le code lui-même.
     masterCodeHash: ''
   };
@@ -78,6 +87,10 @@ class Db {
        reconnectent alors et rechargent tout, ce qui donne le même résultat. */
     this.revision = 0;
     this.abonnes = new Set();
+    /* Les numéros portés par deux fiches, relevés à la migration du plan des
+       casiers. En mémoire seulement : c'est un constat sur l'état du jour, pas
+       une donnée du bureau. */
+    this.conflitsMigration = [];
   }
 
   /* Prévenu à chaque écriture terminée. Rend la fonction de désabonnement —
@@ -114,6 +127,9 @@ class Db {
            laisserait passer le rejeu qu'il devait justement absorber. Purgé à
            la relecture, pour ne pas ressusciter une semaine périmée. */
         operations: idem.purger(Array.isArray(parsed.operations) ? parsed.operations.slice() : []),
+        /* `null` marque un registre d'avant les casiers, à distinguer d'un
+           bureau qui a vidé son plan : le premier se migre, le second non. */
+        boites: Array.isArray(parsed.boites) ? parsed.boites : null,
         masterCodeHash: typeof parsed.masterCodeHash === 'string' ? parsed.masterCodeHash : '',
         pending: Array.isArray(parsed.pending)
           ? parsed.pending.filter(function (p) {
@@ -133,6 +149,27 @@ class Db {
         }
       }
       this.data = emptyDb();
+    }
+
+    /* Le plan du local, pour un registre qui n'en avait pas.
+
+       Il se déduit de ce qui est déjà là : chaque numéro distinct porté par
+       une fiche devient un casier occupé par son titulaire. Rien n'est écrit
+       ici — la première écriture venue le persistera. Le faire au chargement
+       plutôt qu'au démarrage du serveur est délibéré : une restauration de
+       sauvegarde repasse par `load()`, et un registre restauré doit retrouver
+       son plan comme les autres.
+
+       `migrer` rend aussi la liste des conflits — deux fiches sur un même
+       numéro. On la garde en mémoire pour que l'écran des casiers la montre,
+       sans l'écrire au fichier : c'est un constat sur l'état du jour, pas une
+       donnée du bureau. */
+    if (!Array.isArray(this.data.boites)) {
+      const m = boites.migrer(this.data.contacts, this.data.settings.numerotation);
+      this.data.boites = m.boites;
+      this.conflitsMigration = m.conflits;
+    } else {
+      this.conflitsMigration = [];
     }
     return this.data;
   }
