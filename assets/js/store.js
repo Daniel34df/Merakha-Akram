@@ -69,6 +69,9 @@
     codeMaitreParDefaut: false,
     contacts: [],
     history: [],
+    // Le plan du local, servi par /api/state ; vide hors mode serveur.
+    boites: [],
+    conflitsBoites: [],
     settings: Object.assign({}, DEFAULT_SETTINGS),
     lastError: null,
     registryPreference: 'partage',
@@ -597,6 +600,8 @@
     const data = await api('/state');
     state.contacts = data.contacts || [];
     state.history = data.history || [];
+    state.boites = data.boites || [];
+    state.conflitsBoites = data.conflitsBoites || [];
     state.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || {});
     state.suivi = data.suivi || state.suivi;
     /* Le serveur ne le signale qu'au responsable : pour tous les autres, il
@@ -837,6 +842,42 @@
 
   async function loadStats() {
     return api('/stats');
+  }
+
+  /* ---------- les casiers ----------
+     Le numéro est attribué par le serveur : ces écritures ne passent donc
+     jamais par la file hors ligne. Deux postes qui créeraient un casier chacun
+     de son côté, sans serveur pour arbitrer, tomberaient sur le même numéro —
+     c'est exactement ce que la file ne sait pas résoudre. */
+
+  async function creerBoite(input) {
+    return api('/boites', { method: 'POST', body: JSON.stringify(input || {}) });
+  }
+
+  async function creerSerieBoites(input) {
+    return api('/boites/serie', { method: 'POST', body: JSON.stringify(input || {}) });
+  }
+
+  async function majBoite(id, champs) {
+    return api('/boites/' + encodeURIComponent(id), {
+      method: 'PUT', body: JSON.stringify(champs || {})
+    });
+  }
+
+  async function attribuerBoite(id, contactId) {
+    return api('/boites/' + encodeURIComponent(id) + '/attribuer', {
+      method: 'POST', body: JSON.stringify({ contactId: contactId })
+    });
+  }
+
+  async function libererBoite(id, motif) {
+    return api('/boites/' + encodeURIComponent(id) + '/liberer', {
+      method: 'POST', body: JSON.stringify({ motif: motif || '' })
+    });
+  }
+
+  async function supprimerBoite(id) {
+    return api('/boites/' + encodeURIComponent(id), { method: 'DELETE' });
   }
 
   /* La signature du créateur et l'intégrité de l'application. En mode local il
@@ -1290,7 +1331,17 @@
     serverBackup: serverBackup,
     listerSauvegardes: listerSauvegardes,
     restaurerSauvegarde: restaurerSauvegarde,
+    /* Recharger tout l'état depuis le serveur. Public parce que les écritures
+       qui ne passent pas par la file — les casiers, dont le numéro est
+       attribué par le serveur — n'ont pas d'autre moyen de se répercuter. */
+    loadServerState: loadServerState,
     loadStats: loadStats,
+    creerBoite: creerBoite,
+    creerSerieBoites: creerSerieBoites,
+    majBoite: majBoite,
+    attribuerBoite: attribuerBoite,
+    libererBoite: libererBoite,
+    supprimerBoite: supprimerBoite,
     chargerSignature: chargerSignature,
     debloquerIntegrite: debloquerIntegrite,
     loadDomiciliation: loadDomiciliation,

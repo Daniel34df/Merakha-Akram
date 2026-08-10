@@ -387,6 +387,47 @@ dernières actions, bornées à deux mille en tout.
 L'onglet *Dossier* affiche les **statistiques** : volumes sur sept jours, trente
 jours et douze mois, taux de retrait, délai moyen, boîtes les plus actives.
 
+## Les casiers
+
+*Registre → Casiers* montre le plan du local : une case par porte, dans l'ordre
+où on le parcourt, groupée par zone. Chaque case porte son numéro, son
+titulaire, **son état écrit en toutes lettres** à côté de sa couleur, et le
+courrier qui l'attend. Cliquer une case ouvre sa fiche.
+
+Une boîte n'est plus une chaîne posée sur une fiche : c'est un objet qui dure.
+
+- **La numérotation est attribuée par le serveur.** Deux postes qui créent un
+  casier au même instant n'obtiennent jamais le même numéro. Le préfixe, le
+  nombre de chiffres et la plage se règlent dans *Réglages → Le registre*
+  (« B-001 », « 142 », « A-01 » selon ce qui est peint sur vos portes).
+  « Créer une série » équipe le local d'un coup.
+- **Cinq états** : libre, occupée, réservée, suspendue, hors service — les
+  trois derniers avec un motif (« serrure cassée », « nouveau contrat lundi »).
+- **L'historique des titulaires.** Un changement n'écrase jamais : il clôt une
+  période et en ouvre une autre. C'est ce qui permet de savoir à qui était un
+  casier quand un courrier arrive trois semaines après un déménagement.
+- **La capacité** prévient à 80 % et à 100 %, comptée sur le courrier en
+  attente du titulaire.
+
+**Rien ne change pour qui n'ouvre jamais cet écran.** Le champ « N° de boîte »
+des formulaires reste du texte libre ; le serveur rapproche ce qui est saisi du
+plan, et crée le casier à la volée s'il n'y figurait pas. Un registre existant
+retrouve son plan tout seul au premier démarrage — chaque numéro distinct
+devient une boîte occupée par son titulaire. Les numéros portés par deux fiches
+sont **signalés, pas tranchés** : c'est soit un casier repris sans mise à jour,
+soit deux personnes qui le partagent, et l'application ne peut pas le savoir.
+
+Deux refus délibérés : un casier occupé ne se déclare pas « libre » d'un trait
+de plume — il faut le libérer, ce qui clôt la période de son titulaire ; et un
+casier qui a eu des titulaires ne se supprime pas, sa mémoire sert. Pour un
+casier qu'on n'utilise plus : *hors service*.
+
+Le droit **« Casiers »** est ouvert aux agents par défaut, comme la
+domiciliation : donner une boîte à quelqu'un qui s'inscrit est le geste
+d'accueil lui-même.
+
+---
+
 ## Feuille de casier
 
 Le bouton **Feuille de casier** imprime la liste des courriers en attente triée
@@ -1056,12 +1097,13 @@ server/secrets.js     chiffrement des identifiants au repos (AES-256-GCM)
 server/google.js      autorisation Gmail (OAuth 2.0)
 server/reminders.js   courriers en attente et relances automatiques
 test/                 tests (node:test), sans dépendance
+assets/js/ui/casiers.js le plan du local : cases, états, historique
 tools/verifier/       vérifications de navigateur, une par défaut corrigé
 .github/workflows/    intégration continue : npm test sur Node 20.12 et 22
 ```
 
 ```bash
-npm test     # 502 tests : utilitaires, API, comptes, domiciliation, appels, socle,
+npm test     # 522 tests : utilitaires, API, comptes, domiciliation, appels, socle,
              #             couleurs, rejeu, casiers, signature
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```

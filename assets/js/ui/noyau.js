@@ -49,6 +49,8 @@
     sectionReglages: 'bureau',
     // Section ouverte dans le Suivi : à traiter, historique, statistiques.
     sectionSuivi: 'traiter',
+    // Section ouverte dans le Registre : les personnes, ou les casiers.
+    sectionRegistre: 'destinataires',
     contactFilter: '',
     historyFilter: '',
     historyDate: '',

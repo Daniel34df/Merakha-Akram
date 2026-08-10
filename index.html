@@ -406,12 +406,21 @@
 
   <!-- ═══════════════ REGISTRE ═══════════════ -->
   <section class="panel" id="panel-registre" aria-label="Registre">
+    <!-- Deux sections : les personnes, et les casiers. Même mécanique que le
+         Suivi et les Réglages — pas de septième onglet, la barre de navigation
+         passe déjà sur trois lignes à 360 px. -->
+    <div class="search-modes reglages-sections" id="registreSections" role="tablist" aria-label="Sections du registre"></div>
+
+    <div class="reglages-groupe" data-groupe="destinataires" hidden>
     <div class="card">
       <h2>Ajouter un destinataire</h2>
       <form class="add-form" id="addForm" novalidate>
         <div>
           <label for="newBox">N° de boîte</label>
           <input type="text" id="newBox" placeholder="B-12" autocomplete="off">
+          <!-- Proposé, jamais imposé : le champ reste vide, l'aide dit
+               seulement quelle boîte est libre. -->
+          <span class="hint" id="newBoxAide"></span>
         </div>
         <div>
           <label for="newName">Nom complet</label>
@@ -464,6 +473,31 @@
       </div>
       <div id="importMsg"></div>
       <div id="contactsTable"><div class="squelette" aria-hidden="true"><div class="squelette-ligne" style="width:92%"></div><div class="squelette-ligne" style="width:74%"></div><div class="squelette-ligne" style="width:84%"></div><div class="squelette-ligne" style="width:66%"></div><div class="squelette-ligne" style="width:78%"></div></div></div>
+    </div>
+    </div>
+
+    <div class="reglages-groupe" data-groupe="casiers" hidden>
+      <div class="card" id="casiersPlanCard">
+        <div class="card-head">
+          <h2>Le plan du local (<span id="countCasiers">0</span>)</h2>
+          <div class="toolbar">
+            <input type="text" id="casierFiltre" class="filter-input" placeholder="Filtrer…" autocomplete="off">
+            <button class="btn ghost small" id="casierAjouterBtn">Ajouter un casier</button>
+            <button class="btn ghost small" id="casierSerieBtn"
+                    title="Équiper le local d'un coup : « B-001 à B-060 »">Créer une série</button>
+          </div>
+        </div>
+        <p class="hint" id="casierResume"></p>
+        <div id="casierConflits"></div>
+        <div id="casierPlan"><div class="squelette" aria-hidden="true"><div class="squelette-ligne" style="width:88%"></div><div class="squelette-ligne" style="width:70%"></div><div class="squelette-ligne" style="width:80%"></div></div></div>
+      </div>
+      <div class="card" id="casiersListeCard">
+        <h2>Les casiers, en liste</h2>
+        <p class="hint" style="margin-bottom:12px;">
+          Le même plan, trié par numéro, avec le courrier qui attend dans chacun.
+        </p>
+        <div id="casierTable"></div>
+      </div>
     </div>
   </section>
 
@@ -1048,6 +1082,11 @@
   Mis à jour depuis un autre poste
 </div>
 
+<dialog id="casierDialog" class="fiche">
+  <form method="dialog"><button class="fiche-fermer" aria-label="Fermer">×</button></form>
+  <div id="casierDialogCorps"></div>
+</dialog>
+
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <!-- Recherche globale : Ctrl+K depuis n'importe quel onglet. -->
@@ -1198,6 +1237,7 @@
 <script src="assets/js/appels.js"></script>
 <script src="assets/js/codebarres.js"></script>
 <script src="assets/js/xlsx.js"></script>
+<script src="assets/js/boites.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/notify.js"></script>
 <!-- Le socle avant les écrans, l'impression avant app.js : l'ordre de ces
@@ -1207,6 +1247,7 @@
 <script src="assets/js/ui/impression.js"></script>
 <!-- Les écrans, puis app.js qui les assemble et les démarre. -->
 <script src="assets/js/ui/domiciliation.js"></script>
+<script src="assets/js/ui/casiers.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>

@@ -4295,6 +4295,11 @@
     { id: 'controle', label: 'Contrôle' }
   ];
 
+  const SECTIONS_REGISTRE = [
+    { id: 'destinataires', label: 'Destinataires' },
+    { id: 'casiers', label: 'Casiers' }
+  ];
+
   const SECTIONS_SUIVI = [
     { id: 'traiter', label: 'À traiter' },
     { id: 'journalier', label: 'Historique' },
@@ -4356,6 +4361,12 @@
     });
   }
 
+  function renderSectionsRegistre() {
+    renderSections('panel-registre', 'registreSections', SECTIONS_REGISTRE, view.sectionRegistre, function (id) {
+      view.sectionRegistre = id;
+    });
+  }
+
   function renderSectionsSuivi() {
     renderSections('panel-suivi', 'suiviSections', SECTIONS_SUIVI, view.sectionSuivi, function (id) {
       view.sectionSuivi = id;
@@ -4371,6 +4382,13 @@
     if (view.sectionReglages === 'bureau') renderPostes(true);
     // « À propos » et l'intégrité interrogent aussi le serveur : à la demande.
     if (view.sectionReglages === 'controle') renderApropos();
+  });
+
+  $('registreSections').addEventListener('click', function (e) {
+    const b = e.target.closest('button[data-section]');
+    if (!b) return;
+    view.sectionRegistre = b.dataset.section;
+    renderSectionsRegistre();
   });
 
   $('suiviSections').addEventListener('click', function (e) {
@@ -4984,6 +5002,8 @@
        se calculent d'après ce qui reste visible. */
     renderSectionsReglages();
     renderSectionsSuivi();
+    renderSectionsRegistre();
+    if (ecrans.casiers) ecrans.casiers.render();
   }
 
   /* L'interface masque ce qui n'est pas ouvert. Le serveur refuse de toute

@@ -2140,3 +2140,91 @@ body.impression-casier .feuille-casier{display:block;}
   .squelette-ligne{animation:none;}
   .btn[aria-busy="true"]::before{animation:none;border-top-color:currentColor;opacity:.5;}
 }
+
+/* ═════════════ LE PLAN DU LOCAL ═════════════
+
+   Une case par porte, dans l'ordre où on parcourt le couloir. La règle qui
+   gouverne ce bloc : **la couleur ne porte jamais seule l'information** (§33,
+   §54). Chaque case écrit son état en toutes lettres à côté de sa teinte — un
+   casier hors service pris pour un casier libre, c'est un courrier rangé
+   derrière une serrure cassée. */
+.casier-zone{
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+  margin:18px 0 8px;
+}
+.casier-zone:first-child{margin-top:0;}
+.casier-grille{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(132px, 1fr));
+  gap:10px;
+}
+.casier{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+  padding:10px 12px;
+  border:1px solid var(--bord);
+  /* Le filet de gauche double la couleur de fond : il reste visible en noir et
+     blanc, et sur un écran mal réglé. */
+  border-left-width:4px;
+  border-radius:var(--r1);
+  background:var(--surface);
+  color:var(--ink);
+  text-align:left;
+  cursor:pointer;
+  font:inherit;
+  transition:border-color var(--t1) var(--sortie), box-shadow var(--t1) var(--sortie);
+}
+.casier:hover{box-shadow:var(--ombre-2);}
+.casier-num{font-family:var(--mono);font-weight:700;font-size:var(--tx-3);}
+.casier-nom{
+  font-size:var(--tx-2);
+  color:var(--ink-2);
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.casier-mot{
+  font-size:var(--tx-1);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  font-weight:700;
+}
+.casier-libre{border-left-color:var(--ok-vif);background:var(--ok-wash);}
+.casier-libre .casier-mot{color:var(--ok);}
+.casier-occupee{border-left-color:var(--accent);}
+.casier-occupee .casier-mot{color:var(--accent-texte);}
+.casier-reservee{border-left-color:var(--warn-vif);background:var(--warn-wash);}
+.casier-reservee .casier-mot{color:var(--warn);}
+.casier-suspendue{border-left-color:var(--warn-vif);}
+.casier-suspendue .casier-mot{color:var(--warn);}
+.casier-horsservice{border-left-color:var(--danger-vif);background:var(--danger-wash);}
+.casier-horsservice .casier-mot{color:var(--danger);}
+
+/* La jauge de remplissage. Elle double le compte écrit à côté — « 16/20 » —
+   plutôt que de le remplacer : une barre seule ne se lit pas au chiffre près. */
+.casier-jauge{
+  display:block;
+  width:100%;
+  height:4px;
+  margin-top:4px;
+  border-radius:2px;
+  background:var(--line);
+  overflow:hidden;
+}
+.casier-jauge i{display:block;height:100%;background:var(--accent);}
+.casier-jauge.presque i{background:var(--warn-vif);}
+.casier-jauge.pleine i{background:var(--danger-vif);}
+.casier-compte{font-family:var(--mono);font-size:var(--tx-1);color:var(--ink-2);}
+
+/* Les mêmes états dans la liste, en toutes lettres eux aussi. */
+.etat-libre{color:var(--ok);font-weight:600;}
+.etat-occupee{color:var(--accent-texte);font-weight:600;}
+.etat-reservee, .etat-suspendue{color:var(--warn);font-weight:600;}
+.etat-horsservice{color:var(--danger);font-weight:600;}
