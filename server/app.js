@@ -19,6 +19,7 @@ const reseau = require('./reseau.js');
 const idem = require('./idempotence.js');
 const signature = require('./signature.js');
 const boites = require('../assets/js/boites.js');
+const reference = require('../assets/js/reference.js');
 
 const VERSION = '1.2.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -355,6 +356,20 @@ function genererCodeRetrait(history) {
     if (!pris.has(code)) return code;
   }
   return String(crypto.randomInt(1000, 10000));
+}
+
+/* La référence d'un courrier — « COUR-2026-000042 ». Contrairement au code de
+   retrait, elle ne cesse jamais de désigner ce courrier-là : c'est ce qu'on
+   dicte au téléphone six mois plus tard pour savoir ce qu'est devenu un pli.
+
+   **À n'appeler que depuis l'intérieur d'un `db.write`.** Le rang se déduit de
+   l'historique tel qu'il est à cet instant ; hors du mutateur, deux postes qui
+   inscrivent en même temps liraient le même maximum et repartiraient avec la
+   même référence. C'est exactement ce qu'une référence doit empêcher. */
+function referencePour(data, record) {
+  const antenne = util.antenneDe(record, data.settings.antennes);
+  const prefixe = reference.prefixeAntenne(antenne, data.settings.referencePrefixe);
+  return reference.suivante(data.history, new Date(record.date).getFullYear(), prefixe);
 }
 
 /* Refus faute d'autorisation. Distinct du 401 « session expirée » : la session
@@ -2464,7 +2479,12 @@ async function handleApi(req, res, ctx, pathname) {
       if (!record.name) {
         throw Object.assign(new Error('Nom requis'), { status: 400 });
       }
+      /* La référence est calculée **dans** le mutateur, jamais avant.
+         `db.write` sérialise les écritures ; la déduire trois lignes plus haut
+         laisserait deux postes qui inscrivent en même temps repartir avec la
+         même — deux courriers, deux personnes, un seul COUR-2026-000017. */
       await db.write(function (data) {
+        if (!record.reference) record.reference = referencePour(data, record);
         data.history.unshift(record);
       });
       return sendJson(res, 201, record);
@@ -2800,6 +2820,13 @@ async function handleApi(req, res, ctx, pathname) {
            « B-001 » après avoir corrigé une virgule dans un gabarit. */
         numerotation: boites.schemaDe(
           body.numerotation !== undefined ? body.numerotation : db.data.settings.numerotation
+        ),
+        /* Même piège que ci-dessus : sans cette ligne, le préfixe des
+           références serait revenu à « COUR » au premier enregistrement des
+           réglages, et les courriers du lendemain n'auraient plus porté le
+           même préfixe que ceux de la veille. */
+        referencePrefixe: reference.nettoyerPrefixe(
+          body.referencePrefixe !== undefined ? body.referencePrefixe : db.data.settings.referencePrefixe
         )
       });
       await db.write(function (data) {
@@ -3021,10 +3048,20 @@ async function handleApi(req, res, ctx, pathname) {
       pickupCode: code
     };
 
-    if (parTelephone) {
-      await db.write(function (data) {
+    /* Cette route a trois sorties — prévenir par téléphone, envoi refusé,
+       envoi parti — et chacune inscrit le courrier. Une seule fermeture pour
+       les trois : sans elle, la référence finissait par manquer sur celle des
+       trois qu'on avait oublié de reprendre, et ce sont les courriers en échec
+       qu'on rappelle le plus. */
+    const inscrire = function () {
+      return db.write(function (data) {
+        if (!record.reference) record.reference = referencePour(data, record);
         data.history.unshift(record);
       });
+    };
+
+    if (parTelephone) {
+      await inscrire();
       await consigner(db, {
         qui: currentUser && currentUser.name,
         action: 'courrier à annoncer par téléphone',
@@ -3038,18 +3075,14 @@ async function handleApi(req, res, ctx, pathname) {
       await sender.send({ to: to, from: from, cc: ccList, bcc: bccList, subject: subject, text: text });
     } catch (err) {
       record.status = 'échec';
-      await db.write(function (data) {
-        data.history.unshift(record);
-      });
+      await inscrire();
       throw Object.assign(new Error('Envoi refusé par le serveur de courriel : ' + err.message), {
         status: 502,
         record: record
       });
     }
 
-    await db.write(function (data) {
-      data.history.unshift(record);
-    });
+    await inscrire();
     return sendJson(res, 200, { sent: true, record: record });
   }
 

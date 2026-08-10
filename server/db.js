@@ -39,6 +39,10 @@ const DEFAULT_SETTINGS = {
      autre « 142 » tout court, un troisième « A-01 » par étage — c'est ce qui
      est peint sur les portes du local, pas une convention qu'on impose. */
   numerotation: Object.assign({}, boites.NUMEROTATION_DEFAUT),
+  /* Le préfixe des références de courrier — « COUR-2026-000042 ». Il se dicte
+     au téléphone, donc court et en lettres. Quand le bureau a des antennes,
+     chacune tire le sien de son nom et celui-ci sert de repli. */
+  referencePrefixe: 'COUR',
   /* Durée de conservation des courriers terminés, en mois. 0 = illimitée.
      Un registre qui garde tout indéfiniment expose bien plus qu'il ne devrait
      le jour d'une fuite ; c'est aussi une obligation. */

@@ -457,6 +457,12 @@
         <input type="date" id="newDomicilieDepuis">
         <p class="hint" id="newEcheanceApercu"></p>
       </div>
+      <!-- Les fiches qui ressemblent à celle qu'on est en train de saisir.
+           L'avertissement paraît avant l'enregistrement, pas après : une fois
+           la deuxième fiche créée, le courrier commence déjà à se répartir
+           entre les deux. Il prévient et ne bloque rien — c'est l'agent qui a
+           la personne en face de lui. -->
+      <div id="addDoublons" class="doublons" hidden></div>
       <div id="addMsg"></div>
     </div>
 
@@ -1269,6 +1275,8 @@
 <script src="assets/js/codebarres.js"></script>
 <script src="assets/js/xlsx.js"></script>
 <script src="assets/js/boites.js"></script>
+<script src="assets/js/reference.js"></script>
+<script src="assets/js/doublons.js"></script>
 <script src="assets/js/scanner.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/notify.js"></script>

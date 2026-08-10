@@ -572,7 +572,12 @@
     }
 
     let haystack = normalize(contact.name) + ' ' + normalize(contact.email);
-    if (mode !== 'nom') haystack += ' ' + normalize(contact.box);
+    /* La référence d'un courrier se cherche comme le reste. C'est le geste
+       naturel quand quelqu'un rappelle en lisant le numéro qu'il a noté :
+       on le colle dans le filtre. Les fiches de destinataires n'en ont pas —
+       `normalize(undefined)` rend une chaîne vide, et rien ne change pour
+       elles. */
+    if (mode !== 'nom') haystack += ' ' + normalize(contact.box) + ' ' + normalize(contact.reference);
     return terms.every(function (t) {
       return haystack.includes(t);
     });

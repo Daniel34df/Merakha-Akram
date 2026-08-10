@@ -75,6 +75,22 @@ test('matchesQuery cherche sur le nom et le courriel, accents ignorés', functio
   assert.ok(!util.matchesQuery(c, '   '));
 });
 
+test('un courrier se retrouve par sa référence, collée telle quelle dans le filtre', function () {
+  /* C'est le geste au téléphone : la personne lit le numéro qu'elle a noté,
+     l'agent le colle dans le filtre du Suivi. Sans ça, la référence s'affiche
+     partout et ne sert à rien — elle ne ramène pas son propre courrier. */
+  const h = { name: 'Jean Dupont', email: 'jean@exemple.org', reference: 'COUR-2026-000042' };
+  assert.ok(util.matchesQuery(h, 'COUR-2026-000042'));
+  assert.ok(util.matchesQuery(h, 'cour-2026-000042'), 'la casse ne compte pas quand on la dicte');
+  assert.ok(!util.matchesQuery(h, 'COUR-2026-000043'));
+  /* En recherche par nom, la référence ne compte pas : ce mode-là sert à
+     trouver une personne, et un numéro qui répondrait sur un nom brouillerait
+     la liste des suggestions proches. */
+  assert.ok(!util.matchesQuery(h, 'COUR-2026-000042', 'nom'));
+  // Une fiche de destinataire n'a pas de référence, et rien ne change pour elle.
+  assert.ok(util.matchesQuery({ name: 'Jean Dupont', email: '' }, 'dupont'));
+});
+
 test('renderTemplate remplace les variables connues et laisse les autres', function () {
   const out = util.renderTemplate('Bonjour {nom}, le {date}. {inconnu}', { nom: 'Marie', date: '3 mai' });
   assert.equal(out, 'Bonjour Marie, le 3 mai. {inconnu}');

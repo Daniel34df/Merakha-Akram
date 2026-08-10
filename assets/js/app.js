@@ -24,6 +24,8 @@
   const domi = root.BC.domiciliation;
   const roles = root.BC.roles;
   const notify = root.BC.notify;
+  const doublons = root.BC.doublons;
+  const reference = root.BC.reference;
   const ui = root.BC.ui;
   const impression = root.BC.impression;
   const S = store.state;
@@ -717,6 +719,14 @@
           : 'aucune'
       )
     ];
+    /* La référence, au bas de la fiche. Le code de retrait en tête sert
+       maintenant, à ce guichet ; la référence sert plus tard, au téléphone,
+       quand le code aura cessé de désigner quoi que ce soit. Les anciens
+       courriers, inscrits avant qu'elle existe, n'en ont pas — la ligne
+       s'efface plutôt que d'afficher un tiret sans objet. */
+    if (record.reference) {
+      lignes.push(ligneFiche('Référence', record.reference, 'reference-cell'));
+    }
     if (record.urgent) {
       lignes.push(ligneFiche('Urgence', 'Courrier signalé urgent à la réception'));
     }
@@ -1094,6 +1104,7 @@
       '</div>' +
       '<div class="row-actions"><button class="btn" id="quickAddBtn">Ajouter et notifier</button>' +
       '<button class="btn ghost" id="quickRegistreBtn">Ouvrir le registre</button></div>' +
+      '<div id="quickDoublons" class="doublons" hidden></div>' +
       '<div id="quickMsg"></div></div>';
 
     const emailField = $('quickEmail');
@@ -1110,6 +1121,26 @@
         }
       });
     });
+
+    /* Le nom, ici, n'est pas toujours dans un champ : en recherche par nom
+       c'est la saisie du guichet elle-même (`raw`), et le champ « Nom complet »
+       n'existe que dans la recherche par boîte. */
+    const nomSaisi = function () {
+      return parBoite ? $('quickName').value : raw;
+    };
+    const surveiller = function () {
+      avertirDoublons('quickDoublons', {
+        name: nomSaisi(),
+        email: $('quickEmail').value,
+        telephone: $('quickTel').value
+      });
+    };
+    [nameField, emailField, $('quickTel')].forEach(function (champ) {
+      if (champ) champ.addEventListener('input', surveiller);
+    });
+    /* Le nom est déjà connu quand on cherche par nom : l'avertissement doit
+       paraître tout de suite, sans attendre une frappe de plus. */
+    surveiller();
 
     $('quickRegistreBtn').addEventListener('click', function () {
       showPanel('registre');
@@ -1396,6 +1427,41 @@
       });
     }
 
+    /* Une référence est encore moins ambiguë qu'un code : elle ne désigne
+       qu'un courrier, et elle le désigne même retiré. C'est précisément le cas
+       où on s'en sert — quelqu'un rappelle des mois plus tard en lisant le
+       numéro qu'il a noté, et la question est « qu'est-ce qu'il est devenu ».
+       Chercher seulement parmi les courriers en attente, comme pour le code,
+       ne répondrait jamais à cette question-là. */
+    if (reference.estReference(q)) {
+      const cherchee = reference.lire(q);
+      S.history.forEach(function (h) {
+        const r = reference.lire(h.reference);
+        if (!r || r.prefixe !== cherchee.prefixe || r.annee !== cherchee.annee || r.numero !== cherchee.numero) {
+          return;
+        }
+        out.push({
+          genre: 'reference',
+          titre: h.name,
+          detail:
+            h.reference + ' — ' + util.typeCourrier(h.type).label +
+            (h.pickedUpAt
+              ? ' · retiré le ' + util.formatJour(String(h.pickedUpAt).slice(0, 10))
+              : h.closedAt
+                ? ' · clos'
+                : ' · en attente'),
+          action: function () {
+            /* Le Suivi, filtré sur la référence elle-même : elle est unique,
+               donc la liste ne montre que ce courrier — retiré ou non. */
+            showPanel('suivi');
+            view.historyFilter = h.reference;
+            $('historyFilter').value = h.reference;
+            renderHistory();
+          }
+        });
+      });
+    }
+
     S.contacts.forEach(function (c) {
       if (!deLAntenne(c) || !util.matchesQuery(c, q, 'tout')) return;
       const enAttentePour = S.history.filter(function (h) {
@@ -1439,6 +1505,7 @@
 
   const GENRE_PALETTE = {
     code: 'Code de retrait',
+    reference: 'Référence',
     destinataire: 'Destinataire',
     courrier: 'Courrier en attente'
   };
@@ -2462,6 +2529,71 @@
     }
   });
   $('newDomicilieDepuis').addEventListener('input', apercuEcheance);
+
+  /* L'avertissement de doublon.
+
+     Il paraît **pendant** la saisie, pas au moment d'enregistrer : une fois la
+     deuxième fiche créée, le courrier commence déjà à se répartir entre les
+     deux, et plus personne ne sait laquelle fait foi. Pour une domiciliation,
+     les deux fiches ont chacune leur échéance — celle qu'on regarde le jour de
+     la radiation n'est pas forcément celle qui compte.
+
+     Il ne bloque rien et ne fusionne rien. Deux frères d'un même foyer portent
+     le même nom de famille et n'ont pas la même fiche ; c'est l'agent qui a la
+     personne devant lui. « Voir la fiche » ouvre celle qu'on lui montre, pour
+     qu'il tranche en la regardant plutôt qu'en devinant. */
+  function avertirDoublons(slot, champs, exclureId) {
+    const cible = $(slot);
+    if (!cible) return;
+    const trouves = doublons.chercher(S.contacts, champs, { exclureId: exclureId });
+    if (!trouves.length) {
+      cible.hidden = true;
+      cible.innerHTML = '';
+      return;
+    }
+    cible.hidden = false;
+    cible.innerHTML =
+      '<div class="msg warn">' +
+      /* Le mot d'état est écrit, pas seulement peint : la couleur ne porte
+         jamais seule l'information. */
+      esc(doublons.message(trouves)) +
+      '</div><ul class="doublons-liste">' +
+      trouves
+        .map(function (t) {
+          return (
+            '<li><span class="doublon-sur">' + esc(t.sur) + '</span> ' +
+            '<strong>' + esc(t.contact.name) + '</strong>' +
+            (t.contact.box ? ' <span class="muted">boîte ' + esc(t.contact.box) + '</span>' : '') +
+            ' <button type="button" class="link-btn" data-doublon="' + esc(t.contact.id) + '">Voir la fiche</button></li>'
+          );
+        })
+        .join('') +
+      '</ul>';
+  }
+
+  /* Délégué une fois pour toutes : les deux emplacements se réécrivent à
+     chaque frappe, et un écouteur posé sur chaque bouton s'accumulerait. */
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest && e.target.closest('[data-doublon]');
+    if (!btn) return;
+    e.preventDefault();
+    showPanel('registre');
+    ouvrirFiche(btn.dataset.doublon);
+  });
+
+  /* Sur `input` plutôt que sur `blur` : au guichet on tape le nom et on lève
+     les yeux, on ne quitte pas forcément le champ. */
+  ['newName', 'newEmail', 'newTelephone'].forEach(function (id) {
+    const champ = $(id);
+    if (!champ) return;
+    champ.addEventListener('input', function () {
+      avertirDoublons('addDoublons', {
+        name: $('newName').value,
+        email: $('newEmail').value,
+        telephone: $('newTelephone').value
+      });
+    });
+  });
 
   $('addForm').addEventListener('submit', async function (e) {
     e.preventDefault();
