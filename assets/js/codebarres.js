@@ -141,12 +141,126 @@
     );
   }
 
+  /* ═══════════════ LA LECTURE ═══════════════
+
+     Le module savait écrire ; il sait maintenant relire. C'est ce qui permet
+     de scanner sans dépendance : la table est déjà là, il suffit de la
+     retourner.
+
+     Pourquoi ça vaut la peine. `BarcodeDetector`, l'API native des
+     navigateurs, n'existe pas partout — pas dans le Chromium de cette machine,
+     pas dans Firefox. S'appuyer dessus seul, c'est un scanner qui marche chez
+     soi et nulle part ailleurs. Ce décodeur-ci lit **les étiquettes que
+     l'application imprime elle-même** — celles des casiers, celles des
+     attestations — sur n'importe quel navigateur, et sans rien installer.
+
+     Ce qu'il ne lit pas : les QR, les Code 128 des transporteurs. Pour
+     ceux-là, l'API native quand elle est là, ou la douchette USB — qui les lit
+     tous depuis quarante ans et tape le code comme un clavier. */
+
+  const PAR_MOTIF = (function () {
+    const out = {};
+    Object.keys(MOTIFS).forEach(function (c) {
+      out[MOTIFS[c]] = c;
+    });
+    return out;
+  })();
+
+  /* Un caractère = neuf éléments dont **exactement trois larges**. C'est cette
+     invariance qui permet de décoder sans connaître l'échelle : on trie les
+     neuf mesures, les trois plus grandes sont les larges.
+
+     C'est aussi ce qui rend la lecture robuste à un code photographié de
+     travers, où les barres s'élargissent d'un bout à l'autre : le classement
+     se refait à chaque caractère, jamais une fois pour tout le code. */
+  function classer(neuf) {
+    const tries = neuf.slice().sort(function (a, b) { return b - a; });
+    const seuil = tries[2];
+    // Départage à égalité : sans lui, quatre mesures identiques donneraient
+    // quatre larges et un motif introuvable.
+    let restants = 3;
+    return neuf.map(function (x) {
+      if (x > seuil) return 'w';
+      if (x === seuil && restants > 0) { restants--; return 'w'; }
+      return 'n';
+    });
+  }
+
+  /* Décode une suite de largeurs brutes — barres et espaces alternés, en
+     commençant par une barre. Rend le texte lu, ou `null`. */
+  function lireLargeurs(largeurs) {
+    const l = (largeurs || []).filter(function (x) { return x > 0; });
+    // n caractères = 9n éléments + (n-1) espaces de séparation.
+    if (l.length < 9 || (l.length + 1) % 10 !== 0) return null;
+    const n = (l.length + 1) / 10;
+
+    let texte = '';
+    for (let i = 0; i < n; i++) {
+      const neuf = l.slice(i * 10, i * 10 + 9);
+      const c = PAR_MOTIF[classer(neuf).join('')];
+      if (!c) return null;
+      texte += c;
+    }
+    // Le délimiteur ouvre et ferme : sans lui, ce n'est pas un Code 39.
+    if (texte.length < 3 || texte[0] !== DELIMITEUR || texte[texte.length - 1] !== DELIMITEUR) {
+      return null;
+    }
+    const contenu = texte.slice(1, -1);
+    return contenu.indexOf(DELIMITEUR) >= 0 ? null : contenu;
+  }
+
+  /* Une ligne de pixels en niveaux de gris → les largeurs des zones noires et
+     blanches. Le seuil est la moyenne entre le plus clair et le plus sombre de
+     *cette ligne* : un éclairage de guichet n'est jamais celui d'un scanner à
+     plat, et un seuil fixe à 128 rate un code photographié dans l'ombre. */
+  function segmenter(gris) {
+    if (!gris || gris.length < 3) return [];
+    let min = 255;
+    let max = 0;
+    for (let i = 0; i < gris.length; i++) {
+      if (gris[i] < min) min = gris[i];
+      if (gris[i] > max) max = gris[i];
+    }
+    // Trop peu de contraste : ce n'est pas un code à barres, c'est un mur.
+    if (max - min < 40) return [];
+    const seuil = (min + max) / 2;
+
+    const runs = [];
+    let noirCourant = gris[0] < seuil;
+    let debut = 0;
+    for (let i = 1; i <= gris.length; i++) {
+      const noir = i < gris.length ? gris[i] < seuil : !noirCourant;
+      if (noir !== noirCourant) {
+        runs.push({ noir: noirCourant, largeur: i - debut });
+        noirCourant = noir;
+        debut = i;
+      }
+    }
+    /* On part de la première barre noire et on s'arrête à la dernière : le
+       blanc du papier autour n'est pas un élément du code. */
+    let a = 0;
+    while (a < runs.length && !runs[a].noir) a++;
+    let b = runs.length - 1;
+    while (b >= 0 && !runs[b].noir) b--;
+    if (a > b) return [];
+    return runs.slice(a, b + 1).map(function (r) { return r.largeur; });
+  }
+
+  /** Une ligne de pixels gris → le texte, ou `null`. */
+  function lireLigne(gris) {
+    return lireLargeurs(segmenter(gris));
+  }
+
   return {
     MOTIFS: MOTIFS,
     DELIMITEUR: DELIMITEUR,
     estCodable: estCodable,
     normaliser: normaliser,
     elements: elements,
-    html: html
+    html: html,
+    classer: classer,
+    lireLargeurs: lireLargeurs,
+    segmenter: segmenter,
+    lireLigne: lireLigne
   };
 });

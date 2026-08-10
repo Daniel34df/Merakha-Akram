@@ -148,3 +148,109 @@ test('la zone de silence encadre le code, à dix fois la largeur d’un trait', 
   // Elle suit la largeur des barres, sans quoi elle ne vaudrait rien.
   assert.match(cb.html('B-12', { etroit: 3 }), /padding-left:30px/);
 });
+
+/* ═══════════ LA LECTURE ═══════════
+
+   Le module savait écrire ; il sait maintenant relire. C'est ce qui rend le
+   scanner possible sans dépendance : la table était déjà là, il suffisait de
+   la retourner.
+
+   La forme de test qui vaut le plus ici est l'aller-retour : ce que l'encodeur
+   produit, le décodeur doit le rendre. Les deux moitiés ne peuvent pas dériver
+   l'une de l'autre sans que ça se voie — et aucune n'a besoin d'une liste de
+   cas écrite à la main, qui vieillirait. */
+
+/** Les largeurs brutes d'un texte, comme un lecteur les mesurerait. */
+function largeursDe(texte, echelle) {
+  const e = echelle || 1;
+  return cb.elements(texte).map(function (el) {
+    return (el.large ? 3 : 1) * e;
+  });
+}
+
+test('ce que le module écrit, le module le relit', function () {
+  ['B-012', 'AMINA', 'COUR-2026-000001', '4821', 'A', 'CASIER 7'].forEach(function (t) {
+    assert.equal(cb.lireLargeurs(largeursDe(t)), cb.normaliser(t), 'aller-retour sur ' + t);
+  });
+});
+
+test('l’échelle n’a pas d’importance : de loin comme de près', function () {
+  /* Le code est photographié à trente centimètres ou à deux mètres : les
+     barres n'ont pas la même largeur en pixels, et le texte doit être le même. */
+  [1, 2, 3, 7, 11].forEach(function (e) {
+    assert.equal(cb.lireLargeurs(largeursDe('B-012', e)), 'B-012', 'à l’échelle ' + e);
+  });
+});
+
+test('un code photographié de travers se lit quand même', function () {
+  /* Les barres s'élargissent d'un bout à l'autre quand l'étiquette n'est pas
+     de face. Le classement se refait à chaque caractère, jamais une fois pour
+     tout le code : c'est ce qui rattrape la perspective. */
+  const l = largeursDe('B-012', 4).map(function (x, i, a) {
+    return Math.round(x * (1 + (i / a.length) * 0.6));
+  });
+  assert.equal(cb.lireLargeurs(l), 'B-012');
+});
+
+test('trois larges par caractère, toujours — même à mesures égales', function () {
+  /* Le départage à égalité n'est pas une coquetterie : sans lui, quatre
+     mesures identiques donnaient quatre larges et un motif introuvable. */
+  assert.deepEqual(cb.classer([3, 3, 3, 3, 1, 1, 1, 1, 1]).join(''), 'wwwnnnnnn');
+  cb.elements('B-012').length;
+  Object.keys(cb.MOTIFS).forEach(function (c) {
+    const neuf = cb.MOTIFS[c].split('').map(function (t) { return t === 'w' ? 3 : 1; });
+    assert.equal(cb.classer(neuf).join(''), cb.MOTIFS[c], 'motif de « ' + c + ' »');
+  });
+});
+
+test('ce qui n’est pas un Code 39 rend null, jamais du charabia', function () {
+  /* Un scanner qui « lit » n'importe quoi ouvre la fiche de quelqu'un d'autre.
+     Mieux vaut ne rien rendre que rendre faux. */
+  assert.equal(cb.lireLargeurs([]), null);
+  assert.equal(cb.lireLargeurs([1, 2, 3]), null, 'trop court');
+  assert.equal(cb.lireLargeurs(new Array(19).fill(1)), null, 'aucun motif ne correspond');
+  // Un nombre d'éléments qui ne tombe pas juste : 9n + (n-1).
+  assert.equal(cb.lireLargeurs(new Array(15).fill(1)), null);
+});
+
+test('un code sans son délimiteur est refusé', function () {
+  /* Le délimiteur dit où le code commence. Sans lui, on lirait le milieu d'un
+     code tronqué par le bord de l'image, et on ouvrirait la mauvaise fiche. */
+  const sansEtoile = cb.MOTIFS['B'].split('').map(function (t) { return t === 'w' ? 3 : 1; });
+  assert.equal(cb.lireLargeurs(sansEtoile), null);
+});
+
+/* ── de l'image aux largeurs ── */
+
+/** Une ligne de pixels gris, comme une caméra la verrait. */
+function ligneDe(texte, echelle, fond, encre) {
+  const gris = [];
+  const marge = 10 * (echelle || 1);
+  for (let i = 0; i < marge; i++) gris.push(fond === undefined ? 240 : fond);
+  cb.elements(texte).forEach(function (el) {
+    const n = (el.large ? 3 : 1) * (echelle || 1);
+    for (let i = 0; i < n; i++) {
+      gris.push(el.barre ? (encre === undefined ? 20 : encre) : (fond === undefined ? 240 : fond));
+    }
+  });
+  for (let i = 0; i < marge; i++) gris.push(fond === undefined ? 240 : fond);
+  return gris;
+}
+
+test('une ligne de pixels se lit, marges comprises', function () {
+  assert.equal(cb.lireLigne(ligneDe('B-012', 3)), 'B-012');
+});
+
+test('un code photographié dans l’ombre se lit aussi', function () {
+  /* Le seuil se calcule sur la ligne, pas à 128 en dur : un guichet n'est pas
+     un scanner à plat, et une étiquette dans l'ombre reste une étiquette. */
+  assert.equal(cb.lireLigne(ligneDe('B-012', 3, 90, 30)), 'B-012', 'sombre');
+  assert.equal(cb.lireLigne(ligneDe('B-012', 3, 255, 160)), 'B-012', 'délavé');
+});
+
+test('un mur uni ne devient pas un code', function () {
+  assert.equal(cb.lireLigne(new Array(400).fill(200)), null, 'sans contraste, rien');
+  assert.equal(cb.lireLigne(new Array(400).fill(0)), null);
+  assert.equal(cb.lireLigne([]), null);
+  assert.equal(cb.lireLigne(null), null);
+});
