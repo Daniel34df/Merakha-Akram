@@ -21,6 +21,8 @@ const signature = require('./signature.js');
 const boites = require('../assets/js/boites.js');
 const reference = require('../assets/js/reference.js');
 const colisMod = require('../assets/js/colis.js');
+const diagnostic = require('../assets/js/diagnostic.js');
+const journee = require('../assets/js/journee.js');
 
 const VERSION = '1.3.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -2460,6 +2462,18 @@ async function handleApi(req, res, ctx, pathname) {
         contactId: body.contactId || null,
         name: String(body.name || '').trim(),
         email: String(body.email || '').trim(),
+        /* L'urgence se perdait sur cette route. `/api/notify` la gardait, mais
+           un courrier inscrit directement — saisie sans notification, rejeu de
+           la file hors ligne, import — repartait sans elle, et l'urgence n'est
+           pas décorative : elle raccourcit le délai de relance. Un recommandé
+           signalé urgent redevenait une lettre ordinaire. */
+        urgent: !!body.urgent,
+        /* Même chose pour l'antenne : sans elle, le courrier d'une antenne
+           tombait dans la première de la liste, donc sur un autre bureau. */
+        antenneId: String(
+          body.antenneId || (currentUser && currentUser.antenneId) || ''
+        ).trim(),
+        telephone: String(body.telephone || '').trim(),
         subject: String(body.subject || '').trim(),
         cc: String(body.cc || '').trim(),
         bcc: String(body.bcc || '').trim(),
@@ -2893,6 +2907,82 @@ async function handleApi(req, res, ctx, pathname) {
       })
     );
     return res.end(corps);
+  }
+
+  /* L'état de santé de l'installation.
+
+     Réservé à qui règle le bureau : ces observations disent où vit le
+     registre, si le code de reprise a été changé et si la liaison est en
+     clair. C'est la carte de ce qu'il faudrait attaquer.
+
+     Le calcul est dans `assets/js/diagnostic.js` ; cette route ne fait
+     qu'**observer**. Chaque observation est prise dans son propre `try` :
+     une mesure qui échoue doit rendre le point « inconnu », pas faire tomber
+     le diagnostic entier — c'est justement quand la machine va mal qu'on en a
+     besoin. */
+  if (pathname === '/api/diagnostic' && method === 'GET') {
+    exigerDroit(currentUser, 'reglages');
+    const obs = {};
+
+    try {
+      const liste = await listerSauvegardes(db);
+      obs.sauvegardes = liste.map(function (s) {
+        return { at: s.at || (s.jour ? s.jour + 'T12:00:00.000Z' : null), fichier: s.fichier };
+      });
+    } catch (e) {
+      obs.sauvegardes = null;
+    }
+
+    try {
+      obs.codeMaitreDefaut = auth.estCodeMaitreDefaut(db);
+    } catch (e) {
+      /* Laissé indéfini : « inconnu » vaut mieux qu'un « bon » inventé sur un
+         point qui ouvre tout le registre. */
+    }
+
+    /* L'écriture se vérifie en écrivant : `fs.access(W_OK)` répond sur les
+       droits déclarés, pas sur ce qui se passe réellement — un disque plein,
+       un montage en lecture seule et un quota dépassé le laissent passer. */
+    try {
+      const sonde = path.join(path.dirname(db.file), '.diagnostic-' + process.pid);
+      await fsp.writeFile(sonde, 'x', { encoding: 'utf8', mode: 0o600 });
+      await fsp.rm(sonde, { force: true });
+      obs.registreEcrivable = true;
+    } catch (e) {
+      obs.registreEcrivable = false;
+    }
+
+    try {
+      const st = await fsp.statfs(path.dirname(db.file));
+      if (st && st.blocks > 0) {
+        obs.disqueLibrePourcent = Math.round((st.bavail / st.blocks) * 100);
+      }
+    } catch (e) {
+      /* `statfs` n'existe pas partout ; le point restera « inconnu ». */
+    }
+
+    obs.courriel = mailer.mode === 'essai' ? 'essai' : !!(mailer.enabled || (currentUser && currentUser.mailbox));
+    /* « Sort de cette machine » se lit sur l'adresse d'écoute : 127.0.0.1 ne
+       sort pas, 0.0.0.0 ou une adresse de réseau, si. */
+    obs.reseau = !!(ctx.hote && ctx.hote !== '127.0.0.1' && ctx.hote !== 'localhost');
+    obs.https = ctx.protocole === 'https';
+    obs.integrite = ctx.integrite ? ctx.integrite.etat : undefined;
+
+    const constats = diagnostic.bilan(obs, {});
+    return sendJson(res, 200, {
+      constats: constats,
+      phrase: diagnostic.phrase(constats),
+      /* Quelques chiffres bruts, pour qui veut regarder de plus près. Ils ne
+         sont pas des constats : on ne peut rien en faire, ils ne doivent donc
+         pas encombrer la liste. */
+      chiffres: {
+        destinataires: (db.data.contacts || []).length,
+        courriers: (db.data.history || []).length,
+        casiers: (db.data.boites || []).length,
+        version: VERSION,
+        node: process.version
+      }
+    });
   }
 
   if (pathname === '/api/backup' && method === 'POST') {

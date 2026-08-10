@@ -191,3 +191,35 @@ test('un courrier ordinaire ne porte pas de colis vide', function () {
     assert.equal(vide.body.colis, null);
   });
 });
+
+/* ── ce qu'un courrier inscrit directement ne doit pas perdre ── */
+
+test('l’urgence et l’antenne survivent à une inscription directe', function () {
+  /* `/api/notify` les gardait ; `POST /api/history` les perdait. Un courrier
+     saisi sans notification — ou rejoué depuis la file hors ligne — repartait
+     donc sans son urgence, et l'urgence n'est pas décorative : elle raccourcit
+     le délai de relance. Un recommandé signalé urgent redevenait une lettre
+     ordinaire, sans que personne s'en aperçoive. */
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const r = await t.call('POST', '/api/history', {
+      name: 'Jean Dupont', urgent: true, telephone: '06 12 34 56 78'
+    });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.urgent, true);
+    assert.equal(r.body.telephone, '06 12 34 56 78',
+      'le numéro doit être sous les yeux de l’agent au moment d’appeler');
+
+    const relu = new Db(t.fichier);
+    await relu.load();
+    assert.equal(relu.data.history[0].urgent, true);
+  });
+});
+
+test('un courrier ordinaire n’est pas urgent par accident', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const r = await t.call('POST', '/api/history', { name: 'Jean Dupont' });
+    assert.equal(r.body.urgent, false);
+  });
+});

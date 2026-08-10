@@ -39,7 +39,8 @@ const SCRIPTS = [
   ['scanner', 'la douchette au centre, la caméra en plus, et jamais de choix fait à notre place'],
   ['doublons', 'l’avertissement paraît pendant la saisie, prévient sans bloquer, et la référence suit'],
   ['bord', 'le relevé du jour : calme quand c’est calme, et chaque chiffre mène à son dossier'],
-  ['colis', 'l’emplacement demandé quand le colis ne rentre pas, et rien qui sorte chez le transporteur']
+  ['colis', 'l’emplacement demandé quand le colis ne rentre pas, et rien qui sorte chez le transporteur'],
+  ['pilotage', 'la passation du soir, et un diagnostic qui ne dit jamais « tout va bien » sans avoir regardé']
 ];
 
 const PORT_BASE = Number(process.env.PORT_BASE || 5490);

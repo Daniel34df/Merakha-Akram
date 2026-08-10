@@ -4536,6 +4536,10 @@
 
   const SECTIONS_SUIVI = [
     { id: 'traiter', label: 'À traiter' },
+    /* « La journée » vient juste après « À traiter » : c'est l'ordre du
+       service — ce qu'on fait maintenant, puis ce qu'on passe au suivant.
+       L'historique et les chiffres se consultent, ils n'appellent rien. */
+    { id: 'journee', label: 'La journée' },
     { id: 'journalier', label: 'Historique' },
     { id: 'chiffres', label: 'Statistiques' }
   ];
@@ -5239,6 +5243,7 @@
        est à jour, et un chiffre figé sur un écran qu'on regarde le matin est
        pire que pas de chiffre du tout. */
     ecrans.bord.render();
+    ecrans.pilotage.render();
     renderAgents();
     renderAntennes();
     renderCarteAntennes();

@@ -1088,6 +1088,88 @@ td.box-cell{font-family:var(--mono);font-size:var(--tx-2);color:var(--ink-2);whi
 .msg ul{margin:8px 0 0;padding-left:20px;}
 .msg a{color:var(--accent-texte);font-weight:600;}
 
+/* ---------- le relevé de journée ---------- */
+/* Les chiffres de la journée, en cases. Ils répondent à « est-ce qu'on a bien
+   tout saisi ? », qui est la question qu'on se pose en fermant — d'où des
+   nombres lisibles de loin, et le mot dessous plutôt qu'à côté. */
+.journee-compte{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(110px, 1fr));
+  gap:10px;
+  margin:14px 0 18px;
+}
+.journee-case{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+}
+.journee-n{
+  font-size:var(--tx-5);
+  font-weight:700;
+  line-height:1.1;
+  font-variant-numeric:tabular-nums;
+  color:var(--ink);
+}
+.journee-mot{font-size:var(--tx-2);color:var(--ink-2);}
+.journee-titre{
+  font-size:var(--tx-3);
+  margin:18px 0 8px;
+  color:var(--ink-2);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+}
+.journee-echeances{margin:0;padding-left:20px;font-size:var(--tx-3);}
+.journee-echeances li{margin-bottom:4px;}
+
+/* ---------- diagnostic ---------- */
+/* Chaque ligne porte son mot d'état — « à traiter », « à surveiller », « non
+   vérifié », « en ordre ». La couleur ne le dit pas seule : entre « grave » et
+   « attention » il y a la différence entre agir maintenant et y penser cette
+   semaine, et deux teintes voisines ne la portent pas. */
+.diag-ligne{
+  display:grid;
+  grid-template-columns:minmax(160px, 220px) 1fr;
+  gap:4px 16px;
+  padding:10px 0;
+  border-top:1px solid var(--line);
+}
+.diag-ligne:first-child{border-top:0;}
+.diag-ligne dt{font-weight:600;color:var(--ink);}
+/* `.status-list dd` aligne à droite — c'est juste pour un couple « nom :
+   valeur » court, et illisible pour deux phrases. Ici le texte se lit, il ne
+   se compare pas. */
+.diag-ligne dd{
+  margin:0;
+  color:var(--ink-2);
+  font-size:var(--tx-2);
+  line-height:1.6;
+  text-align:left;
+  font-weight:400;
+}
+.diag-mot{
+  display:inline-block;
+  padding:1px 8px;
+  border-radius:999px;
+  font-size:var(--tx-1);
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  background:var(--surface-2);
+  color:var(--ink-2);
+}
+.diag-grave .diag-mot{background:var(--danger-wash);color:var(--danger);}
+.diag-attention .diag-mot{background:var(--warn-wash);color:var(--warn);}
+.diag-bon .diag-mot{background:var(--ok-wash);color:var(--ok);}
+/* La consigne se détache du constat : l'un se lit, l'autre se fait. */
+.diag-faire{color:var(--ink);font-weight:500;}
+@media (max-width: 560px){
+  .diag-ligne{grid-template-columns:1fr;}
+}
+
 /* ---------- le colis ---------- */
 /* Ces champs n'existent que pour un colis, et ils sont nombreux. Une grille
    qui s'adapte plutôt qu'une colonne : sept champs empilés repousseraient le

@@ -912,6 +912,20 @@
     return api('/backup/list');
   }
 
+  /* L'état de santé de l'installation.
+
+     Il n'a de sens qu'en mode serveur : un navigateur ne sait pas si un disque
+     est plein ni si un fichier est écrivable. En mode local, le dire
+     franchement vaut mieux que de rendre un bilan vide — un bilan vide se
+     lirait comme « tout va bien », ce qui est précisément le mensonge que le
+     diagnostic refuse de faire. */
+  async function diagnostic() {
+    if (state.mode !== 'serveur') {
+      throw new Error('le registre de ce poste n’a pas de serveur à interroger');
+    }
+    return api('/diagnostic');
+  }
+
   async function restaurerSauvegarde(fichier) {
     const resultat = await api('/backup/restore', {
       method: 'POST',
@@ -1336,6 +1350,7 @@
     relancer: relancer,
     serverBackup: serverBackup,
     listerSauvegardes: listerSauvegardes,
+    diagnostic: diagnostic,
     restaurerSauvegarde: restaurerSauvegarde,
     /* Recharger tout l'état depuis le serveur. Public parce que les écritures
        qui ne passent pas par la file — les casiers, dont le numéro est

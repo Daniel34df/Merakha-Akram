@@ -601,6 +601,28 @@
       </div>
     </div>
 
+    <!-- Le relevé de journée : une passation, pas une statistique. Ce qui est
+         entré, ce qui est sorti, et surtout ce qui reste en suspens et que le
+         suivant doit savoir. Aucune journée ne se « clôt » dans les données —
+         un courrier déposé à 17 h 05 doit pouvoir s'inscrire, et un agent qui
+         oublie de cliquer ne doit pas bloquer le lendemain. -->
+    <div class="reglages-groupe" data-groupe="journee" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Relevé de la journée</h2>
+          <div class="toolbar">
+            <input type="date" id="journeeDate" class="filter-input">
+            <button class="btn ghost small" id="journeeAujourdhuiBtn">Aujourd'hui</button>
+            <button class="btn ghost small" id="journeeImprimerBtn">Imprimer</button>
+          </div>
+        </div>
+        <p class="bord-phrase" id="journeePhrase"></p>
+        <div id="journeeCompte" class="journee-compte"></div>
+        <div id="journeeSuspens"></div>
+        <div id="journeeEcheances"></div>
+      </div>
+    </div>
+
     <div class="reglages-groupe" data-groupe="journalier" hidden>
       <div class="card">
         <div class="card-head">
@@ -1103,6 +1125,21 @@
     </div>
 
     <div class="reglages-groupe" data-groupe="controle" hidden>
+      <!-- Le diagnostic en tête du contrôle : c'est ce qu'on vient chercher
+           quand quelque chose ne va pas, et ce qu'on doit voir même quand on
+           venait pour autre chose. Il ne dit jamais « tout va bien » sur un
+           point qu'il n'a pas pu observer. Voir assets/js/diagnostic.js. -->
+      <div class="card" id="diagnosticCard">
+        <div class="card-head">
+          <h2>Santé de l'installation</h2>
+          <div class="toolbar">
+            <button class="btn ghost small" id="diagnosticBtn">Vérifier</button>
+          </div>
+        </div>
+        <p class="bord-phrase" id="diagnosticPhrase"></p>
+        <div id="diagnosticListe"></div>
+        <p class="hint" id="diagnosticChiffres"></p>
+      </div>
       <div class="card" id="journalCard">
         <div class="card-head">
           <h2>Journal d'activité</h2>
@@ -1333,6 +1370,8 @@
 <script src="assets/js/reference.js"></script>
 <script src="assets/js/bord.js"></script>
 <script src="assets/js/colis.js"></script>
+<script src="assets/js/journee.js"></script>
+<script src="assets/js/diagnostic.js"></script>
 <script src="assets/js/doublons.js"></script>
 <script src="assets/js/scanner.js"></script>
 <script src="assets/js/store.js"></script>
@@ -1346,6 +1385,7 @@
 <script src="assets/js/ui/domiciliation.js"></script>
 <script src="assets/js/ui/casiers.js"></script>
 <script src="assets/js/ui/bord.js"></script>
+<script src="assets/js/ui/pilotage.js"></script>
 <script src="assets/js/ui/scanner.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
