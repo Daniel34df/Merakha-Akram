@@ -219,7 +219,7 @@ test('/api/state ne divulgue ni comptes ni sessions', function () {
     const state = await t.call('GET', '/api/state');
     assert.deepEqual(
       Object.keys(state.body).sort(),
-      ['codeMaitreParDefaut', 'contacts', 'history', 'settings', 'suivi']
+      ['boites', 'codeMaitreParDefaut', 'conflitsBoites', 'contacts', 'history', 'settings', 'suivi']
     );
     assert.equal(state.body.users, undefined);
     assert.equal(state.body.sessions, undefined);

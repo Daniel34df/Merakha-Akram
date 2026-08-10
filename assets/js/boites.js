@@ -380,12 +380,19 @@
     }
 
     /* Numéro inconnu : la boîte existe dans le local, elle manquait au plan.
-       On la range dans la numérotation quand la saisie la suit — « b12 »
-       devient « B-012 » — et on garde la saisie telle quelle sinon, pour que
-       « Casier 7 » reste « Casier 7 ». */
-    const n = lireNumero(texte, schema);
+       On garde **la saisie telle quelle**.
+
+       La première version la reformatait selon le schéma — « B-12 » devenait
+       « B-012 ». C'était une erreur, et pas seulement de goût : quelqu'un qui
+       tape un numéro décrit une porte du couloir, sur laquelle est peint
+       « B-12 ». Réécrire sa saisie faisait dire à l'écran autre chose que ce
+       que l'agent a sous les yeux — et le jour où il cherche « B-12 » dans le
+       local, il ne le trouve pas au même endroit que dans l'application.
+
+       Le schéma reste l'autorité là où personne n'a rien tapé : quand c'est le
+       serveur qui attribue le prochain numéro, ou qu'on crée une série. */
     const neuve = creer({
-      numero: n === null ? texte : formaterNumero(n, schema),
+      numero: texte,
       antenneId: (contact && contact.antenneId) || '',
       createdAt: quand
     });
@@ -436,9 +443,10 @@
           })
         });
       }
-      const n = lireNumero(g.numero, schema);
+      /* Le numéro tel qu'il était écrit sur la fiche : la migration relève un
+         local existant, elle ne le renumérote pas. */
       const neuve = creer({
-        numero: n === null ? g.numero : formaterNumero(n, schema),
+        numero: g.numero,
         antenneId: titulaire.antenneId || '',
         createdAt: titulaire.createdAt || ''
       });

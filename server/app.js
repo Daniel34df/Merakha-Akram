@@ -18,6 +18,7 @@ const roles = require('../assets/js/roles.js');
 const reseau = require('./reseau.js');
 const idem = require('./idempotence.js');
 const signature = require('./signature.js');
+const boites = require('../assets/js/boites.js');
 
 const VERSION = '1.2.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
@@ -1639,6 +1640,11 @@ async function handleApi(req, res, ctx, pathname) {
 
     return sendJson(res, 200, {
       contacts: contacts,
+      // Le plan du local, filtré par antenne comme le reste.
+      boites: pourSonAntenne(db.data.boites || []),
+      /* Les numéros portés par deux fiches, relevés à la migration. En mémoire
+         seulement, et réservés à qui peut y remédier. */
+      conflitsBoites: roles.peut(currentUser, 'casiers') ? (db.conflitsMigration || []) : [],
       // Les codes sont retirés du contenu servi, pas seulement de l'affichage :
       // un onglet de développeur suffirait à lire ce que l'interface masque.
       history: roles.masquerCodes(history, currentUser),
@@ -1649,6 +1655,243 @@ async function handleApi(req, res, ctx, pathname) {
          changer. L'annoncer à tout le monde reviendrait à indiquer la porte. */
       codeMaitreParDefaut: roles.estResponsable(currentUser) ? auth.estCodeMaitreDefaut(db) : false
     });
+  }
+
+  /* ════════════ les casiers ════════════
+
+     Une boîte n'est plus une chaîne posée sur une fiche : c'est un objet qui
+     dure, avec son statut, sa zone, sa capacité et la suite de ses titulaires.
+     Le calcul vit dans `assets/js/boites.js`, vérifiable hors navigateur ; ici
+     il n'y a que les droits, l'antenne et l'écriture. */
+
+  if (pathname === '/api/boites') {
+    if (method === 'GET') {
+      exigerUnDesDroits(currentUser, ['casiers', 'registre']);
+      return sendJson(res, 200, pourSonAntenne(db.data.boites || []));
+    }
+
+    if (method === 'POST') {
+      exigerDroit(currentUser, 'casiers');
+      const corps = await readBody(req);
+
+      /* Le piège de cette route, et la raison d'être du §5 : deux postes qui
+         créent un casier en même temps ne doivent pas obtenir le même numéro.
+
+         Le calcul se fait donc **dans le mutateur**, pas avant. `db.write`
+         sérialise les écritures : ce qui est calculé là ne peut pas être
+         calculé en parallèle. Le sortir de trois lignes suffirait à rendre la
+         collision possible, sans que rien ne la signale. */
+      let creee = null;
+      let plage = false;
+      await db.write(function (data) {
+        if (!Array.isArray(data.boites)) data.boites = [];
+        const schema = data.settings.numerotation;
+        const impose = String((corps && corps.numero) || '').trim();
+
+        if (impose && boites.trouverParNumero(data.boites, impose, schema)) {
+          creee = null;
+          return;
+        }
+        let numero = impose;
+        if (!numero) {
+          const n = boites.prochainNumero(data.boites, schema);
+          if (n === null) { plage = true; return; }
+          numero = boites.formaterNumero(n, schema);
+        }
+        creee = boites.creer({
+          numero: numero,
+          zone: (corps && corps.zone) || '',
+          statut: (corps && corps.statut) || 'libre',
+          capacite: corps && corps.capacite,
+          motif: (corps && corps.motif) || '',
+          antenneId: (corps && corps.antenneId) || (currentUser && currentUser.antenneId) || ''
+        });
+        data.boites.push(creee);
+      });
+      if (plage) {
+        throw Object.assign(
+          new Error('La plage de numérotation est épuisée. Élargissez-la dans les réglages.'),
+          { status: 409, code: 'plage-epuisee' }
+        );
+      }
+      if (!creee) {
+        throw Object.assign(new Error('Cette boîte existe déjà au plan du local.'), { status: 409 });
+      }
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'casier créé',
+        cible: creee.numero,
+        details: creee.zone ? 'zone ' + creee.zone : ''
+      });
+      return sendJson(res, 201, creee);
+    }
+  }
+
+  /* Créer une plage d'un coup — « B-001 à B-060 ». Sans ça, équiper un local
+     de soixante casiers demanderait soixante clics, et personne ne le ferait. */
+  if (pathname === '/api/boites/serie' && method === 'POST') {
+    exigerDroit(currentUser, 'casiers');
+    const corps = await readBody(req);
+    const debut = Math.max(0, Math.floor(Number(corps && corps.debut) || 0));
+    const fin = Math.max(debut, Math.floor(Number(corps && corps.fin) || 0));
+    /* Deux cents d'un coup au maximum : au-delà, c'est une faute de frappe
+       dans un champ, pas un local. */
+    if (fin - debut + 1 > 200) {
+      throw Object.assign(new Error('Deux cents casiers au maximum par série.'), { status: 400 });
+    }
+    const creees = [];
+    await db.write(function (data) {
+      if (!Array.isArray(data.boites)) data.boites = [];
+      const schema = data.settings.numerotation;
+      for (let n = debut; n <= fin; n++) {
+        const numero = boites.formaterNumero(n, schema);
+        // Une série rejouée n'ajoute pas de doublon : elle complète les trous.
+        if (boites.trouverParNumero(data.boites, numero, schema)) continue;
+        const b = boites.creer({
+          numero: numero,
+          zone: (corps && corps.zone) || '',
+          antenneId: (corps && corps.antenneId) || (currentUser && currentUser.antenneId) || ''
+        });
+        data.boites.push(b);
+        creees.push(b);
+      }
+    });
+    await consigner(db, {
+      qui: currentUser && currentUser.name,
+      action: 'série de casiers créée',
+      cible: creees.length + ' casier(s)',
+      details: (corps && corps.zone) || ''
+    });
+    return sendJson(res, 201, { creees: creees.length, boites: creees });
+  }
+
+  const boiteMatch = pathname.match(/^\/api\/boites\/([^/]+)(\/attribuer|\/liberer)?$/);
+  if (boiteMatch) {
+    const idBoite = decodeURIComponent(boiteMatch[1]);
+    const geste = boiteMatch[2] || '';
+    const existante = pourSonAntenne(db.data.boites || []).find(function (b) {
+      return b.id === idBoite;
+    });
+    if (!existante) throw Object.assign(new Error('Casier introuvable'), { status: 404 });
+
+    /* Attribuer : la boîte change de titulaire, et la fiche reçoit le numéro.
+       Les deux dans la même écriture — sinon un incident entre les deux
+       laisserait un casier attribué à quelqu'un dont la fiche l'ignore. */
+    if (geste === '/attribuer' && method === 'POST') {
+      exigerDroit(currentUser, 'casiers');
+      const corps = await readBody(req);
+      const idContact = String((corps && corps.contactId) || '');
+      const contact = pourSonAntenne(db.data.contacts || []).find(function (c) {
+        return c.id === idContact;
+      });
+      if (!contact) throw Object.assign(new Error('Destinataire introuvable'), { status: 404 });
+
+      let numero = '';
+      await db.write(function (data) {
+        const r = boites.reconcilier(
+          data.boites, contact, existante.numero, data.settings.numerotation
+        );
+        data.boites = r.boites;
+        numero = r.numero;
+        const cible = data.contacts.find(function (c) { return c.id === idContact; });
+        if (cible) cible.box = numero;
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'casier attribué',
+        cible: contact.name,
+        details: 'boîte ' + numero
+      });
+      return sendJson(res, 200, {
+        boite: (db.data.boites || []).find(function (b) { return b.id === idBoite; }),
+        contact: (db.data.contacts || []).find(function (c) { return c.id === idContact; })
+      });
+    }
+
+    if (geste === '/liberer' && method === 'POST') {
+      exigerDroit(currentUser, 'casiers');
+      const corps = await readBody(req);
+      const motif = String((corps && corps.motif) || '').trim().slice(0, 200);
+      const titulaire = boites.titulaireCourant(existante);
+      await db.write(function (data) {
+        const i = data.boites.findIndex(function (b) { return b.id === idBoite; });
+        if (i === -1) return;
+        data.boites[i] = boites.liberer(data.boites[i], motif);
+        // Le miroir suit : la fiche de l'ancien titulaire perd son numéro.
+        if (titulaire && titulaire.contactId) {
+          const c = data.contacts.find(function (x) { return x.id === titulaire.contactId; });
+          if (c) c.box = '';
+        }
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'casier libéré',
+        cible: existante.numero,
+        details: motif || ((titulaire && titulaire.nom) ? 'occupé par ' + titulaire.nom : '')
+      });
+      return sendJson(res, 200, (db.data.boites || []).find(function (b) { return b.id === idBoite; }));
+    }
+
+    if (!geste && method === 'PUT') {
+      exigerDroit(currentUser, 'casiers');
+      const corps = await readBody(req);
+      let maj = null;
+      await db.write(function (data) {
+        const i = data.boites.findIndex(function (b) { return b.id === idBoite; });
+        if (i === -1) return;
+        const avant = data.boites[i];
+        /* Le statut se règle ici — hors service, suspendue, réservée — mais
+           **pas** le titulaire : changer de titulaire passe par « attribuer »,
+           qui clôt une période et en ouvre une. Le laisser modifiable ici
+           rouvrirait la porte à l'écrasement que tout le module évite. */
+        maj = Object.assign({}, avant, {
+          zone: corps.zone !== undefined ? String(corps.zone).trim().slice(0, 60) : avant.zone,
+          statut: corps.statut !== undefined ? boites.statut(corps.statut).id : avant.statut,
+          motif: corps.motif !== undefined ? String(corps.motif).trim().slice(0, 200) : avant.motif,
+          capacite: corps.capacite !== undefined
+            ? Math.max(1, Math.min(999, Number(corps.capacite) || boites.CAPACITE_DEFAUT))
+            : avant.capacite
+        });
+        /* Un casier occupé ne se déclare pas « libre » d'un trait de plume :
+           il faut le libérer, ce qui clôt la période de son titulaire. */
+        if (maj.statut === 'libre' && boites.titulaireCourant(avant)) maj.statut = avant.statut;
+        data.boites[i] = maj;
+      });
+      if (!maj) throw Object.assign(new Error('Casier introuvable'), { status: 404 });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'casier modifié',
+        cible: maj.numero,
+        details: boites.statut(maj.statut).label + (maj.motif ? ' — ' + maj.motif : '')
+      });
+      return sendJson(res, 200, maj);
+    }
+
+    if (!geste && method === 'DELETE') {
+      exigerDroit(currentUser, 'casiers');
+      /* On ne retire du plan qu'un casier libre et sans passé. Un casier qui a
+         eu des titulaires garde une mémoire dont on peut avoir besoin des mois
+         plus tard, quand un courrier arrive pour quelqu'un qui est parti. Pour
+         un casier qu'on n'utilise plus : « hors service ». */
+      if (!boites.estLibre(existante) || (existante.periodes || []).length) {
+        throw Object.assign(
+          new Error(
+            'Ce casier a un titulaire ou un historique : il ne se supprime pas. ' +
+            'Libérez-le, ou mettez-le hors service.'
+          ),
+          { status: 409, code: 'casier-occupe' }
+        );
+      }
+      await db.write(function (data) {
+        data.boites = data.boites.filter(function (b) { return b.id !== idBoite; });
+      });
+      await consigner(db, {
+        qui: currentUser && currentUser.name,
+        action: 'casier retiré du plan',
+        cible: existante.numero
+      });
+      return sendJson(res, 200, { deleted: idBoite });
+    }
   }
 
   /* --- destinataires --- */
@@ -1669,8 +1912,16 @@ async function handleApi(req, res, ctx, pathname) {
       if (clash) {
         throw Object.assign(new Error('Ce courriel est déjà au registre sous « ' + clash.name + ' »'), { status: 409 });
       }
-      const contact = Object.assign({ id: crypto.randomUUID(), createdAt: new Date().toISOString() }, input);
+      let contact = Object.assign({ id: crypto.randomUUID(), createdAt: new Date().toISOString() }, input);
+      /* La chaîne saisie rejoint le plan du local. Si elle désigne un casier
+         connu, il change de titulaire ; sinon il est créé à la volée. Un
+         bureau qui n'ouvre jamais l'écran des casiers travaille donc comme
+         avant, et son plan se remplit tout seul au fil des inscriptions. */
       await db.write(function (data) {
+        if (!Array.isArray(data.boites)) data.boites = [];
+        const r = boites.reconcilier(data.boites, contact, contact.box, data.settings.numerotation);
+        data.boites = r.boites;
+        contact = Object.assign({}, contact, { box: r.numero });
         data.contacts.push(contact);
       });
       await consigner(db, {
@@ -2021,18 +2272,26 @@ async function handleApi(req, res, ctx, pathname) {
         }
         updated.nomsAnterieurs = anciens.slice(-10);
       }
+      let enregistre = updated;
       await db.write(function (data) {
+        if (!Array.isArray(data.boites)) data.boites = [];
+        // Même réconciliation qu'à la création : corriger le numéro sur la
+        // fiche déplace la personne d'un casier à l'autre, et l'ancien se
+        // libère dans le même geste.
+        const r = boites.reconcilier(data.boites, updated, updated.box, data.settings.numerotation);
+        data.boites = r.boites;
+        enregistre = Object.assign({}, updated, { box: r.numero });
         const i = data.contacts.findIndex(function (c) {
           return c.id === id;
         });
-        data.contacts[i] = updated;
+        data.contacts[i] = enregistre;
       });
       await consigner(db, {
         qui: currentUser && currentUser.name,
         action: 'destinataire modifié',
-        cible: updated.name
+        cible: enregistre.name
       });
-      return sendJson(res, 200, updated);
+      return sendJson(res, 200, enregistre);
     }
     if (method === 'DELETE') {
       exigerDroit(currentUser, 'registre');
@@ -2095,7 +2354,34 @@ async function handleApi(req, res, ctx, pathname) {
         data.contacts = data.contacts.filter(function (c) {
           return c.id !== id;
         });
+
+        /* La personne s'en va : son casier se rend, sinon il resterait occupé
+           par une fiche qui n'existe plus et personne ne pourrait l'attribuer.
+           La période est close, pas effacée — c'est ce qui permet de savoir à
+           qui était la boîte quand un courrier arrive trois semaines après. */
+        (data.boites || []).forEach(function (b, i) {
+          const t = boites.titulaireCourant(b);
+          if (t && t.contactId === id) {
+            data.boites[i] = boites.liberer(b, complet ? 'fiche effacée' : 'sortie du registre');
+          }
+        });
+
         if (!complet) return;
+
+        /* Effacement complet : le nom ne doit rester nulle part, y compris
+           dans l'historique des casiers. Le §46 demande que « effacer » ne
+           laisse rien — un nom oublié dans une période de boîte suffirait à
+           retrouver quelqu'un qui a demandé à disparaître. */
+        (data.boites || []).forEach(function (b) {
+          (b.periodes || []).forEach(function (p) {
+            if (p.contactId === id || sesNoms.some(function (n) {
+              return util.normalize(p.nom) === util.normalize(n);
+            })) {
+              p.nom = 'personne effacée';
+              p.contactId = null;
+            }
+          });
+        });
 
         const avant = data.history.length;
         data.history = data.history.filter(function (h) {
@@ -2507,6 +2793,13 @@ async function handleApi(req, res, ctx, pathname) {
               ) || 0
             )
           )
+        ),
+        /* Le schéma de numérotation des casiers. Sans cette ligne, il
+           repartait à la valeur d'usine à chaque enregistrement des
+           réglages — un bureau qui numérote « A-01 » aurait retrouvé
+           « B-001 » après avoir corrigé une virgule dans un gabarit. */
+        numerotation: boites.schemaDe(
+          body.numerotation !== undefined ? body.numerotation : db.data.settings.numerotation
         )
       });
       await db.write(function (data) {

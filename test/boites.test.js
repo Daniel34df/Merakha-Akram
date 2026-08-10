@@ -230,9 +230,17 @@ test('un numéro hors schéma garde son écriture', function () {
   assert.equal(r.boites[0].numero, 'Casier 7');
 });
 
-test('un numéro dans le schéma est mis au format du bureau', function () {
-  const r = B.reconcilier([], AMINA, 'b12', null, T);
-  assert.equal(r.numero, 'B-012', 'le registre cesse de mélanger quatre écritures du même casier');
+test('un numéro jamais vu garde l’écriture de celui qui l’a tapé', function () {
+  /* Quelqu'un qui saisit un numéro décrit une porte du couloir. Reformater sa
+     saisie — « B-12 » en « B-012 » — ferait dire à l'écran autre chose que ce
+     que l'agent a sous les yeux. Le schéma n'est l'autorité que là où personne
+     n'a rien tapé : quand le serveur attribue le prochain numéro. */
+  assert.equal(B.reconcilier([], AMINA, 'B-12', null, T).numero, 'B-12');
+  assert.equal(B.reconcilier([], AMINA, 'b12', null, T).numero, 'b12');
+  assert.equal(B.reconcilier([], AMINA, 'Casier 7', null, T).numero, 'Casier 7');
+  // Mais deux écritures du même numéro restent un seul casier.
+  const r = B.reconcilier([], AMINA, 'B-12', null, T);
+  assert.equal(B.trouverParNumero(r.boites, 'b012'), r.boites[0]);
 });
 
 /* ---------- la migration ---------- */
