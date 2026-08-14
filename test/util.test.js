@@ -369,3 +369,42 @@ test('le gabarit d’un type l’emporte, dans les deux langues', function () {
   assert.ok(m.body.includes('لديك بريد'), 'la langue garde son texte');
   assert.ok(m.body.includes('Un colis vous attend'), 'et le français prend celui du type');
 });
+
+/* ── l'état d'un courrier ── */
+
+test('l’état d’un courrier suit un ordre, et l’ordre a des raisons', function () {
+  /* Cette règle vivait en double — une copie dans `app.js`, une dans
+     `server/reminders.js` — et n’avait aucun test des deux côtés. Elle décide
+     pourtant du filtre du Suivi, du compteur d’onglet, de la couleur d’une
+     ligne et de la liste des relances : si les deux copies divergeaient, le
+     serveur relançait un courrier que l’écran ne montrait pas comme à
+     relancer. */
+  const base = { date: '2026-08-01T10:00:00.000Z', status: 'envoyé', reminderCount: 0 };
+  assert.equal(util.etatCourrier(base), 'attente');
+  assert.equal(util.etatCourrier(Object.assign({}, base, { reminderCount: 2 })), 'relance');
+  assert.equal(util.etatCourrier(Object.assign({}, base, { flaggedAt: '2026-08-05' })), 'signale');
+  assert.equal(util.etatCourrier(Object.assign({}, base, { status: 'échec' })), 'echec');
+  assert.equal(util.etatCourrier(Object.assign({}, base, { pickedUpAt: '2026-08-06' })), 'recupere');
+  assert.equal(util.etatCourrier(Object.assign({}, base, { closedAt: '2026-08-07' })), 'clos');
+});
+
+test('« clos » l’emporte sur tout : un courrier classé n’est plus rien d’autre', function () {
+  const h = {
+    closedAt: '2026-08-09', pickedUpAt: '2026-08-06', flaggedAt: '2026-08-05',
+    status: 'échec', reminderCount: 3
+  };
+  assert.equal(util.etatCourrier(h), 'clos');
+});
+
+test('remis en main propre l’emporte sur un envoi qui a échoué', function () {
+  /* Un courrier dont la notification a échoué mais que la personne est venue
+     chercher est remis, point. L’ordre inverse le compterait « en échec » pour
+     toujours, et il ressortirait à chaque relance. */
+  const h = { status: 'échec', pickedUpAt: '2026-08-06', reminderCount: 1 };
+  assert.equal(util.etatCourrier(h), 'recupere');
+});
+
+test('un courrier abîmé ne fait pas tomber le classement', function () {
+  assert.equal(util.etatCourrier(null), 'attente');
+  assert.equal(util.etatCourrier({}), 'attente');
+});

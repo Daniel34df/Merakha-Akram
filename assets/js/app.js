@@ -48,6 +48,9 @@
   const antennes = ui.antennes;
   const antenneImposee = ui.antenneImposee;
   const deLAntenne = ui.deLAntenne;
+  /* La règle vit dans util.js : le serveur la lit aussi, et deux copies
+     d'un même classement finissent par diverger. */
+  const etatCourrier = util.etatCourrier;
   const enAttente = ui.enAttente;
   const joursDepuis = ui.joursDepuis;
   const tableau = root.BC.tableau.tableau;
@@ -3162,16 +3165,6 @@
     view.historyDate = e.target.value;
     renderHistory();
   });
-
-  /** Même classement que le serveur : clos, récupéré, échec, signalé, relancé, attente. */
-  function etatCourrier(h) {
-    if (h.closedAt) return 'clos';
-    if (h.pickedUpAt) return 'recupere';
-    if (h.status === 'échec') return 'echec';
-    if (h.flaggedAt) return 'signale';
-    if (h.reminderCount > 0) return 'relance';
-    return 'attente';
-  }
 
   function visibleHistory() {
     return S.history.filter(function (h) {

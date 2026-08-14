@@ -90,15 +90,15 @@ function aSignaler(history, options) {
   });
 }
 
-/** État d'un courrier, pour l'affichage et les filtres. */
-function etat(entree) {
-  if (entree.closedAt) return 'clos';
-  if (entree.pickedUpAt) return 'recupere';
-  if (entree.status === 'échec') return 'echec';
-  if (entree.flaggedAt) return 'signale';
-  if (entree.reminderCount > 0) return 'relance';
-  return 'attente';
-}
+/* État d'un courrier, pour l'affichage et les filtres.
+
+   La règle est dans `assets/js/util.js`, que les deux côtés chargent : elle
+   était écrite ici **et** dans `app.js`, avec de part et d'autre le commentaire
+   « même classement que le serveur » — ce qui dit bien que quelqu'un savait le
+   risque. Le jour où les deux divergent, un courrier compté « signalé » par le
+   serveur n'est pas celui que l'écran colore, et la liste des relances cesse de
+   parler des mêmes plis que la liste affichée. */
+const etat = util.etatCourrier;
 
 /** Résumé destiné à l'interface : combien en attente, depuis combien de temps. */
 function resume(history, now) {

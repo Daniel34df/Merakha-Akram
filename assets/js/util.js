@@ -583,6 +583,35 @@
     });
   }
 
+  /* L'état d'un courrier : clos, récupéré, échec, signalé, relancé, attente.
+
+     Cette règle existait **en double** — une copie dans `app.js` pour les
+     filtres et les couleurs, une autre dans `server/reminders.js` pour les
+     relances — et les deux portaient le commentaire « même classement que le
+     serveur », ce qui dit bien que quelqu'un savait le risque. Deux copies
+     d'une même règle finissent par diverger, et le jour où elles divergent, un
+     courrier compté « signalé » côté serveur n'est pas celui que l'écran
+     colore : la liste des relances et la liste affichée ne parlent plus des
+     mêmes plis.
+
+     Elle vit donc ici, dans le seul fichier que les deux côtés chargent — au
+     même titre que la recherche et la validation des adresses, et pour la même
+     raison.
+
+     L'ordre des tests n'est pas indifférent. « Clos » l'emporte sur tout : un
+     courrier classé n'est plus rien d'autre. « Récupéré » vient avant
+     « échec », parce qu'un courrier dont la notification a échoué mais qui a
+     été remis en main propre est remis, point. */
+  function etatCourrier(entree) {
+    const h = entree || {};
+    if (h.closedAt) return 'clos';
+    if (h.pickedUpAt) return 'recupere';
+    if (h.status === 'échec') return 'echec';
+    if (h.flaggedAt) return 'signale';
+    if (h.reminderCount > 0) return 'relance';
+    return 'attente';
+  }
+
   function sortByName(list) {
     return list.slice().sort(function (a, b) {
       return (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
@@ -795,6 +824,7 @@
     suggestionsProches: suggestionsProches,
     presence: presence,
     formatJour: formatJour,
+    etatCourrier: etatCourrier,
     sortByName: sortByName,
     toCsv: toCsv,
     parseCsv: parseCsv,
