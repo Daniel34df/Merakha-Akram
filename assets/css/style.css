@@ -1,0 +1,2552 @@
+/* Bureau du Courrier — feuille de style
+   Encre profonde, surfaces claires, accent indigo-violet : un guichet vivant.
+
+   ═══════════════ LA RÈGLE QUI TIENT TOUT LE RESTE ═══════════════
+
+   Deux mondes cohabitent dans ce fichier, et ils ne se mélangent jamais.
+
+   **L'écran** est libre de changer. Il a ses polices (`--display`, `--sans`),
+   ses couleurs (`--ink`, `--surface`, `--accent`), ses rayons et ses ombres.
+
+   **Le papier** ne change pas. L'attestation d'élection de domicile se présente
+   à la CAF, à France Travail ou en préfecture ; les étiquettes sortent au format
+   d'une planche autocollante achetée dans le commerce ; le code à barres passe
+   sous un lecteur qui n'a pas d'opinion sur le design. Tout ce qui s'imprime
+   tire donc ses valeurs des variables `--print-*` et `--p-*` ci-dessous, gelées
+   à ce qu'elles ont toujours valu. Aucune retouche de l'écran ne peut les
+   emporter par ricochet — c'est le seul garde-fou, et il est là pour ça. */
+
+:root{
+  /* ── surfaces et encre ──
+     Les neutres du document, à un écart près, énoncé ici parce qu'il compte.
+     « Text muted #64748B » ne fait que 4,34:1 sur une surface teintée : sous
+     le seuil AA, donc illisible pour qui lit de biais près d'une fenêtre. Il
+     sert ici à ce qu'il fait bien — le pourtour d'un champ, où la norme
+     demande 3:1 — et l'encre seconde descend d'un cran. */
+  --bg:#F8FAFC;
+  --surface:#FFFFFF;
+  --surface-2:#F1F5F9;
+  --ink:#0F172A;
+  --ink-2:#475569;
+  /* Deux filets, et la distinction est une exigence, pas un goût.
+     `--line` sépare : entre deux lignes d'un tableau, sous un titre. Personne
+     n'a besoin de le voir pour se servir de l'application, il peut donc être
+     ténu — c'est le « Border #E2E8F0 » du document. `--bord` **délimite un
+     objet manipulable** — le pourtour d'un champ, d'une case à cocher, d'un
+     bouton fantôme. La norme demande 3:1 pour celui-là (WCAG 1.4.11) :
+     quelqu'un doit pouvoir voir où finit le champ avant d'y écrire. */
+  --line:#E2E8F0;
+  --bord:#64748B;
+
+  /* ── l'accent ──
+     Un bleu, et un seul. La version précédente en avait deux et les mariait
+     en dégradé sur les titres, les boutons et le fond de page ; le document
+     demande l'inverse, et il a raison pour une raison qui n'est pas de goût :
+     un dégradé sous du texte fait varier le contraste d'un bout à l'autre du
+     mot. `--a1` et `--a2` restent comme alias, le temps que les règles qui
+     les nomment disparaissent. */
+  --a1:#2563EB;
+  --a2:#2563EB;
+  --accent:#2563EB;
+  --accent-2:#1D4ED8;
+  --accent-texte:#1D4ED8;
+  --accent-wash:#DBEAFE;
+
+  /* ── ce que ça veut dire ──
+     Deux tiers, et c'est ce qui réconcilie le document avec lui-même : il
+     donne une palette (§48) et exige WCAG AA (§54), or trois de ses couleurs
+     n'atteignent pas 4,5:1 comme texte — le vert 3,30, l'ambre 2,15, le
+     cyan 2,77. Les valeurs du document sont donc les teintes « vives » :
+     pastilles, jauges, filets, tout ce qui se voit sans se lire. À côté,
+     une encre plus sombre porte les mots.
+
+     Deux d'entre elles ont dû descendre d'un cran malgré tout. Même comme
+     pastille, l'ambre du document ne fait que 2,15:1 sur une carte blanche et
+     le cyan 2,77 : une pastille qu'on ne distingue pas du fond ne dit rien à
+     qui voit mal, et c'est précisément à qui voit mal qu'elle sert. Ce sont
+     les voisines les plus proches qui passent (#D97706, #0284C7). */
+  --ok:#15803D;        --ok-vif:#16A34A;
+  --warn:#B45309;      --warn-vif:#D97706;
+  --danger:#B91C1C;    --danger-vif:#DC2626;
+  --info:#0369A1;      --info-vif:#0284C7;
+  --ok-wash:#DCFCE7;
+  --warn-wash:#FEF3C7;
+  --danger-wash:#FEE2E2;
+  --info-wash:#E0F2FE;
+
+  /* ── relief ──
+     Des ombres plus courtes et plus pâles : le document demande des bordures
+     fines et des cartes propres, pas du relief. */
+  --r1:8px;  --r2:12px;  --r3:16px;
+  --ombre-1:0 1px 2px rgba(15,23,42,.05);
+  --ombre-2:0 1px 3px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.06);
+  --ombre-3:0 4px 16px rgba(15,23,42,.08), 0 16px 32px rgba(15,23,42,.10);
+  --ombre-accent:0 2px 8px rgba(37,99,235,.20);
+  --voile:rgba(15,23,42,.45);
+  --stamp-bg:rgba(255,255,255,0.94);
+
+  /* ── mouvement ──
+     Une courbe, trois durées, toutes dans les 100-180 ms du document. Le
+     ressort a disparu : un rebond dit « regardez-moi », et rien ici n'a à
+     être regardé pour lui-même. `--entree` remplace `--ressort` sous son vrai
+     nom, pour que personne ne rétablisse un rebond en lisant le mot. */
+  --entree:cubic-bezier(.2, .8, .3, 1);
+  --sortie:cubic-bezier(.2, .8, .3, 1);
+  --t1:100ms;  --t2:140ms;  --t3:180ms;
+
+  /* ── typographie de l'écran ── */
+  --display:'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --sans:'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono:'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+  /* Une échelle, pas une collection de tailles.
+     Chaque cran est un `clamp()` : le titre respire sur le 27 pouces du bureau
+     et reste lisible sur le portable qu'on emmène au guichet, sans qu'aucune
+     règle de média n'ait à le dire. Les deux derniers crans n'ont pas de borne
+     mobile — un libellé de champ ne rétrécit pas. */
+  --tx-6:clamp(26px, 1.3rem + 1.2vw, 38px);   /* le titre de l'application */
+  --tx-5:clamp(20px, 1.1rem + .5vw, 26px);    /* titres d'écran de connexion */
+  --tx-4:clamp(16px, .95rem + .3vw, 19px);    /* titres de carte */
+  --tx-3:15px;                                /* texte courant */
+  --tx-2:13px;                                /* texte second */
+  --tx-1:11px;                                /* étiquettes et pastilles */
+  --suivi-large:.08em;                        /* interlettrage des capitales */
+
+  /* ── typographie et couleurs du papier — GELÉES ──
+     Ne pas repeindre. Voir l'avertissement en tête de fichier. */
+  --print-display:'Special Elite', 'Courier New', monospace;
+  --print-serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --print-mono:'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --p-ink:#16233F;
+  --p-ink-2:#5B6B82;
+  --p-paper:#F4F0E6;
+  --p-line:#CFC6AE;
+  --p-accent:#B8892B;
+
+  /* Une seule teinte pour les six onglets. Elles étaient six, une par écran ;
+     le document les retire (§47, « trop de couleurs »), et le repère qui
+     restait utile — *quel* onglet est ouvert — est porté par le soulignement
+     et par `aria-selected`, pas par la couleur. */
+  --teinte:var(--accent);
+}
+
+/* Thème sombre : mêmes rôles, valeurs inversées.
+   Trois blocs et non deux — c'est ce qui permet à la bascule manuelle de
+   l'emporter dans les deux sens. Sans réglage explicite, on suit le système ;
+   avec, le choix de la personne gagne. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="clair"]){
+    --bg:#0F172A;
+    --surface:#111827;
+    --surface-2:#1E293B;
+    --ink:#F8FAFC;
+    --ink-2:#94A3B8;
+    /* Le « Border #334155 » du document ne fait que 1,71:1 sur la surface
+       sombre : bon pour séparer, insuffisant pour dessiner le pourtour d'un
+       champ. Même partage qu'en clair, mêmes raisons. */
+    --line:#334155;
+    --bord:#64748B;
+
+    --a1:#2563EB;
+    --a2:#2563EB;
+    --accent:#2563EB;
+    --accent-2:#1D4ED8;
+    --accent-texte:#93C5FD;
+    --accent-wash:#17243F;
+
+    /* Le sombre n'est pas une inversion : les aplats gardent leur bleu et leur
+       texte blanc, seules les encres s'éclaircissent pour tenir sur du noir. */
+    --ok:#4ADE80;        --ok-vif:#16A34A;
+    --warn:#FBBF24;      --warn-vif:#F59E0B;
+    --danger:#FCA5A5;    --danger-vif:#DC2626;
+    --info:#7DD3FC;      --info-vif:#0EA5E9;
+    --ok-wash:#0D2117;
+    --warn-wash:#241C0C;
+    --danger-wash:#2B1414;
+    --info-wash:#0C2230;
+
+    --ombre-1:0 1px 2px rgba(0,0,0,.4);
+    --ombre-2:0 1px 3px rgba(0,0,0,.45), 0 4px 12px rgba(0,0,0,.4);
+    --ombre-3:0 4px 16px rgba(0,0,0,.5), 0 16px 32px rgba(0,0,0,.45);
+    --ombre-accent:0 2px 8px rgba(37,99,235,.35);
+    --voile:rgba(2,6,17,.66);
+    --stamp-bg:rgba(17,24,39,0.95);
+
+    --shadow:rgba(0,0,0,.45);
+  }
+}
+
+:root[data-theme="sombre"]{
+  --bg:#0F172A;
+  --surface:#111827;
+  --surface-2:#1E293B;
+  --ink:#F8FAFC;
+  --ink-2:#94A3B8;
+  /* Le « Border #334155 » du document ne fait que 1,71:1 sur la surface
+     sombre : bon pour séparer, insuffisant pour dessiner le pourtour d'un
+     champ. Même partage qu'en clair, mêmes raisons. */
+  --line:#334155;
+  --bord:#64748B;
+
+  --a1:#2563EB;
+  --a2:#2563EB;
+  --accent:#2563EB;
+  --accent-2:#1D4ED8;
+  --accent-texte:#93C5FD;
+  --accent-wash:#17243F;
+
+  /* Le sombre n'est pas une inversion : les aplats gardent leur bleu et leur
+     texte blanc, seules les encres s'éclaircissent pour tenir sur du noir. */
+  --ok:#4ADE80;        --ok-vif:#16A34A;
+  --warn:#FBBF24;      --warn-vif:#F59E0B;
+  --danger:#FCA5A5;    --danger-vif:#DC2626;
+  --info:#7DD3FC;      --info-vif:#0EA5E9;
+  --ok-wash:#0D2117;
+  --warn-wash:#241C0C;
+  --danger-wash:#2B1414;
+  --info-wash:#0C2230;
+
+  --ombre-1:0 1px 2px rgba(0,0,0,.4);
+  --ombre-2:0 1px 3px rgba(0,0,0,.45), 0 4px 12px rgba(0,0,0,.4);
+  --ombre-3:0 4px 16px rgba(0,0,0,.5), 0 16px 32px rgba(0,0,0,.45);
+  --ombre-accent:0 2px 8px rgba(37,99,235,.35);
+  --voile:rgba(2,6,17,.66);
+  --stamp-bg:rgba(17,24,39,0.95);
+
+  --shadow:rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--bg);
+  font-family:var(--sans);
+  color:var(--ink);
+  min-height:100vh;
+  font-size:15px;
+  line-height:1.55;
+}
+
+/* Le lissage des glyphes est un réglage d'écran. Posé sur le corps de page, il
+   descendait jusque dans la feuille d'impression et changeait le rendu des
+   caractères d'un document destiné au papier. Il reste donc sur l'enveloppe de
+   l'application, que la feuille ne traverse pas. */
+.wrap, .gate, .toasts, .palette, dialog{
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* La lueur d'accent qui couvrait le haut de la page a été retirée : le
+   document demande un fond sobre (§47), et cette couche fixe était aussi ce
+   qui débordait sur le papier — il a fallu la neutraliser deux fois dans
+   `@media print`. Ce qui n'existe pas ne déborde pas. */
+.wrap, .gate, .toasts, .stamp-overlay{position:relative;z-index:1;}
+::selection{background:var(--accent);color:#fff;}
+
+/* Un anneau de focus unique, visible seulement au clavier. Il est vif : c'est
+   le seul repère de qui n'utilise pas la souris. */
+:focus-visible{
+  outline:2px solid var(--a1);
+  outline-offset:2px;
+  border-radius:4px;
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--a1) 22%, transparent);
+}
+input:focus-visible, textarea:focus-visible{outline-offset:1px;}
+.wrap{max-width:1080px;margin:0 auto;padding:36px 24px 96px;}
+
+/* ---------- en-tête ---------- */
+header{
+  position:relative;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:20px;
+  padding-bottom:22px;
+  margin-bottom:26px;
+}
+/* Un trait sous l'en-tête, d'une seule couleur et immobile. Il était en
+   dégradé et se déplaçait sur dix-huit secondes ; le document écarte les
+   animations de fond (§50), et un filet qui bouge est exactement ça. */
+header::after{
+  content:'';
+  position:absolute;
+  left:0;right:0;bottom:0;
+  height:2px;
+  border-radius:2px;
+  background:var(--accent);
+}
+header h1{
+  font-family:var(--display);
+  font-size:var(--tx-6);
+  font-weight:800;
+  letter-spacing:-.02em;
+  line-height:1.05;
+  margin:0 0 4px;
+  /* Le titre était peint d'un dégradé découpé à la forme des lettres. Le
+     dégradé est parti avec les autres (§47) ; le découpage, lui, était resté,
+     et un `color:transparent` sans rien derrière laisse un titre invisible.
+     Une couleur pleine, donc, et rien à découper. */
+  color:var(--ink);
+}
+header p{margin:0;color:var(--ink-2);font-size:var(--tx-2);}
+.brand{display:flex;align-items:center;gap:16px;}
+.brand-logo{
+  width:54px;
+  height:54px;
+  flex:0 0 auto;
+  object-fit:contain;
+  filter:drop-shadow(0 4px 12px rgba(67,56,202,.22));
+}
+.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+.header-badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+.install-btn{padding:6px 12px;font-size:var(--tx-1);}
+/* La bascule de thème. Elle dit ce qu'elle fait en toutes lettres — « Système »,
+   « Clair », « Sombre » — plutôt qu'en pictogramme : un soleil et une lune ne
+   savent pas exprimer le troisième état, celui où l'on suit le système, et
+   c'est pourtant le plus courant. */
+.theme-btn{
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:600;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 12px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--ink-2);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:border-color var(--t1) var(--sortie), color var(--t1) var(--sortie),
+             background-color var(--t1) var(--sortie);
+}
+.theme-btn:hover{border-color:var(--a1);color:var(--accent-texte);}
+.theme-btn .theme-pastille{
+  width:11px;
+  height:11px;
+  border-radius:50%;
+  flex:0 0 auto;
+  /* Un demi-disque : la moitié claire, la moitié sombre. En « Système » les
+     deux se voient ; sur un choix explicite, la pastille prend la couleur du
+     thème retenu. */
+  background:linear-gradient(90deg, #F8FAFC 50%, #0F172A 50%);
+  border:1px solid var(--bord);
+}
+.theme-btn[data-choix="clair"] .theme-pastille{background:#F8FAFC;}
+.theme-btn[data-choix="sombre"] .theme-pastille{background:#0F172A;}
+.date-stamp{
+  font-family:var(--mono);
+  font-size:var(--tx-2);
+  color:var(--ink-2);
+  text-align:right;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:6px 14px;
+  background:var(--surface);
+  box-shadow:var(--ombre-1);
+}
+/* Les pastilles d'état : une teinte diluée en fond, la même en trait et en
+   texte. Trois façons de dire la même chose, dont deux survivent au daltonisme
+   et à l'impression en noir et blanc. */
+.mode-badge{
+  font-family:var(--mono);
+  font-size:var(--tx-1);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  padding:4px 11px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--ink-2) 45%, transparent);
+  color:var(--ink-2);
+  background:color-mix(in srgb, var(--ink-2) 10%, transparent);
+  cursor:help;
+}
+.mode-badge.server{
+  border-color:color-mix(in srgb, var(--ok) 50%, transparent);
+  color:var(--ok);
+  background:var(--ok-wash);
+}
+.mode-badge.local{
+  border-color:color-mix(in srgb, var(--warn) 55%, transparent);
+  color:var(--warn);
+  background:var(--warn-wash);
+}
+.mode-badge.memory{
+  border-color:color-mix(in srgb, var(--danger) 55%, transparent);
+  color:var(--danger);
+  background:var(--danger-wash);
+}
+
+/* ---------- navigation ----------
+   Six pastilles dans une gouttière, et non six boutons juxtaposés. L'onglet
+   ouvert n'est plus un aplat sombre : c'est une surface qui remonte, sous un
+   soulignement de la couleur de l'onglet. La teinte porte l'information, la
+   graisse la double — les deux se lisent aussi en noir et blanc. */
+nav{
+  position:relative;
+  display:flex;
+  gap:4px;
+  margin-bottom:28px;
+  padding:5px;
+  border-radius:var(--r3);
+  background:var(--surface-2);
+  border:1px solid var(--line);
+}
+nav button{
+  position:relative;
+  flex:1;
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  font-weight:600;
+  letter-spacing:.01em;
+  padding:11px 10px 13px;
+  background:transparent;
+  border:none;
+  border-radius:calc(var(--r3) - 6px);
+  color:var(--ink-2);
+  cursor:pointer;
+  white-space:nowrap;
+}
+nav button{
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie),
+             box-shadow var(--t2) var(--sortie);
+}
+nav button:hover{color:var(--ink);background:color-mix(in srgb, var(--ink) 6%, transparent);}
+nav button.active{
+  background:var(--surface);
+  color:var(--ink);
+  font-weight:700;
+  box-shadow:var(--ombre-1);
+}
+/* Chaque onglet apporte sa teinte, et l'onglet ouvert la donne à la page
+   entière : c'est `--teinte` que reprennent le filet des cartes et le
+   soulignement mobile. */
+
+.tab-count{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:var(--tx-1);
+  font-weight:500;
+  line-height:1;
+  padding:3px 7px;
+  margin-left:6px;
+  border-radius:999px;
+  background:color-mix(in srgb, var(--ink-2) 15%, transparent);
+  color:var(--ink-2);
+  vertical-align:1px;
+}
+nav button.active .tab-count{
+  background:color-mix(in srgb, var(--teinte) 18%, transparent);
+  color:var(--teinte);
+}
+.tab-count{transition:background-color var(--t2) var(--sortie), color var(--t2) var(--sortie);}
+
+/* Le soulignement qui glisse d'un onglet à l'autre.
+   Un seul élément, placé par `BC.ui.glisseOnglet()` en position et en largeur.
+   Six barres qu'on allume et qu'on éteint feraient clignoter ; une barre qui
+   se déplace fait suivre le regard, et dit d'où l'on vient. */
+.nav-glisse{
+  position:absolute;
+  /* `left:0` et `top:0` ne sont pas décoratifs : sans eux, un élément absolu
+     garde sa position statique — c'est-à-dire, dans une barre en flex, après le
+     dernier bouton. La barre partirait du coin opposé et tout le calcul serait
+     faux.
+
+     Le placement se fait en deux axes, et le second n'est pas un luxe : sous
+     720 px la barre des six onglets passe sur trois lignes. Ancrée en bas, la
+     barre restait sous la dernière ligne pendant que l'onglet ouvert était sur
+     la deuxième. */
+  left:0;
+  top:0;
+  height:3px;
+  border-radius:3px;
+  background:var(--accent);
+  pointer-events:none;
+  opacity:0;
+  transition:transform var(--t2) var(--sortie), width var(--t2) var(--sortie),
+             opacity var(--t1) var(--sortie), background-color var(--t2) var(--sortie);
+}
+.nav-glisse.pret{opacity:1;}
+
+.panel{display:none;}
+.panel.active{display:block;animation:panelIn var(--t3) var(--sortie);}
+@keyframes panelIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+
+/* Les cartes d'un onglet entrent l'une après l'autre, au ressort : le regard
+   suit la page au lieu de la recevoir d'un bloc. La cascade s'arrête à la
+   quatrième — au-delà, l'attente devient plus longue que le service rendu. */
+.panel.active > .card,
+.reglages-groupe > .card{animation:cardIn var(--t3) var(--entree) backwards;}
+.panel.active > .card:nth-child(2){animation-delay:60ms;}
+.panel.active > .card:nth-child(3){animation-delay:120ms;}
+.panel.active > .card:nth-child(4){animation-delay:180ms;}
+@keyframes cardIn{
+  from{opacity:0;transform:translateY(18px) scale(.985);}
+  to{opacity:1;transform:none;}
+}
+
+/* Lignes de tableau et résultats : même arrivée, très courte, et surtout
+   plafonnée. Au-delà de la quatrième, tout arrive ensemble — une liste de
+   dix mille courriers ne peut pas se permettre dix mille animations
+   décalées. */
+tbody tr{animation:rowIn var(--t2) var(--sortie) backwards;}
+tbody tr:nth-child(1){animation-delay:20ms;}
+tbody tr:nth-child(2){animation-delay:40ms;}
+tbody tr:nth-child(3){animation-delay:60ms;}
+tbody tr:nth-child(4){animation-delay:80ms;}
+tbody tr:nth-child(n+5){animation-delay:100ms;}
+@keyframes rowIn{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
+
+/* Le survol d'une ligne.
+   En couleur de fond et en filet interne — jamais en `box-shadow` extérieure
+   ni en `transform`, qui obligeraient le navigateur à recomposer la table
+   entière. Le rendu de dix mille courriers était descendu de 1 478 ms à 37 ms ;
+   ce n'est pas un survol qui va le rendre. */
+tbody tr{transition:background-color var(--t1) var(--sortie);}
+tbody tr:hover{background:color-mix(in srgb, var(--teinte) 8%, transparent);}
+tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--teinte);}
+
+.result-row{
+  animation:rowIn var(--t2) var(--sortie) backwards;
+  transition:transform var(--t1) var(--sortie), border-color var(--t1) var(--sortie),
+             box-shadow var(--t2) var(--sortie);
+}
+.result-row:hover{
+  transform:translateY(-2px);
+  border-color:color-mix(in srgb, var(--a1) 35%, transparent);
+  box-shadow:var(--ombre-2);
+}
+.suggestions{animation:sugIn var(--t1) var(--sortie);}
+@keyframes sugIn{from{opacity:0;transform:translateY(-8px) scale(.99);}to{opacity:1;transform:none;}}
+.msg, .fiche-retrait{animation:msgIn var(--t2) var(--sortie);}
+@keyframes msgIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+.palette-boite{animation:paletteIn var(--t2) var(--entree);}
+@keyframes paletteIn{from{opacity:0;transform:translateY(-16px) scale(.97);}to{opacity:1;transform:none;}}
+.toast{animation:toastIn var(--t3) var(--entree);}
+@keyframes toastIn{from{opacity:0;transform:translateX(24px) scale(.96);}to{opacity:1;transform:none;}}
+
+/* Les cartes se soulèvent au passage. Elles sont peu nombreuses par écran :
+   l'ombre animée y est sans conséquence, contrairement aux lignes. */
+.card{transition:box-shadow var(--t2) var(--sortie);}
+.card:hover{box-shadow:var(--ombre-3);}
+
+/* ---------- cartes ---------- */
+.card{
+  position:relative;
+  background:var(--surface);
+  box-shadow:var(--ombre-2);
+  border:1px solid var(--line);
+  border-radius:var(--r2);
+  padding:26px 28px;
+  margin-bottom:22px;
+  overflow:hidden;
+}
+/* Un filet de la couleur de l'onglet, en haut de chaque carte. Il ne se voit
+   pas vraiment ; il se remarque quand on change d'écran, et c'est tout ce
+   qu'on lui demande. */
+.card::before{
+  content:'';
+  position:absolute;
+  inset:0 0 auto 0;
+  /* Un filet fin, pas un bandeau. Il était de trois pixels pleins et portait
+     une teinte différente par onglet ; à trois cartes empilées, l'écran
+     comptait trois barres de couleur avant la première ligne de texte. Le
+     document demande des bordures fines (§47), et une carte n'a pas besoin
+     d'être annoncée pour se voir. */
+  height:2px;
+  background:var(--accent);
+  opacity:.55;
+}
+/* Une carte qui signale un risque, pas un réglage. Le filet à gauche la
+   distingue au premier coup d'œil dans une colonne de cartes identiques —
+   sans clignoter ni réclamer un clic pour disparaître : elle doit rester là
+   tant que la cause est là. Les deux teintes existent en clair et en sombre. */
+.alerte-securite{
+  border-color:color-mix(in srgb, var(--danger) 45%, transparent);
+  background:var(--danger-wash);
+  box-shadow:var(--ombre-2), inset 4px 0 0 var(--danger);
+}
+.alerte-securite::before{background:var(--danger);opacity:1;}
+.alerte-securite h2{color:var(--danger);}
+.alerte-securite code{
+  font-family:var(--mono);
+  font-weight:600;
+  white-space:nowrap;
+}
+
+/* La liste des variables d'un gabarit : deux colonnes quand la place le
+   permet, pour qu'elle se parcoure d'un coup d'oeil plutôt qu'en déroulant. */
+.variables-gabarit{
+  list-style:none;
+  margin:0 0 14px;
+  padding:0;
+  columns:2;
+  column-gap:28px;
+}
+.variables-gabarit li{margin:0 0 3px;break-inside:avoid;}
+.variables-gabarit code{font-weight:600;}
+@media (max-width:640px){ .variables-gabarit{columns:1;} }
+
+/* Planche d'étiquettes à coller sur les casiers.
+
+   Les dimensions sont en millimètres, pas en pixels : une étiquette doit
+   sortir à la taille de la planche autocollante qu'on a achetée, quelle que
+   soit l'imprimante. 63,5 × 38,1 mm sur trois colonnes est le format le plus
+   répandu (21 par feuille A4). Sur du papier ordinaire, les traits de coupe
+   guident les ciseaux. */
+.planche-etiquettes{
+  display:grid;
+  grid-template-columns:repeat(3, 63.5mm);
+  gap:0;
+  justify-content:center;
+}
+.etiquette{
+  width:63.5mm;
+  height:38.1mm;
+  padding:3mm;
+  border:1px dashed #bbb;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1.5mm;
+  text-align:center;
+  overflow:hidden;
+  page-break-inside:avoid;
+  break-inside:avoid;
+}
+.etq-boite{
+  font-family:var(--print-display);
+  font-size:22pt;
+  font-weight:700;
+  line-height:1;
+  color:#000;
+}
+.etq-nom{
+  font-family:var(--print-serif);
+  font-size:10pt;
+  line-height:1.2;
+  color:#000;
+  /* Un nom trop long ne doit pas pousser le reste hors de l'étiquette. */
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.etq-code{line-height:0;}
+.etq-code .codebarres{padding-top:0;padding-bottom:0;}
+
+/* Code à barres (Code 39) — des traits, pas une image.
+   Une image tramée devient illisible au lecteur dès que l'impression pâlit ;
+   des éléments sortent nets à n'importe quelle résolution. Toujours noir sur
+   blanc, y compris en thème sombre : c'est un objet destiné au papier. */
+.codebarres{
+  display:inline-flex;
+  align-items:flex-end;
+  flex-wrap:wrap;
+  background:#fff;
+  /* Le remplissage latéral vient du module : c'est la zone de silence, et elle
+     dépend de la largeur des barres. Ici, seulement le haut et le bas. */
+  padding-top:6px;
+  padding-bottom:2px;
+  line-height:0;
+}
+.cb-el{display:inline-block;background:transparent;}
+.cb-barre{background:#000;}
+.cb-legende{
+  flex-basis:100%;
+  text-align:center;
+  font-family:var(--print-mono);
+  font-size:11px;
+  letter-spacing:2px;
+  color:#000;
+  line-height:1.6;
+}
+.attest-code{margin:26px 0 10px;text-align:center;}
+
+/* Les titres de carte ne crient plus en capitales espacées. Ce sont des titres
+   lus des dizaines de fois par jour : la graisse suffit à les distinguer, et
+   le bas-de-casse se lit plus vite. */
+.card h2{
+  font-family:var(--display);
+  font-size:var(--tx-4);
+  font-weight:700;
+  letter-spacing:-.01em;
+  margin:0 0 20px;
+  color:var(--ink);
+}
+.card-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:16px;
+  flex-wrap:wrap;
+}
+.card-head h2{margin-bottom:14px;}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+
+/* ---------- formulaires ---------- */
+label{
+  display:block;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  letter-spacing:0;
+  text-transform:none;
+  color:var(--ink-2);
+  margin-bottom:7px;
+}
+input[type=text], input[type=email], input[type=date], input[type=password], textarea, select{
+  width:100%;
+  font-family:var(--sans);
+  font-size:var(--tx-3);
+  padding:11px 14px;
+  border:1px solid var(--bord);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  color:var(--ink);
+  margin-bottom:16px;
+  transition:border-color var(--t1) var(--sortie), background-color var(--t1) var(--sortie), box-shadow var(--t1) var(--sortie);
+}
+input::placeholder, textarea::placeholder{color:var(--ink-2);opacity:.7;}
+textarea{font-family:var(--mono);font-size:var(--tx-2);line-height:1.65;resize:vertical;}
+/* Un champ qu'on remplit s'éclaire : il passe de creux à clair, avec un halo
+   d'accent. C'est le seul retour visuel que reçoit quelqu'un qui saisit
+   quarante fiches dans la journée. */
+input:focus, textarea:focus, select:focus{
+  outline:none;
+  border-color:var(--a1);
+  background:var(--surface);
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--a1) 16%, transparent);
+}
+input.invalid{border-color:var(--danger);background:var(--danger-wash);}
+input.invalid:focus{box-shadow:0 0 0 4px color-mix(in srgb, var(--danger) 18%, transparent);}
+.filter-input{
+  width:auto;
+  font-size:var(--tx-2);
+  padding:8px 12px;
+  margin-bottom:0;
+  background:var(--surface);
+}
+.hint{font-size:var(--tx-2);color:var(--ink-2);margin:0;}
+.hint code{
+  font-family:var(--mono);
+  font-size:var(--tx-1);
+  background:var(--surface-2);
+  padding:2px 6px;
+  border-radius:5px;
+  border:1px solid var(--line);
+}
+
+/* ---------- boutons ---------- */
+.btn{
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  font-weight:700;
+  letter-spacing:0;
+  text-transform:none;
+  padding:11px 20px;
+  border:1px solid transparent;
+  border-radius:var(--r1);
+  background:var(--accent);
+  color:#fff;
+  cursor:pointer;
+  white-space:nowrap;
+  box-shadow:var(--ombre-1);
+  transition:transform var(--t1) var(--sortie), box-shadow var(--t2) var(--sortie),
+             filter var(--t1) var(--sortie), background-color var(--t1) var(--sortie),
+             color var(--t1) var(--sortie), border-color var(--t1) var(--sortie);
+}
+.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:var(--ombre-accent);filter:saturate(1.1);}
+.btn:active:not(:disabled){transform:translateY(1px);box-shadow:var(--ombre-1);}
+.btn.ghost{
+  background:var(--surface);
+  color:var(--ink);
+  border-color:var(--bord);
+  box-shadow:none;
+}
+.btn.ghost:hover:not(:disabled){
+  background:var(--surface-2);
+  border-color:var(--a1);
+  color:var(--accent-texte);
+  box-shadow:var(--ombre-1);
+}
+.btn.rust{background:var(--danger);border-color:transparent;color:#fff;}
+.btn.rust:hover:not(:disabled){box-shadow:0 6px 20px rgba(190,18,60,.3);}
+.btn.small{font-size:var(--tx-1);padding:8px 13px;border-radius:7px;}
+.btn.ghost.danger{color:var(--danger);border-color:color-mix(in srgb, var(--danger) 55%, transparent);}
+.btn.ghost.danger:hover:not(:disabled){background:var(--danger-wash);color:var(--danger);border-color:var(--danger);}
+.btn:disabled{opacity:0.45;cursor:not-allowed;box-shadow:none;}
+.row-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.row-actions.end{justify-content:flex-end;}
+
+/* ---------- guichet ---------- */
+/* Même vocabulaire que la navigation : une gouttière, des pastilles, celle qui
+   est choisie remonte. Rien de nouveau à apprendre d'un écran à l'autre. */
+.search-modes{
+  display:flex;
+  gap:4px;
+  margin-bottom:18px;
+  max-width:380px;
+  padding:4px;
+  border-radius:var(--r2);
+  background:var(--surface-2);
+  border:1px solid var(--line);
+}
+.search-modes button{
+  flex:1;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  padding:9px 12px;
+  background:transparent;
+  border:none;
+  border-radius:calc(var(--r2) - 5px);
+  color:var(--ink-2);
+  cursor:pointer;
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie), box-shadow var(--t1) var(--sortie);
+}
+.search-modes button:hover{color:var(--ink);}
+.search-modes button.active{
+  background:var(--surface);
+  color:var(--ink);
+  font-weight:700;
+  box-shadow:var(--ombre-1);
+}
+
+/* Numéro de boîte : une étiquette compacte, lisible d'un coup d'œil. */
+.box-tag{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:var(--tx-1);
+  font-style:normal;
+  font-weight:600;
+  letter-spacing:.04em;
+  padding:3px 9px;
+  margin-right:7px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--accent-texte) 35%, transparent);
+  background:color-mix(in srgb, var(--accent-texte) 10%, transparent);
+  color:var(--accent-texte);
+  vertical-align:1px;
+}
+td.box-cell{font-family:var(--mono);font-size:var(--tx-2);color:var(--ink-2);white-space:nowrap;}
+
+.search-field{position:relative;}
+.suggestions{
+  position:absolute;
+  top:calc(100% - 12px);
+  left:0;right:0;
+  margin:0;padding:0;
+  list-style:none;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r2);
+  z-index:20;
+  max-height:260px;
+  overflow:hidden auto;
+  box-shadow:var(--ombre-3);
+  padding:5px;
+}
+.suggestions li{
+  padding:10px 12px;
+  border-radius:var(--r1);
+  cursor:pointer;
+  font-size:var(--tx-3);
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie);
+}
+.suggestions li:hover, .suggestions li.highlight{
+  background:color-mix(in srgb, var(--a1) 12%, transparent);
+  color:var(--accent-texte);
+}
+.suggestions li span{
+  display:block;
+  font-family:var(--mono);
+  font-size:var(--tx-1);
+  color:var(--ink-2);
+  margin-top:3px;
+}
+.result-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:14px 16px;
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+  margin-bottom:10px;
+  background:var(--surface-2);
+}
+.result-row .who{font-size:var(--tx-3);font-weight:600;}
+.result-row .who span{display:block;font-family:var(--mono);font-size:var(--tx-2);font-weight:400;color:var(--ink-2);margin-top:3px;}
+
+/* ---------- écran de connexion ---------- */
+/* display:flex l'emporterait sur le display:none implicite de [hidden] :
+   sans cette règle, l'écran de connexion resterait au-dessus de l'application. */
+.gate[hidden]{display:none;}
+.gate{
+  position:fixed;
+  inset:0;
+  background:var(--bg);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  z-index:80;
+  overflow-y:auto;
+}
+.gate-card{
+  position:relative;
+  background:var(--surface);
+  box-shadow:var(--ombre-3);
+  border:1px solid var(--line);
+  border-radius:var(--r3);
+  padding:32px;
+  width:100%;
+  max-width:440px;
+}
+.gate-head{display:flex;align-items:center;gap:16px;margin-bottom:24px;}
+.gate-head h1{font-family:var(--display);font-size:var(--tx-5);font-weight:800;letter-spacing:-.02em;margin:0 0 4px;}
+.gate-head p{margin:0;color:var(--ink-2);font-size:var(--tx-2);}
+.gate-head .brand-logo{width:48px;height:48px;}
+/* Même piège que .gate : display:flex l'emporterait sur [hidden]. */
+.gate-tabs[hidden]{display:none;}
+.gate-tabs{
+  display:flex;
+  gap:4px;
+  margin-bottom:22px;
+  padding:4px;
+  border-radius:var(--r2);
+  background:var(--surface-2);
+  border:1px solid var(--line);
+}
+.gate-tabs button{
+  flex:1;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  padding:10px 8px;
+  background:transparent;
+  border:none;
+  border-radius:calc(var(--r2) - 5px);
+  color:var(--ink-2);
+  cursor:pointer;
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie), box-shadow var(--t1) var(--sortie);
+}
+.gate-tabs button:hover{color:var(--ink);}
+.gate-tabs button.active{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:var(--ombre-1);}
+.gate-form .btn{width:100%;margin-top:4px;}
+.gate-form .hint{margin:-8px 0 14px;}
+/* La marge négative ci-dessus sert à rapprocher l'aide d'un champ ; sous un
+   résumé dépliant, elle ferait chevaucher les deux lignes. */
+.gate-form details .hint{margin:10px 0 14px;}
+.gate-form details summary{
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  font-weight:600;
+  cursor:pointer;
+  margin-bottom:4px;
+}
+.verify-lead{font-size:var(--tx-3);line-height:1.6;margin:0 0 18px;color:var(--ink-2);}
+.verify-lead strong{color:var(--ink);}
+/* Un code qu'on dicte au téléphone ou qu'on recopie d'un papier : chiffres
+   détachés, grande taille, rien qui puisse se confondre. */
+.code-input{
+  font-family:var(--mono);
+  font-size:26px;
+  font-weight:600;
+  letter-spacing:10px;
+  text-align:center;
+  padding:14px 12px;
+}
+.who-badge{
+  font-family:var(--mono);
+  font-size:var(--tx-1);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+}
+
+/* ---------- choix du registre ---------- */
+.registry-choice{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
+.registry-choice .choice{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  border:1px solid var(--line);
+  background:var(--surface);
+  padding:14px 16px;
+  cursor:pointer;
+  text-transform:none;
+  letter-spacing:0;
+  font-family:var(--sans);
+  font-size:14px;
+  color:var(--ink);
+  margin-bottom:0;
+  transition:border-color 0.15s ease, background-color 0.15s ease;
+}
+.registry-choice .choice:hover{border-color:var(--accent-texte);}
+.registry-choice input{margin-top:3px;accent-color:var(--ink);flex:0 0 auto;}
+.registry-choice b{
+  display:block;
+  font-family:var(--display);
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  margin-bottom:4px;
+}
+.registry-choice span{line-height:1.5;}
+.registry-choice .choice:has(input:checked){
+  border-color:var(--a1);
+  background:color-mix(in srgb, var(--a1) 8%, var(--surface));
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--a1) 14%, transparent);
+}
+
+/* ---------- boîte d'envoi personnelle ---------- */
+.mailbox-option{
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+  padding:18px;
+  margin-bottom:14px;
+  background:var(--surface-2);
+}
+.mailbox-option h3{
+  font-family:var(--display);
+  font-size:var(--tx-3);
+  font-weight:700;
+  margin:0 0 8px;
+}
+.mailbox-option p{margin:0 0 12px;font-size:var(--tx-2);line-height:1.6;color:var(--ink-2);}
+.mailbox-option summary{
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  font-weight:600;
+  cursor:pointer;
+  margin-bottom:10px;
+}
+
+/* ---------- copies (Cc / Cci) ---------- */
+.copies{
+  margin-top:18px;
+  border-top:1px solid var(--line);
+  padding-top:14px;
+}
+.copies summary{
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
+  cursor:pointer;
+  list-style:none;
+  transition:color var(--t1) var(--sortie);
+}
+.copies summary::-webkit-details-marker{display:none;}
+.copies summary::before{content:'▸ ';display:inline-block;transition:transform var(--t1) var(--sortie);}
+.copies[open] summary::before{transform:rotate(90deg);}
+.copies summary:hover{color:var(--accent-texte);}
+.copies-state{
+  font-size:var(--tx-1);
+  color:var(--accent-texte);
+  font-weight:600;
+}
+.copies-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;}
+@media (max-width:720px){
+  .copies-grid{grid-template-columns:1fr;gap:0;}
+}
+
+/* ---------- messages ---------- */
+.empty{
+  text-align:center;
+  padding:36px 14px;
+  color:var(--ink-2);
+  font-size:var(--tx-3);
+}
+/* Trois couleurs, trois sens, et le fond les dit autant que le filet : un
+   message d'erreur ne doit pas se distinguer d'un message de succès par un
+   trait de quatre pixels sur le côté. */
+.msg{
+  padding:13px 16px;
+  border-radius:var(--r1);
+  border:1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-left:4px solid var(--warn);
+  background:var(--warn-wash);
+  color:var(--ink);
+  margin-bottom:16px;
+  font-size:var(--tx-2);
+  line-height:1.6;
+}
+.msg:last-child{margin-bottom:0;}
+.msg.error{
+  border-color:color-mix(in srgb, var(--danger) 32%, transparent);
+  border-left-color:var(--danger);
+  background:var(--danger-wash);
+}
+.msg.ok{
+  border-color:color-mix(in srgb, var(--ok) 32%, transparent);
+  border-left-color:var(--ok);
+  background:var(--ok-wash);
+}
+.msg ul{margin:8px 0 0;padding-left:20px;}
+.msg a{color:var(--accent-texte);font-weight:600;}
+
+/* ---------- calendrier des échéances ---------- */
+/* Une grille de sept colonnes, du lundi au dimanche. Les jours vides gardent
+   leur place : ce sont les creux qui servent, quand il faut déplacer un
+   rendez-vous. */
+.cal{margin-top:12px;overflow-x:auto;}
+.cal-entete, .cal-semaine{
+  display:grid;
+  grid-template-columns:repeat(7, minmax(0, 1fr));
+  gap:4px;
+  min-width:560px;
+}
+.cal-entete{margin-bottom:4px;}
+.cal-jour-nom{
+  font-size:var(--tx-1);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+  padding:2px 6px;
+}
+.cal-jour-nom abbr{text-decoration:none;border:0;}
+.cal-semaine{margin-bottom:4px;}
+.cal-case{
+  min-height:74px;
+  padding:6px 8px;
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+  background:var(--surface);
+  font-size:var(--tx-1);
+}
+/* Les jours des mois voisins restent lisibles mais s'effacent : ils sont là
+   pour ne pas trouer la grille, pas pour être consultés. */
+.cal-hors{background:var(--surface-2);opacity:.5;}
+.cal-numero{font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums;}
+.cal-aujourdhui{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
+.cal-aujourdhui .cal-numero{color:var(--accent-texte);}
+/* Le nombre est écrit dans la case, à côté de sa couleur : une journée chargée
+   et une journée dépassée ne se distinguent pas par la teinte pour tout le
+   monde, et la différence est celle entre « à étaler » et « en retard ». */
+.cal-compte{
+  font-size:var(--tx-1);
+  font-weight:600;
+  color:var(--ink-2);
+  margin:2px 0 3px;
+}
+.cal-remplie{background:var(--info-wash);border-color:color-mix(in srgb, var(--info) 30%, transparent);}
+.cal-charge{background:var(--warn-wash);border-color:color-mix(in srgb, var(--warn) 40%, transparent);}
+.cal-charge .cal-compte{color:var(--warn);}
+.cal-expiree{background:var(--danger-wash);border-color:color-mix(in srgb, var(--danger) 40%, transparent);}
+.cal-expiree .cal-compte{color:var(--danger);}
+.cal-noms{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;}
+.cal-noms .link-btn{padding:0;font-size:var(--tx-1);text-align:left;}
+.cal-reste{color:var(--ink-2);font-style:italic;}
+
+/* ---------- le relevé de journée ---------- */
+/* Les chiffres de la journée, en cases. Ils répondent à « est-ce qu'on a bien
+   tout saisi ? », qui est la question qu'on se pose en fermant — d'où des
+   nombres lisibles de loin, et le mot dessous plutôt qu'à côté. */
+.journee-compte{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(110px, 1fr));
+  gap:10px;
+  margin:14px 0 18px;
+}
+.journee-case{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+}
+.journee-n{
+  font-size:var(--tx-5);
+  font-weight:700;
+  line-height:1.1;
+  font-variant-numeric:tabular-nums;
+  color:var(--ink);
+}
+.journee-mot{font-size:var(--tx-2);color:var(--ink-2);}
+.journee-titre{
+  font-size:var(--tx-3);
+  margin:18px 0 8px;
+  color:var(--ink-2);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+}
+.journee-echeances{margin:0;padding-left:20px;font-size:var(--tx-3);}
+.journee-echeances li{margin-bottom:4px;}
+
+/* ---------- diagnostic ---------- */
+/* Chaque ligne porte son mot d'état — « à traiter », « à surveiller », « non
+   vérifié », « en ordre ». La couleur ne le dit pas seule : entre « grave » et
+   « attention » il y a la différence entre agir maintenant et y penser cette
+   semaine, et deux teintes voisines ne la portent pas. */
+.diag-ligne{
+  display:grid;
+  grid-template-columns:minmax(160px, 220px) 1fr;
+  gap:4px 16px;
+  padding:10px 0;
+  border-top:1px solid var(--line);
+}
+.diag-ligne:first-child{border-top:0;}
+.diag-ligne dt{font-weight:600;color:var(--ink);}
+/* `.status-list dd` aligne à droite — c'est juste pour un couple « nom :
+   valeur » court, et illisible pour deux phrases. Ici le texte se lit, il ne
+   se compare pas. */
+.diag-ligne dd{
+  margin:0;
+  color:var(--ink-2);
+  font-size:var(--tx-2);
+  line-height:1.6;
+  text-align:left;
+  font-weight:400;
+}
+.diag-mot{
+  display:inline-block;
+  padding:1px 8px;
+  border-radius:999px;
+  font-size:var(--tx-1);
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  background:var(--surface-2);
+  color:var(--ink-2);
+}
+.diag-grave .diag-mot{background:var(--danger-wash);color:var(--danger);}
+.diag-attention .diag-mot{background:var(--warn-wash);color:var(--warn);}
+.diag-bon .diag-mot{background:var(--ok-wash);color:var(--ok);}
+/* La consigne se détache du constat : l'un se lit, l'autre se fait. */
+.diag-faire{color:var(--ink);font-weight:500;}
+@media (max-width: 560px){
+  .diag-ligne{grid-template-columns:1fr;}
+}
+
+/* ---------- le colis ---------- */
+/* Ces champs n'existent que pour un colis, et ils sont nombreux. Une grille
+   qui s'adapte plutôt qu'une colonne : sept champs empilés repousseraient le
+   bouton « Valider » hors de l'écran, et c'est lui qu'on vient chercher. */
+.colis-champs{
+  margin:12px 0 4px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:var(--r2);
+  background:var(--surface-2);
+}
+.colis-grille{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+  gap:10px 12px;
+}
+.colis-grille label{margin-bottom:2px;}
+/* Le transporteur sur deux colonnes : « La Poste — Colissimo » ne tient pas
+   dans 150 px, et un nom tronqué dans un menu déroulant ne se lit qu'en
+   l'ouvrant. Les cotes, elles, sont des nombres à deux chiffres. */
+.colis-grille > :first-child{grid-column:span 2;}
+@media (max-width: 520px){
+  .colis-grille > :first-child{grid-column:auto;}
+}
+/* L'emplacement se détache : c'est le seul champ dont l'absence rend le colis
+   introuvable, et il n'apparaît que quand il compte vraiment. */
+#colisEmplacementBloc{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+
+/* ---------- le relevé du jour ---------- */
+/* Une bande, pas une page. Elle passe au-dessus du champ de saisie du Guichet
+   et ne doit pas le repousser : d'où une seule ligne de puces qui s'enroule, et
+   aucun cadre lourd. Un bureau dont la journée est calme doit voir quelque
+   chose de calme — c'est ce que règle `[data-calme="oui"]`. */
+.bord{
+  margin:0 0 16px;
+  padding:12px 16px;
+  border:1px solid var(--line);
+  border-radius:var(--r2);
+  background:var(--surface);
+}
+.bord-phrase{
+  margin:0;
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink);
+}
+/* Journée calme : la phrase se retire au second plan. Elle reste lisible —
+   c'est une information, pas une décoration — mais elle cesse d'attirer l'œil
+   là où il n'y a rien à faire. */
+.bord[data-calme="oui"] .bord-phrase{font-weight:500;color:var(--ink-2);}
+.bord-alertes{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+.bord-alertes:empty{display:none;}
+/* Le chiffre et le mot dans le même bouton : c'est la paire entière qui est
+   cliquable. Viser une pastille de douze pixels debout, au guichet, ne marche
+   pas — d'où la hauteur de 36 px, qui reste dans la cible tactile. */
+.bord-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:36px;
+  padding:4px 12px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--surface-2);
+  color:var(--ink);
+  font:inherit;
+  font-size:var(--tx-3);
+  cursor:pointer;
+  transition:background var(--t1) var(--sortie), border-color var(--t1) var(--sortie);
+}
+.bord-chip:hover{background:var(--surface);border-color:var(--bord);}
+.bord-n{font-weight:700;font-variant-numeric:tabular-nums;}
+/* Le mot est toujours là, à côté du chiffre : la couleur ne porte jamais seule
+   l'information (§33, §54). Entre « expirée » et « à renouveler » il y a la
+   différence entre un droit perdu et un rendez-vous à prendre, et deux teintes
+   voisines ne la disent pas à tout le monde. */
+.bord-mot{color:var(--ink-2);}
+.bord-danger{border-color:color-mix(in srgb, var(--danger) 40%, transparent);background:var(--danger-wash);}
+.bord-danger .bord-n{color:var(--danger);}
+.bord-warn{border-color:color-mix(in srgb, var(--warn) 40%, transparent);background:var(--warn-wash);}
+.bord-warn .bord-n{color:var(--warn);}
+.bord-info{border-color:var(--line);background:var(--surface-2);}
+
+/* Sur un écran étroit, chaque puce qui passe à la ligne repousse d'autant le
+   champ de saisie du Guichet — et c'est lui qu'on vient chercher. Les puces se
+   resserrent pour que deux tiennent sur une ligne, sans jamais descendre sous
+   la taille lisible ni sous la cible tactile de 36 px. */
+@media (max-width: 520px){
+  .bord{padding:10px 12px;}
+  .bord-alertes{gap:6px;}
+  /* --tx-2, « texte second » : le cran juste en dessous du texte courant.
+     C'est le dernier avant les étiquettes, et une puce n'est pas une étiquette
+     — elle se lit, et elle se clique. */
+  .bord-chip{padding:4px 10px;gap:6px;font-size:var(--tx-2);}
+}
+
+/* ---------- fiches qui se ressemblent ---------- */
+/* L'avertissement de doublon : il prévient, il ne bloque pas. Le ton est celui
+   d'une remarque — encadré comme un message, pas comme une erreur — parce
+   qu'un homonyme réel est banal dans un foyer et que refuser serait pire. */
+.doublons{margin-bottom:16px;}
+.doublons .msg{margin-bottom:8px;}
+.doublons-liste{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.doublons-liste li{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:8px;
+  font-size:var(--tx-2);
+  padding:6px 10px;
+  border-radius:var(--r1);
+  background:var(--surface-2);
+}
+/* Le motif du rapprochement est écrit, pas seulement suggéré par une couleur :
+   « même courriel » et « nom très proche » n'appellent pas la même prudence. */
+.doublons-liste .doublon-sur{
+  color:var(--ink-2);
+  font-size:var(--tx-3);
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+/* ---------- tableaux ---------- */
+.table-scroll{
+  overflow:auto;
+  max-height:62vh;
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+}
+table{width:100%;border-collapse:collapse;font-size:var(--tx-2);}
+th{
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+  text-align:left;
+  padding:10px;
+  border-bottom:1px solid var(--line);
+  white-space:nowrap;
+  position:sticky;
+  top:0;
+  background:var(--surface-2);
+  z-index:1;
+}
+td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+td.actions{text-align:right;white-space:nowrap;}
+td.copies-cell{
+  font-family:var(--mono);
+  font-size:var(--tx-1);
+  color:var(--ink-2);
+  max-width:220px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+td input{margin-bottom:0;font-size:var(--tx-2);padding:7px 10px;}
+/* Les actions de ligne : discrètes tant qu'on ne les vise pas, franches
+   ensuite. Pas de soulignement permanent — sur huit colonnes de liens
+   soulignés, la ligne devient illisible. */
+.link-btn{
+  background:none;
+  border:1px solid transparent;
+  border-radius:6px;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
+  cursor:pointer;
+  text-decoration:none;
+  padding:4px 8px;
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie);
+}
+.link-btn:hover{color:var(--accent-texte);background:color-mix(in srgb, var(--a1) 12%, transparent);}
+.link-btn.danger{color:var(--danger);}
+.link-btn.danger:hover{color:var(--danger);background:var(--danger-wash);}
+.add-form{display:grid;grid-template-columns:1fr 1fr auto;gap:14px;align-items:end;}
+.add-form label{margin-bottom:7px;}
+.add-form .btn{height:46px;margin-bottom:16px;}
+
+.status-pill{
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+  background:var(--ok-wash);
+  color:var(--ok);
+  white-space:nowrap;
+}
+.status-pill.manual{border-color:var(--accent-texte);color:var(--accent-texte);}
+.status-pill.failed{border-color:var(--danger);color:var(--danger);}
+
+/* ---------- réglages ---------- */
+.preview{
+  white-space:pre-wrap;
+  font-family:var(--mono);
+  font-size:12.5px;
+  line-height:1.6;
+  background:var(--surface-2);
+  border:1px solid var(--line);
+  padding:12px;
+  margin:0;
+}
+.status-list{margin:0 0 16px;font-size:var(--tx-2);}
+.status-list div{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  padding:11px 0;
+  border-bottom:1px solid var(--line);
+}
+.status-list div:last-child{border-bottom:none;}
+.status-list dt{
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  text-transform:none;
+  color:var(--ink-2);
+  letter-spacing:0;
+}
+.status-list dd{margin:0;text-align:right;font-weight:600;}
+
+/* ---------- tampon ----------
+   Le seul moment franchement joyeux de la journée : le courrier est parti.
+   Il garde sa forme de cachet — c'est un geste de bureau, et il est compris
+   sans légende — mais il prend la couleur de l'accent et un vrai rebond. */
+.stamp-overlay{
+  position:fixed;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--voile);
+  backdrop-filter:blur(3px);
+  z-index:50;
+  opacity:0;pointer-events:none;
+  transition:opacity var(--t2) var(--sortie);
+}
+.stamp-overlay.show{opacity:1;}
+.stamp{
+  width:200px;height:200px;
+  border:6px solid var(--accent-2);
+  border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:var(--accent-2);
+  font-family:var(--display);
+  font-size:21px;
+  font-weight:800;
+  letter-spacing:.02em;
+  text-transform:uppercase;
+  text-align:center;
+  padding:14px;
+  background:var(--stamp-bg);
+  transform:scale(2.2) rotate(-18deg);
+  opacity:0;
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--accent-2) 18%, transparent) inset,
+             0 18px 50px rgba(0,0,0,.28);
+}
+.stamp-overlay.show .stamp{animation:stampDown 520ms var(--entree) forwards;}
+@keyframes stampDown{
+  0%{transform:scale(2.3) rotate(-22deg);opacity:0;}
+  55%{transform:scale(0.88) rotate(-12deg);opacity:1;}
+  75%{transform:scale(1.04) rotate(-11deg);opacity:1;}
+  100%{transform:scale(1) rotate(-12deg);opacity:1;}
+}
+.stamp small{
+  display:block;
+  font-size:var(--tx-1);
+  font-weight:500;
+  margin-top:7px;
+  font-family:var(--mono);
+  letter-spacing:0;
+  line-height:1.45;
+  text-transform:none;
+  color:var(--ink-2);
+}
+
+/* ---------- notifications éphémères ---------- */
+.toasts{
+  position:fixed;
+  right:22px;bottom:22px;
+  display:flex;flex-direction:column;gap:10px;
+  z-index:60;
+  max-width:360px;
+}
+.toast{
+  background:var(--ink);
+  color:var(--bg);
+  border-radius:var(--r1);
+  border-left:4px solid var(--a1);
+  padding:13px 16px;
+  font-size:var(--tx-2);
+  font-weight:500;
+  box-shadow:var(--ombre-3);
+}
+.toast.ok{border-left-color:var(--ok-vif);}
+.toast.error{border-left-color:var(--danger-vif);}
+
+/* ---------- dialogue de confirmation ---------- */
+dialog{
+  border:1px solid var(--line);
+  border-radius:var(--r3);
+  background:var(--surface);
+  color:var(--ink);
+  padding:28px;
+  max-width:440px;
+  font-family:var(--sans);
+  box-shadow:var(--ombre-3);
+}
+dialog::backdrop{background:var(--voile);backdrop-filter:blur(3px);}
+dialog h3{
+  font-family:var(--display);
+  font-size:var(--tx-4);
+  font-weight:700;
+  text-transform:none;
+  letter-spacing:-.01em;
+  margin:0 0 12px;
+}
+dialog p{margin:0 0 22px;font-size:var(--tx-3);line-height:1.6;color:var(--ink-2);}
+
+footer.note{
+  margin-top:14px;
+  font-size:var(--tx-2);
+  color:var(--ink-2);
+  line-height:1.6;
+}
+
+/* ---------- petits écrans ---------- */
+@media (max-width:720px){
+  .wrap{padding:22px 14px 72px;}
+  header{flex-direction:column;align-items:flex-start;}
+  .header-right{align-items:flex-start;}
+  .header-badges{justify-content:flex-start;}
+  nav{flex-wrap:wrap;border-radius:var(--r2);}
+  nav button{flex:1 1 45%;border-radius:calc(var(--r2) - 5px);}
+  .add-form{grid-template-columns:1fr;}
+  .add-form .btn{width:100%;height:auto;}
+  .card{padding:20px 16px;}
+  .result-row{flex-direction:column;align-items:flex-start;}
+  .toasts{left:14px;right:14px;max-width:none;}
+  th, td{padding:10px 8px;}
+}
+
+/* ---------- mise à jour venue d'un autre poste ----------
+   Un écran qui change tout seul inquiète. Ces deux signes disent d'où ça
+   vient : une annonce brève en bas, et le compteur qui a bougé qui respire
+   une fois. Rien qui clignote, rien qui réclame un clic. */
+.maj-distante{
+  position:fixed;
+  left:22px;
+  bottom:22px;
+  z-index:60;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:9px 15px;
+  border-radius:999px;
+  background:var(--ink);
+  color:var(--bg);
+  font-family:var(--mono);
+  font-size:11.5px;
+  letter-spacing:.02em;
+  box-shadow:var(--ombre-2);
+  animation:majIn var(--t3) var(--entree) both;
+}
+.maj-distante.sortie{animation:majOut var(--t3) var(--sortie) both;}
+.maj-point{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--a1);
+  box-shadow:0 0 0 0 color-mix(in srgb, var(--a1) 60%, transparent);
+}
+@keyframes majIn{from{opacity:0;transform:translateY(16px) scale(.94);}to{opacity:1;transform:none;}}
+@keyframes majOut{to{opacity:0;transform:translateY(10px) scale(.98);}}
+
+/* Le compteur qui vient de changer : une respiration, pas un clignotement. */
+.tab-count.vient-de-changer{animation:compteurChange 1.1s var(--entree);}
+@keyframes compteurChange{
+  0%{transform:scale(1);}
+  22%{transform:scale(1.3);background:var(--accent);color:#fff;}
+  100%{transform:scale(1);}
+}
+
+@media (max-width:640px){
+  .maj-distante{left:14px;right:14px;bottom:14px;justify-content:center;}
+}
+
+/* Réglage système « réduire les animations ».
+   La règle universelle coupe tout ce qui bouge, y compris ce qui a été ajouté
+   depuis — c'est pour ça qu'elle est écrite en `*` plutôt qu'en liste. Restent
+   trois cas où l'immobilité ne suffit pas : un élément dont l'état de départ
+   est invisible resterait invisible pour toujours. */
+@media (prefers-reduced-motion:reduce){
+  *, *::before, *::after{
+    animation-duration:0.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:0.001ms !important;
+    scroll-behavior:auto !important;
+  }
+  /* Le tampon arrive posé, sans tomber. */
+  .stamp{transform:rotate(-12deg);opacity:1;}
+  /* Le filet d'en-tête garde sa couleur et cesse de la promener. */
+  header::after{animation:none;background-size:100% 100%;}
+  /* L'annonce reste lisible, elle cesse seulement de bouger : c'est une
+     information, pas une décoration — la supprimer priverait la personne du
+     seul indice qui explique pourquoi son écran a changé. */
+  .maj-point{animation:none;box-shadow:0 0 0 3px color-mix(in srgb, var(--a1) 40%, transparent);}
+  /* Le soulignement se pose sur le bon onglet sans le trajet. */
+  .nav-glisse{transition:none;}
+  /* Rien ne se soulève au survol : le déplacement est précisément ce dont on
+     ne veut pas ici. La couleur, elle, reste — c'est un repère, pas une
+     animation. */
+  .result-row:hover{transform:none;}
+  .btn:hover:not(:disabled), .btn:active:not(:disabled){transform:none;}
+}
+
+@media print{
+  nav, .toolbar, .row-actions, .btn, .link-btn, .toasts, .stamp-overlay, footer.note{display:none !important;}
+  .panel{display:block !important;}
+  body{background:#fff;}
+  .card{border-color:#999;box-shadow:none;page-break-inside:avoid;}
+  /* La lueur d'accent est une couche fixe : `background:#fff` sur le corps ne
+     l'atteint pas. Sans cette ligne elle sortait sur le papier — un voile
+     indigo derrière l'attestation, et de l'encre dépensée pour rien. */
+  body::before{display:none !important;}
+  /* Rien ne bouge sur du papier. */
+  *, *::before, *::after{animation:none !important;transition:none !important;}
+}
+
+/* Le même nettoyage pendant la préparation de la feuille, avant que le
+   navigateur ne bascule en média « print » : l'aperçu doit montrer la page qui
+   sortira, pas celle qu'on regardait. */
+body.impression-casier::before{display:none;}
+
+/* ---------- suivi des courriers ---------- */
+.attente-cell{
+  font-family:var(--mono);
+  font-size:12.5px;
+  color:var(--ink-2);
+  white-space:nowrap;
+}
+tbody tr.vieux .attente-cell{color:var(--danger);font-weight:600;}
+tbody tr.vieux td:first-child{box-shadow:inset 3px 0 0 var(--danger);}
+/* Les étiquettes de ligne — relance, absence, porteur, requis, urgent.
+   Elles partagent une forme et ne diffèrent que par la teinte, portée par
+   `--ton` : une seule règle à corriger plutôt que six copies. */
+.relance-tag, .absence-tag, .porteur-tag, .urgent-tag, .requis, .compte-pill{
+  display:inline-block;
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  padding:3px 9px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--ton) 40%, transparent);
+  background:color-mix(in srgb, var(--ton) 12%, transparent);
+  color:var(--ton);
+  margin-left:8px;
+  vertical-align:1px;
+  white-space:nowrap;
+}
+.relance-tag{--ton:var(--accent-texte);}
+
+/* ---------- pile de courrier ---------- */
+.pile{
+  margin-top:18px;
+  border-top:1px solid var(--line);
+  padding-top:14px;
+}
+.pile summary{
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
+  cursor:pointer;
+  list-style:none;
+  transition:color var(--t1) var(--sortie);
+}
+.pile summary::-webkit-details-marker{display:none;}
+.pile summary::before{content:'▸ ';display:inline-block;transition:transform var(--t1) var(--sortie);}
+.pile[open] summary::before{transform:rotate(90deg);}
+.pile summary:hover{color:var(--accent-texte);}
+.pile textarea{margin-top:12px;}
+.pile .msg ul{margin:8px 0 0;padding-left:20px;}
+.pile .msg li{margin-bottom:3px;}
+
+.sous-titre{
+  font-family:var(--display);
+  font-size:var(--tx-3);
+  font-weight:700;
+  letter-spacing:-.01em;
+  margin:24px 0 12px;
+}
+#passwordBox summary{
+  font-family:var(--display);
+  font-size:var(--tx-3);
+  font-weight:600;
+  cursor:pointer;
+  margin-bottom:12px;
+}
+select.filter-input{
+  font-family:var(--sans);
+  color:var(--ink);
+  border:1px solid var(--bord);
+  width:auto;
+}
+
+/* ---------- remise par code ---------- */
+.retrait-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.retrait-row .code-input{width:160px;margin-bottom:0;}
+
+/* ---------- accès des agents ---------- */
+.identifiant-input{letter-spacing:6px;font-size:22px;}
+.identifiant-pill{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:var(--tx-3);
+  font-weight:600;
+  letter-spacing:2px;
+  border-radius:999px;
+  background:var(--accent);
+  color:#fff;
+  padding:4px 13px;
+  white-space:nowrap;
+}
+.agent-fiche{
+  border:1px solid var(--line);
+  border-left:4px solid var(--ok);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  padding:16px 18px;
+  margin-bottom:12px;
+}
+/* Un accès suspendu se distingue au premier coup d'œil du reste de la liste. */
+.agent-fiche.suspendu{border-left-color:var(--danger);opacity:0.75;}
+.agent-tete{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+.agent-tete strong{font-family:var(--display);font-size:var(--tx-4);font-weight:700;}
+.agent-fiche summary{
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
+  cursor:pointer;
+  padding:6px 0;
+}
+.droits-grille{display:grid;gap:4px;margin:12px 0 16px;}
+.droit-ligne{
+  align-items:flex-start;
+  gap:10px;
+  padding:10px 12px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+}
+.droit-ligne input{margin-top:3px;flex:0 0 auto;}
+.droit-detail{display:block;font-size:var(--tx-2);color:var(--ink-2);margin-top:3px;}
+#masterForm .code-input{letter-spacing:4px;}
+/* Dans l'écran d'entrée, le bouton colle à l'indication qui le suit. */
+.gate-form .btn{margin-bottom:12px;}
+.gate-form .hint{margin-top:0;}
+#agentsMsg .code-pill, #agentsMsg .identifiant-pill{display:inline-block;margin:6px 4px 0 0;}
+#agentsListe{margin-top:16px;}
+
+/* ---------- courrier urgent ---------- */
+/* Filet rouille en bordure de ligne : repérable en balayant la liste, sans
+   crier sur toute la largeur. */
+tr.urgent td:first-child{box-shadow:inset 3px 0 0 var(--danger);}
+tr.urgent{background:var(--danger-wash);}
+/* Un courrier urgent : la seule étiquette en aplat plein. Sur une liste où
+   tout le reste est en teinte diluée, c'est ce qui la fait sortir. */
+.urgent-tag{
+  --ton:var(--danger);
+  border-color:transparent;
+  background:var(--danger);
+  color:#fff;
+}
+.guichet-options{display:flex;gap:20px;flex-wrap:wrap;margin:14px 0 4px;}
+.guichet-options .check-row{margin:0;}
+
+/* ---------- saisie en série ---------- */
+.serie-bilan{
+  border:1px solid var(--line);
+  border-left:4px solid var(--ok);
+  border-radius:var(--r1);
+  background:var(--ok-wash);
+  padding:14px 18px;
+  margin-top:16px;
+}
+.serie-tete{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;}
+.serie-liste{margin:0;padding-left:22px;font-size:var(--tx-2);max-height:200px;overflow-y:auto;}
+.serie-liste li{padding:3px 0;}
+.serie-detail{font-family:var(--mono);font-size:var(--tx-1);color:var(--ink-2);}
+
+/* ---------- recherche globale ---------- */
+.palette{
+  position:fixed;
+  inset:0;
+  z-index:60;
+  background:var(--voile);
+  backdrop-filter:blur(4px);
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:12vh 20px 20px;
+}
+.palette[hidden]{display:none;}
+.palette-boite{
+  width:100%;
+  max-width:660px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r3);
+  box-shadow:var(--ombre-3);
+  overflow:hidden;
+}
+#paletteInput{
+  width:100%;
+  margin:0;
+  border:none;
+  border-bottom:1px solid var(--line);
+  border-radius:0;
+  font-size:18px;
+  padding:18px 20px;
+  background:var(--surface);
+}
+#paletteInput:focus{outline:none;box-shadow:none;border-bottom-color:var(--a1);}
+#paletteResultats{max-height:52vh;overflow-y:auto;padding:6px;}
+.palette-ligne{
+  display:grid;
+  grid-template-columns:130px 1fr;
+  grid-template-areas:'genre titre' 'genre detail';
+  gap:0 14px;
+  width:100%;
+  text-align:left;
+  background:none;
+  border:none;
+  border-radius:var(--r1);
+  padding:11px 14px;
+  cursor:pointer;
+  font-family:var(--sans);
+  color:var(--ink);
+  transition:background-color var(--t1) var(--sortie);
+}
+.palette-ligne:hover, .palette-ligne.actif{background:color-mix(in srgb, var(--a1) 12%, transparent);}
+.palette-genre{
+  grid-area:genre;
+  align-self:center;
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+}
+.palette-titre{grid-area:titre;font-size:var(--tx-3);font-weight:600;}
+.palette-detail{grid-area:detail;font-size:var(--tx-2);color:var(--ink-2);}
+.palette-aide{
+  margin:0;
+  padding:11px 20px;
+  border-top:1px solid var(--line);
+  background:var(--surface-2);
+  font-size:var(--tx-1);
+}
+
+/* ---------- retrait par un tiers ---------- */
+.fiche-porteur{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
+.fiche-porteur input[type=text]{margin-bottom:0;}
+.fiche-porteur label[for]{margin-top:10px;}
+/* Le destinataire n'est pas venu lui-même, cela se voit. */
+.porteur-tag{--ton:var(--danger);}
+
+/* ---------- coupure réseau ---------- */
+/* Le bandeau est en tête de page et ne se referme pas tout seul : une action
+   qui n'est pas encore partie doit rester sous les yeux. */
+.bandeau-file{
+  border:1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-left:4px solid var(--warn);
+  border-radius:var(--r1);
+  background:var(--warn-wash);
+  padding:14px 18px;
+  margin-bottom:18px;
+  font-size:var(--tx-2);
+  line-height:1.6;
+}
+.bandeau-file.coupure{border-left-color:var(--danger);}
+.bandeau-file.echec{
+  border-color:color-mix(in srgb, var(--danger) 32%, transparent);
+  border-left-color:var(--danger);
+  background:var(--danger-wash);
+}
+.bandeau-file ul{margin:8px 0 6px;padding-left:20px;}
+.bandeau-file li{margin-bottom:3px;}
+.bandeau-file .link-btn{margin-left:6px;}
+.mode-badge.hors-ligne{
+  border-color:color-mix(in srgb, var(--danger) 55%, transparent);
+  color:var(--danger);
+  background:var(--danger-wash);
+}
+
+/* ---------- formulaire de domiciliation ---------- */
+.requis{--ton:var(--danger);font-size:10px;padding:2px 8px;margin-left:6px;}
+#formDomiciliation .sous-titre{margin-top:22px;}
+#formDomiciliation .sous-titre:first-child{margin-top:0;}
+#formDomiciliation .hint{margin:-10px 0 16px;}
+
+/* ---------- antennes ---------- */
+/* Le sélecteur vit dans l'en-tête, à côté du mode de stockage : c'est un
+   contexte d'affichage, pas un réglage. Absent tant qu'il n'y a qu'un bureau. */
+.antenne-select{
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  padding:4px 12px;
+  width:auto;
+  margin-bottom:0;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--accent-texte) 40%, transparent);
+  color:var(--accent-texte);
+  background:color-mix(in srgb, var(--accent-texte) 10%, transparent);
+  max-width:200px;
+}
+.antenne-select:disabled{opacity:1;cursor:default;}
+
+/* ---------- langues ---------- */
+.langue-select{
+  font-family:var(--sans);
+  font-size:var(--tx-3);
+  padding:11px 14px;
+  border:1px solid var(--bord);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  color:var(--ink);
+  width:100%;
+}
+.langue-choix{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.langue-choix label{margin-bottom:0;white-space:nowrap;}
+.langue-choix .langue-select{width:auto;min-width:150px;}
+.langue-choix .hint{margin:0;flex:1 1 240px;}
+.add-form .langue-select{margin-bottom:16px;}
+/* Un texte arabe se lit de droite à gauche : le champ doit suivre. */
+#setSubject[dir=rtl], #setBody[dir=rtl]{text-align:right;}
+
+/* ---------- gabarits par type de courrier ---------- */
+.gabarit-onglets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.gabarit-onglets button{
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  padding:8px 14px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--surface-2);
+  color:var(--ink-2);
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  transition:background-color var(--t1) var(--sortie), color var(--t1) var(--sortie), border-color var(--t1) var(--sortie);
+}
+.gabarit-onglets button:hover{border-color:var(--a1);color:var(--accent-texte);}
+.gabarit-onglets button.active{
+  background:var(--accent);
+  color:#fff;
+  border-color:transparent;
+}
+/* Pastille : ce type a son propre texte, il ne suit plus le général. */
+.point-propre{width:6px;height:6px;border-radius:50%;background:var(--accent-texte);display:inline-block;}
+.gabarit-onglets button.active .point-propre{background:#fff;}
+#setSubject::placeholder, #setBody::placeholder{color:var(--ink-2);opacity:0.7;}
+
+/* ---------- fiche de vérification avant remise ---------- */
+/* Le bord coloré et l'apparition franche disent : « regardez ceci avant de
+   valider ». C'est le seul écran qui s'interpose entre le code et la remise. */
+.fiche-retrait{
+  border:1px solid color-mix(in srgb, var(--a1) 26%, transparent);
+  border-left:4px solid var(--a1);
+  border-radius:var(--r1);
+  background:color-mix(in srgb, var(--a1) 7%, var(--surface));
+  padding:18px 20px;
+  margin-top:6px;
+}
+.fiche-retrait-tete{
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:14px;
+  padding-bottom:12px;
+  border-bottom:1px solid var(--line);
+}
+.fiche-retrait-tete strong{font-size:var(--tx-5);font-family:var(--display);font-weight:700;letter-spacing:-.02em;}
+/* Le code de retrait : c'est ce qu'on lit à voix haute par-dessus le
+   comptoir. Chiffres détachés, aplat sombre, aucune ambiguïté. */
+.code-pill{
+  font-family:var(--mono);
+  font-size:var(--tx-4);
+  font-weight:600;
+  letter-spacing:4px;
+  border-radius:999px;
+  background:var(--ink);
+  color:var(--bg);
+  padding:5px 12px 5px 17px;
+}
+/* Le nombre de courriers, lisible d'un coup d'œil : c'est ce qui dit combien
+   d'enveloppes sortir du casier avant d'appeler la personne. */
+.compte-pill{--ton:var(--accent-texte);margin-left:0;}
+.fiche-retrait .status-list{margin-bottom:0;}
+.fiche-retrait .status-list div{border-bottom-color:var(--line);}
+.box-cell{font-family:var(--mono);font-size:var(--tx-2);color:var(--ink-2);white-space:nowrap;}
+.fiche-autres{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
+.fiche-autres .hint{margin-bottom:8px;}
+.check-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  /* Une ligne à lire, pas une étiquette de champ : on annule la casse et la
+     graisse des libellés de formulaire. */
+  font-family:var(--sans);
+  font-size:var(--tx-3);
+  font-weight:400;
+  text-transform:none;
+  letter-spacing:0;
+  color:var(--ink);
+  margin-bottom:0;
+  padding:6px 0;
+  cursor:pointer;
+}
+.check-row input{margin:0;width:auto;}
+/* Les cases et les boutons radio prennent la couleur de l'accent : c'est
+   gratuit, natif, et ça évite de les redessiner. */
+input[type=checkbox], input[type=radio]{accent-color:var(--accent);}
+.fiche-retrait-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+
+/* ---------- fiche d'un destinataire ---------- */
+#ficheDialog{max-width:640px;width:92vw;}
+.fiche h3{
+  font-family:var(--display);
+  font-size:17px;
+  text-transform:none;
+  letter-spacing:0.5px;
+  margin-bottom:16px;
+}
+.fiche .status-list{margin-bottom:0;}
+
+/* ---------- absences ---------- */
+.absence-tag{--ton:var(--danger);}
+td.absence-edit{
+  background:var(--surface-2);
+  padding:12px 6px;
+  display:flex;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+td.absence-edit label{margin-bottom:0;white-space:nowrap;}
+td.absence-edit label.inline{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  text-transform:none;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  color:var(--ink);
+}
+td.absence-edit input[type=date], td.absence-edit select{margin-bottom:0;width:auto;font-size:var(--tx-2);padding:7px 10px;}
+
+/* ---------- signature ---------- */
+#signatureDialog{max-width:620px;width:94vw;}
+#signaturePad{
+  width:100%;
+  height:180px;
+  border:1px dashed var(--bord);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  touch-action:none;
+  cursor:crosshair;
+  display:block;
+}
+.signature-vue{
+  max-width:220px;
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+  background:#fff;
+  display:block;
+  margin-top:8px;
+}
+
+/* ---------- feuille de casier (impression) ---------- */
+.feuille-casier{
+  display:none;
+  /* La feuille ne prend rien à l'écran qui l'entoure : ni sa police, ni son
+     encre, ni ses mesures.
+
+     Les deux dernières lignes ont l'air superflues et ne le sont pas. Le corps
+     de page a gagné `font-size:15px` et `line-height:1.55` en même temps que la
+     nouvelle typographie ; la feuille en héritait, et les trois documents
+     tabulaires ont grandi de 20 à 35 pixels — assez pour qu'un rapport annuel
+     déborde d'une page. Le papier repart donc des mesures qu'il a toujours
+     eues. */
+  font-family:var(--print-serif);
+  color:var(--p-ink);
+  font-size:16px;
+  line-height:normal;
+}
+.feuille-casier h1{
+  font-family:var(--print-display);
+  font-size:20px;
+  margin-bottom:4px;
+}
+.feuille-casier p{font-size:13px;color:var(--p-ink-2);margin-bottom:16px;}
+.feuille-casier table{width:100%;border-collapse:collapse;font-size:13px;}
+.feuille-casier th{
+  text-align:left;
+  background:var(--p-ink);
+  color:var(--p-paper);
+  padding:7px 8px;
+  font-family:var(--print-mono);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.feuille-casier tbody tr:nth-child(even) td{background:var(--p-paper);}
+.feuille-casier td{border-bottom:1px solid var(--p-line);padding:8px 4px;}
+.feuille-casier td.b{font-family:var(--print-mono);font-weight:600;}
+.feuille-casier td.case{width:70px;border:1px solid var(--p-ink);}
+
+/* Le numéro à appeler : c'est ce qu'on recopie sur un clavier, il doit se lire
+   sans se pencher, et sans confondre un 0 et un O. */
+.tel-cell{
+  font-family:var(--mono);
+  font-size:var(--tx-3);
+  font-weight:600;
+  color:var(--ink);
+  white-space:nowrap;
+}
+.tel-cell em{font-family:var(--sans);font-weight:400;font-style:normal;color:var(--ink-2);font-size:var(--tx-2);}
+
+/* ---------- guichet : le repli des options secondaires ----------
+   L'écran le plus utilisé de la journée ne garde déplié que ce qui sert à
+   chaque courrier. Le reste tient sous une entrée, à un clic. */
+.guichet-plus{
+  border-top:1px solid var(--line);
+  margin-top:18px;
+  padding-top:4px;
+}
+.guichet-plus > summary{
+  cursor:pointer;
+  padding:11px 0;
+  font-family:var(--sans);
+  font-size:var(--tx-2);
+  font-weight:600;
+  color:var(--ink-2);
+  list-style:none;
+  transition:color var(--t1) var(--sortie);
+}
+.guichet-plus > summary::-webkit-details-marker{display:none;}
+.guichet-plus > summary::before{content:'▸ ';display:inline-block;transition:transform var(--t1) var(--sortie);}
+.guichet-plus[open] > summary::before{transform:rotate(90deg);}
+.guichet-plus > summary:hover{color:var(--accent-texte);}
+.guichet-plus[open] > summary{color:var(--ink);}
+.guichet-plus .pile,
+.guichet-plus .copies{margin-top:6px;}
+
+/* ---------- sections des réglages ----------
+   Onze cartes à la suite, c'est un mur : on ne sait plus où chercher. La barre
+   reprend le motif segmenté du guichet — même vocabulaire visuel, rien de
+   nouveau à apprendre — et n'affiche qu'un groupe à la fois. */
+.reglages-sections{max-width:none;flex-wrap:wrap;margin-bottom:22px;}
+.reglages-sections button{flex:0 1 auto;padding:9px 16px;}
+.reglages-groupe[hidden]{display:none;}
+
+@media (max-width:640px){
+  .reglages-sections{gap:4px;}
+  .reglages-sections button{font-size:var(--tx-1);padding:8px 11px;}
+}
+
+/* ---------- postes du bureau ----------
+   L'adresse à recopier sur le poste d'à côté : c'est la seule chose qu'on
+   vient chercher ici, elle doit se lire de loin et se copier d'un clic. */
+.poste-adresse{
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+  background:var(--surface-2);
+  padding:14px 16px;
+  margin-bottom:10px;
+}
+.poste-adresse.principale{
+  border-color:color-mix(in srgb, var(--a1) 40%, transparent);
+  background:color-mix(in srgb, var(--a1) 8%, var(--surface));
+}
+.poste-adresse-titre{
+  font-family:var(--sans);
+  font-size:var(--tx-1);
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+  margin-bottom:7px;
+}
+.poste-adresse-url{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+.poste-adresse-url code{font-family:var(--mono);font-size:17px;word-break:break-all;}
+.poste-adresse.principale .poste-adresse-url code{font-size:21px;font-weight:600;color:var(--accent-texte);}
+.poste-adresse .hint{margin:6px 0 0;}
+
+/* ---------- attestation d'élection de domicile ----------
+   Une page qui doit tenir devant un guichet : en-tête de l'organisme, corps
+   aéré, place pour le cachet. Les traits remplacent les mentions qu'on n'a pas
+   enregistrées — l'attestation s'imprime toujours, quitte à se compléter à la
+   main, plutôt que de refuser de sortir. */
+.attestation{
+  max-width:17cm;
+  margin:0 auto;
+  font-size:16px;
+  line-height:1.65;
+  font-family:var(--print-serif);
+  color:var(--p-ink);
+}
+.attest-entete{
+  border-bottom:3px solid var(--p-accent);
+  padding-bottom:10px;
+  margin-bottom:28px;
+  font-size:12px;
+  color:var(--p-ink-2);
+}
+.attest-organisme{
+  font-family:var(--print-display);
+  font-size:17px;
+  margin-bottom:2px;
+  color:var(--p-ink);
+}
+.attestation h1{
+  font-family:var(--print-display);
+  font-size:19px;
+  text-align:center;
+  margin:0 0 30px;
+}
+.attest-corps{font-size:13.5px;margin:0 0 16px;}
+.attest-identite{font-size:15px;margin-bottom:20px;}
+/* L'adresse de domiciliation : c'est la ligne que la personne recopiera sur
+   ses formulaires. Elle doit se retrouver d'un coup d'œil sur la page. */
+.attest-adresse{
+  margin:6px 0 20px 0;
+  padding:10px 14px;
+  background:var(--p-paper);
+  border-left:3px solid var(--p-accent);
+  font-family:var(--print-mono);
+  font-size:13px;
+}
+.attest-valeur{font-weight:600;color:var(--p-ink);}
+.attest-trait{
+  display:inline-block;
+  border-bottom:1px solid var(--p-ink);
+  height:1em;
+  vertical-align:baseline;
+}
+.attest-fait{margin-top:30px;}
+.attest-signature{margin-top:14px;text-align:right;}
+.attest-signature p{font-size:12px;color:var(--p-ink-2);margin:0 0 70px;}
+
+/* Pendant l'impression de la feuille, l'application entière s'efface. */
+body.impression-casier .feuille-casier{display:block;}
+@media print{
+  body.impression-casier .wrap,
+  body.impression-casier .toasts,
+  body.impression-casier dialog{display:none !important;}
+  body.impression-casier .feuille-casier{display:block;}
+  /* Les couleurs à l'impression.
+
+     Par défaut, les navigateurs effacent fonds et aplats pour économiser
+     l'encre : sans print-color-adjust, l'en-tête de l'attestation sortirait
+     blanc sur blanc. On le demande explicitement, là où la couleur porte du
+     sens — l'identité de l'organisme, et la lecture des tableaux.
+
+     Tout reste lisible en noir et blanc : la couleur double une information
+     déjà donnée par le texte et la graisse, elle ne la remplace jamais. Un
+     bureau qui imprime en monochrome ne perd rien. */
+  .feuille-casier{color:#16233F;}
+  .feuille-casier h1{color:#16233F;}
+  .feuille-casier th{
+    background:#16233F;
+    color:#F4F0E6;
+    border-bottom:none;
+    padding:7px 8px;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .feuille-casier td{border-bottom:1px solid #CFC6AE;}
+  /* Une ligne sur deux teintée : sur une liste de casiers, c'est ce qui évite
+     de suivre la mauvaise ligne du doigt. */
+  .feuille-casier tbody tr:nth-child(even) td{
+    background:#F4F0E6;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .feuille-casier td.b{color:#16233F;}
+  .feuille-casier td.case{border:1px solid #16233F;}
+
+  .attestation h1{color:#16233F;}
+  .attest-entete{
+    border-bottom-color:#B8892B;
+    border-bottom-width:3px;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .attest-organisme{color:#16233F;}
+  .attest-adresse{
+    background:#F4F0E6;
+    border-left:3px solid #B8892B;
+    padding:10px 14px;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .attest-valeur{color:#16233F;}
+  .attest-trait{border-bottom-color:#16233F;}
+  .attest-signature p{color:#5B6B82;}
+}
+
+/* ═════════════ L'ATTENTE ═════════════
+
+   Le document demande des squelettes plutôt qu'un écran vide (§52) et des
+   boutons à état de chargement (§34). Les deux répondent à la même chose : le
+   guichet ne doit jamais se demander si son geste est parti.
+
+   Le mouvement reste dans les bornes du document — une pulsation lente, pas
+   un miroitement qui traverse l'écran — et s'arrête net pour qui a demandé
+   moins d'animations. Une animation qui ne dure que le temps d'un chargement
+   n'est pas une « animation de fond » : elle disparaît avec son objet. */
+.squelette{display:flex;flex-direction:column;gap:10px;padding:6px 2px;}
+.squelette-ligne{
+  height:13px;
+  border-radius:6px;
+  background:var(--surface-2);
+  border:1px solid var(--line);
+  animation:squeletteBat 1.4s ease-in-out infinite;
+}
+@keyframes squeletteBat{
+  0%, 100%{opacity:1;}
+  50%{opacity:.55;}
+}
+
+/* Un bouton parti. Le libellé reste lisible — on doit pouvoir relire ce qu'on
+   vient de déclencher — et le disque tourne à côté, pas à la place. */
+.btn[aria-busy="true"]{
+  position:relative;
+  pointer-events:none;
+  padding-left:30px;
+}
+.btn[aria-busy="true"]::before{
+  content:'';
+  position:absolute;
+  left:11px;
+  top:50%;
+  width:12px;
+  height:12px;
+  margin-top:-6px;
+  border-radius:50%;
+  border:2px solid currentColor;
+  border-top-color:transparent;
+  opacity:.85;
+  animation:boutonTourne 620ms linear infinite;
+}
+@keyframes boutonTourne{to{transform:rotate(360deg);}}
+
+@media (prefers-reduced-motion: reduce){
+  .squelette-ligne{animation:none;}
+  .btn[aria-busy="true"]::before{animation:none;border-top-color:currentColor;opacity:.5;}
+}
+
+/* ═════════════ LE PLAN DU LOCAL ═════════════
+
+   Une case par porte, dans l'ordre où on parcourt le couloir. La règle qui
+   gouverne ce bloc : **la couleur ne porte jamais seule l'information** (§33,
+   §54). Chaque case écrit son état en toutes lettres à côté de sa teinte — un
+   casier hors service pris pour un casier libre, c'est un courrier rangé
+   derrière une serrure cassée. */
+.casier-zone{
+  font-family:var(--display);
+  font-size:var(--tx-2);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+  margin:18px 0 8px;
+}
+.casier-zone:first-child{margin-top:0;}
+.casier-grille{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(132px, 1fr));
+  gap:10px;
+}
+.casier{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+  padding:10px 12px;
+  border:1px solid var(--bord);
+  /* Le filet de gauche double la couleur de fond : il reste visible en noir et
+     blanc, et sur un écran mal réglé. */
+  border-left-width:4px;
+  border-radius:var(--r1);
+  background:var(--surface);
+  color:var(--ink);
+  text-align:left;
+  cursor:pointer;
+  font:inherit;
+  transition:border-color var(--t1) var(--sortie), box-shadow var(--t1) var(--sortie);
+}
+.casier:hover{box-shadow:var(--ombre-2);}
+.casier-num{font-family:var(--mono);font-weight:700;font-size:var(--tx-3);}
+.casier-nom{
+  font-size:var(--tx-2);
+  color:var(--ink-2);
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.casier-mot{
+  font-size:var(--tx-1);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  font-weight:700;
+}
+.casier-libre{border-left-color:var(--ok-vif);background:var(--ok-wash);}
+.casier-libre .casier-mot{color:var(--ok);}
+.casier-occupee{border-left-color:var(--accent);}
+.casier-occupee .casier-mot{color:var(--accent-texte);}
+.casier-reservee{border-left-color:var(--warn-vif);background:var(--warn-wash);}
+.casier-reservee .casier-mot{color:var(--warn);}
+.casier-suspendue{border-left-color:var(--warn-vif);}
+.casier-suspendue .casier-mot{color:var(--warn);}
+.casier-horsservice{border-left-color:var(--danger-vif);background:var(--danger-wash);}
+.casier-horsservice .casier-mot{color:var(--danger);}
+
+/* La jauge de remplissage. Elle double le compte écrit à côté — « 16/20 » —
+   plutôt que de le remplacer : une barre seule ne se lit pas au chiffre près. */
+.casier-jauge{
+  display:block;
+  width:100%;
+  height:4px;
+  margin-top:4px;
+  border-radius:2px;
+  background:var(--line);
+  overflow:hidden;
+}
+.casier-jauge i{display:block;height:100%;background:var(--accent);}
+.casier-jauge.presque i{background:var(--warn-vif);}
+.casier-jauge.pleine i{background:var(--danger-vif);}
+.casier-compte{font-family:var(--mono);font-size:var(--tx-1);color:var(--ink-2);}
+
+/* Les mêmes états dans la liste, en toutes lettres eux aussi. */
+.etat-libre{color:var(--ok);font-weight:600;}
+.etat-occupee{color:var(--accent-texte);font-weight:600;}
+.etat-reservee, .etat-suspendue{color:var(--warn);font-weight:600;}
+.etat-horsservice{color:var(--danger);font-weight:600;}
+
+/* Le flux de la caméra du scanner. Une bande large et basse : on présente une
+   étiquette de casier, pas un portrait — et c'est la bande centrale que le
+   décodeur lit. */
+.scan-video{
+  display:block;
+  width:100%;
+  max-height:38vh;
+  margin-top:10px;
+  border-radius:var(--r1);
+  border:1px solid var(--bord);
+  background:#000;
+  object-fit:cover;
+}
+
+/* ---------- étiquettes ---------- */
+/* Elles disent de quel genre est la situation ; les observations disent
+   laquelle. Ni les unes ni les autres ne sortent dans un message : ce sont des
+   mots que l'équipe se dit entre elle, et « tutelle » ou « expulsion » lus par
+   un tiers blessent sans rien apprendre d'utile. */
+.etiq-suggestions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:6px;
+}
+.etiq-suggestion{
+  padding:3px 10px;
+  border:1px dashed var(--line);
+  border-radius:999px;
+  background:transparent;
+  color:var(--ink-2);
+  font:inherit;
+  font-size:var(--tx-1);
+  cursor:pointer;
+}
+.etiq-suggestion:hover{
+  border-style:solid;
+  border-color:var(--accent);
+  color:var(--accent-texte);
+}
+/* Sur la fiche de remise, ces deux lignes ne s'alignent pas à droite comme les
+   couples « nom : valeur » : ce sont des phrases, elles se lisent. */
+.notes-cell{text-align:left !important;font-weight:500 !important;}
+
+/* Le choix « automatique / manuel » de la boîte, à l'ouverture d'un dossier.
+   La barre segmentée est celle du guichet, réemployée : c'est le même geste,
+   il doit avoir la même forme. */
+#domBoiteMode{margin-bottom:6px;}

@@ -16,3 +16,36 @@ bin-release/
 # Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
 # should NOT be excluded as they contain compiler settings and other important
 # information for Eclipse / Flash Builder.
+
+# Bureau du Courrier
+node_modules/
+# Node.js téléchargé par l'installateur — ne se versionne pas.
+runtime/
+demarrer.sh
+.env
+data/*.json
+data/*.tmp
+data/*.corrompu-*
+data/secret.key
+data/sauvegardes/
+npm-debug.log*
+.DS_Store
+
+# Dépendances de développement (Playwright) — jamais nécessaires au serveur.
+node_modules/
+# `npm install` en fabrique un ; l'application n'a aucune dépendance à figer.
+package-lock.json
+
+# Captures des vérifications de navigateur, quand on demande à les garder.
+captures/
+# Et celles qui atterrissent à côté des scripts : commun.js le dit lui-même,
+# « un script de vérification ne doit pas laisser de fichiers dans le dépôt ».
+tools/verifier/*.png
+
+# Signature du créateur — la clé privée ne doit JAMAIS entrer dans le dépôt.
+# Le manifeste et la liste de révocation sont produits à la publication.
+*.pem
+*.key
+cles/
+signature.json
+revocations.json
