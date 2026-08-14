@@ -1353,7 +1353,7 @@ tools/verifier/       vérifications de navigateur, une par défaut corrigé
 ```
 
 ```bash
-npm test     # 724 tests : utilitaires, API, comptes, domiciliation, appels, socle,
+npm test     # 728 tests : utilitaires, API, comptes, domiciliation, appels, socle,
              #             couleurs, rejeu, casiers, signature, scanner, référence,
              #             doublons, colis, relevé du jour, journée, diagnostic,
              #             calendrier, PDF, étiquettes, délégation
