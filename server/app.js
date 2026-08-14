@@ -25,7 +25,7 @@ const diagnostic = require('../assets/js/diagnostic.js');
 const etiquettes = require('../assets/js/etiquettes.js');
 const journee = require('../assets/js/journee.js');
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const MAX_BODY = 1024 * 1024; // 1 Mo : largement de quoi importer un gros registre
 
 const MIME = {

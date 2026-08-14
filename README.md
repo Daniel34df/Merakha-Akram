@@ -443,6 +443,96 @@ Sur la fiche de remise, l'emplacement passe avant le transporteur : quelqu'un
 attend au comptoir, et ce qu'il faut d'abord, c'est savoir où aller le
 chercher.
 
+## Le relevé de la journée
+
+Un bureau de courrier n'est pas tenu par une seule personne : quelqu'un ouvre,
+quelqu'un d'autre ferme, et entre les deux il y a ce qu'on se dit de vive voix
+— « le colis de la dame du deuxième est derrière le comptoir ». Rien de cela ne
+survivait à la fin du service.
+
+**Suivi → La journée** produit une passation, pas une statistique : ce qui est
+entré, ce qui est sorti, et surtout **ce qui reste en plan**. Un colis
+encombrant sans emplacement noté, une personne appelée sans réponse, un envoi
+refusé par le serveur de courriel. Chaque point porte la consigne, pas
+seulement le constat.
+
+Le relevé s'imprime, pour être posé sur le comptoir : celui qui ouvre demain
+n'allumera pas forcément l'écran avant de commencer. Et une journée passée se
+relit telle qu'elle a été — « en attente » y veut dire « en attente ce soir-là ».
+
+Aucune journée ne se « clôt » : il n'y a pas d'état « fermée » dans les
+données. Un agent qui oublie de cliquer ne doit pas bloquer le lendemain, et un
+courrier déposé à 17 h 05 doit pouvoir s'inscrire.
+
+## La santé de l'installation
+
+**Réglages → Contrôle → Vérifier.** Cette application est installée par un
+bureau, pas par un service informatique : personne ne surveille le disque, et
+personne ne remarque qu'aucune sauvegarde n'a été faite depuis trois mois —
+jusqu'au jour où le disque lâche et où le registre des domiciliations part avec
+lui.
+
+Sont examinés : les sauvegardes et leur ancienneté, l'espace disque, l'écriture
+réelle du registre (vérifiée **en écrivant**, pas en lisant des droits — un
+disque plein et un montage en lecture seule passent les droits sans problème),
+le code de reprise, la liaison réseau, l'intégrité des fichiers signés.
+
+Une règle gouverne cet écran : **ce qui n'a pas pu être observé rend « non
+vérifié », jamais « en ordre »**. Dire « tout va bien » sans avoir regardé est
+la seule façon de le rendre nuisible — il empêcherait quelqu'un d'aller voir.
+
+## Les échéances au calendrier
+
+**Domiciliation**, en tête d'onglet. La liste triée par urgence répond à
+« qu'est-ce qui presse aujourd'hui » ; le calendrier répond à « est-ce que la
+semaine prochaine sera tenable ». Une domiciliation se renouvelle en présence
+de la personne : douze échéances le même mardi, ce sont douze rendez-vous
+impossibles à caser, donc des attestations qui expirent.
+
+Les jours vides restent affichés — ce sont les creux qui servent quand il faut
+déplacer un rendez-vous. Une échéance dépassée reste à sa date, en rouge, au
+lieu de disparaître : la sortir effacerait la trace de ce qui n'a pas été fait,
+à l'endroit précis où l'on regarde pour le savoir.
+
+## Attestation et rapport en PDF
+
+À côté de « Imprimer », un bouton **PDF**. Une attestation s'imprime le plus
+souvent, mais elle se transmet aussi : la personne la dépose à la CAF, l'envoie
+à l'assurance maladie, la garde sur un téléphone. « Imprimer vers un PDF »
+n'existe pas sur tous les postes, et le résultat porte alors les en-têtes du
+navigateur sur un document qui doit avoir l'air officiel.
+
+Le fichier est écrit à la main, sans bibliothèque — ce serait la première
+dépendance du projet. Il reprend le même texte que la version imprimée : deux
+formulations d'une même attestation, c'est une administration qui refuse celle
+qu'elle ne connaît pas. Et ce qui ne s'imprime pas ne se télécharge pas
+davantage : une attestation échue est refusée dans les deux cas, parce qu'un
+fichier circule plus loin qu'une feuille et plus longtemps.
+
+## Observations et étiquettes
+
+Un bureau qui domicilie suit des situations qui ne tiennent dans aucun champ :
+une personne sous tutelle, un dossier suivi par une association, quelqu'un dont
+le courrier ne doit pas être remis à un tiers.
+
+Les **observations** sont un texte libre sur la fiche. Elles paraissent
+maintenant **sur la fiche de remise**, au seul instant où elles servent :
+quelqu'un est devant le comptoir, et la consigne doit être sous les yeux de
+l'agent sans qu'il ait à ouvrir la fiche — il ne l'ouvrira pas s'il n'a pas de
+raison de le faire.
+
+Les **étiquettes** viennent à côté et disent de quel genre est la situation,
+là où l'observation dit laquelle. Ce que les observations ne savent pas faire,
+c'est regrouper : taper `#tutelle` dans le filtre du registre répond à une
+question qu'aucune recherche par nom ne sait poser. Elles se séparent par des
+virgules — pas par des espaces, pour que « suivi social » reste une étiquette
+et non deux.
+
+**Ni les unes ni les autres ne sortent jamais dans un courriel.** Aucune
+variable de gabarit ne les expose, et c'est une absence délibérée : « tutelle »
+ou « expulsion » lu par la personne, ou par un tiers, est une information qui
+blesse et qui ne la regarde pas sous cette forme.
+
 ## Absences et remplaçants
 
 Un destinataire peut être marqué **absent jusqu'à une date**, ou **parti de
@@ -1209,6 +1299,11 @@ assets/js/reference.js  « COUR-2026-000042 » : le numéro qui désigne un cour
 assets/js/doublons.js   les fiches qui se ressemblent — prévenir, jamais fusionner
 assets/js/colis.js    poids, transporteur, suivi, et surtout : où il est rangé
 assets/js/bord.js     le relevé du jour : ce qui appelle une action aujourd'hui
+assets/js/journee.js  la passation du soir : entré, sorti, et ce qui reste en plan
+assets/js/diagnostic.js  santé de l'installation — jamais « tout va bien » sans avoir regardé
+assets/js/calendrier.js  les échéances par mois, pour les étaler avant qu'elles s'entassent
+assets/js/etiquettes.js  ce que l'équipe se dit d'une personne, et qui ne part pas en courriel
+assets/js/pdf.js      écrire un PDF à la main, sans bibliothèque
 assets/js/codebarres.js Code 39 : écrire les étiquettes, et les relire
 assets/js/scanner.js  ce qu'un code scanné désigne, et ce que le poste sait lire
 assets/js/notify.js   composition du message, mailto, presse-papiers
@@ -1226,15 +1321,18 @@ server/reminders.js   courriers en attente et relances automatiques
 test/                 tests (node:test), sans dépendance
 assets/js/ui/casiers.js le plan du local : cases, états, historique
 assets/js/ui/bord.js    la bande du relevé, en haut du Guichet
+assets/js/ui/pilotage.js  le relevé de journée et la santé de l'installation
+assets/js/ui/calendrier.js  la grille des échéances
 assets/js/ui/scanner.js douchette, caméra, photo déposée
 tools/verifier/       vérifications de navigateur, une par défaut corrigé
 .github/workflows/    intégration continue : npm test sur Node 20.12 et 22
 ```
 
 ```bash
-npm test     # 610 tests : utilitaires, API, comptes, domiciliation, appels, socle,
+npm test     # 712 tests : utilitaires, API, comptes, domiciliation, appels, socle,
              #             couleurs, rejeu, casiers, signature, scanner, référence,
-             #             doublons, colis, relevé du jour
+             #             doublons, colis, relevé du jour, journée, diagnostic,
+             #             calendrier, PDF, étiquettes, délégation
 npm run dev  # rechargement automatique, mode essai pour le courriel
 ```
 
@@ -1246,12 +1344,12 @@ Tout ce qui est calculable — règles de domiciliation, listes d'appels, bornes
 d'affichage, droits, filtrage par antenne — vit dans des modules chargeables des
 deux côtés et se teste là, vite et partout.
 
-Reste ce qui exige un écran. Quatorze parcours cliquent pour de vrai :
+Reste ce qui exige un écran. Dix-huit parcours cliquent pour de vrai :
 
 ```bash
 npm i                    # installe Playwright (outillage seulement)
 npx playwright install chromium
-npm run verifier         # les quatorze, chacun sur son serveur et sa base
+npm run verifier         # les dix-huit, chacun sur son serveur et sa base
 npm run verifier -- rappel   # un seul
 npm run parcours         # le parcours complet, qui s'imprime comme procédure
 ```
