@@ -142,5 +142,55 @@ const ok = v.ok;
   ok(!/[Ss]upprimer les données|[Ee]ffacer le registre/.test(fiche.texte),
     'aucune action destructrice n’est proposée depuis un casier');
 
+  /* ---- 6. la boîte à l'ouverture d'un dossier ---- */
+  console.log('\n6. Ouvrir un dossier : automatique, ou choisi');
+  /* La fiche de casier ouverte au constat précédent recouvre la page : sans
+     cette fermeture, le clic suivant vise un onglet qu'un dialogue masque. */
+  await page.evaluate(() => {
+    const d = document.getElementById('casierDialog');
+    if (d && d.open) d.close();
+  });
+  await page.waitForTimeout(300);
+  await page.click('nav button[data-panel="domiciliation"]');
+  await page.waitForTimeout(500);
+  await page.click('#ouvrirFormDomiBtn');
+  await page.waitForTimeout(500);
+
+  const aide = await page.$eval('#domBoiteAide', (e) => e.textContent);
+  ok(/première boîte libre/.test(aide),
+    'l’automatique est proposé par défaut, et annonce ce qui sera pris : ' + JSON.stringify(aide));
+  ok(await page.evaluate(() => document.getElementById('domBoite').hidden),
+    'le champ de saisie reste caché tant qu’on ne le demande pas');
+
+  await page.click('#domBoiteMode [data-boite-mode="manuel"]');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => !document.getElementById('domBoite').hidden),
+    '« Choisir moi-même » ouvre le champ — l’agent a le local sous les yeux');
+  await page.click('#domBoiteMode [data-boite-mode="auto"]');
+  await page.waitForTimeout(300);
+
+  const jour = new Date().toISOString().slice(0, 10);
+  await page.fill('#domNom', 'BENALI');
+  await page.fill('#domPrenom', 'Sarah');
+  await page.fill('#domTelephone', '06 88 88 88 88');
+  await page.fill('#domDebut', jour);
+  await page.click('#enregistrerDomiBtn');
+  await page.waitForTimeout(1500);
+
+  const message = await page.$eval('#domiMsg', (e) => e.innerText);
+  ok(/Boîte B-/.test(message), 'le dossier s’ouvre avec sa boîte : ' + JSON.stringify(message.slice(-40)));
+
+  const attribuee = await page.evaluate(() => {
+    const S = window.BC.store.state;
+    const c = S.contacts.find((x) => x.name === 'Sarah BENALI');
+    const b = S.boites.find((x) => x.numero === c.box);
+    const t = b && window.BC.boites.titulaireCourant(b);
+    return { box: c.box, titulaire: t && t.contactId, id: c.id, statut: b && b.statut };
+  });
+  ok(!!attribuee.box, 'la fiche porte le numéro (' + attribuee.box + ')');
+  ok(attribuee.titulaire === attribuee.id,
+    'et le casier la porte comme titulaire — le miroir tient dès l’ouverture');
+  ok(attribuee.statut === 'occupee', 'le casier est marqué occupé (' + attribuee.statut + ')');
+
   await C.conclure(b, page, v);
 })().catch(function (e) { console.error('PLANTAGE', e); process.exit(1); });

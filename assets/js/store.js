@@ -1076,9 +1076,13 @@
       contact.domicilieJusqua = domiciliation.echeance(contact.domicilieDepuis);
     }
     if (state.mode === 'serveur') {
+      /* `boiteAuto` accompagne la requête sans entrer dans la fiche : ce n'est
+         pas une propriété de la personne, c'est une demande faite au serveur au
+         moment de l'inscription. Le serveur l'écarte de la fiche qu'il range —
+         inutile de la retrouver dans le registre six mois plus tard. */
       const saved = await api('/contacts', {
         method: 'POST',
-        body: JSON.stringify(contact),
+        body: JSON.stringify(Object.assign({ boiteAuto: !!input.boiteAuto }, contact)),
         horsLigne: {
           op: 'contact-ajout',
           description: 'Destinataire ajouté : ' + contact.name,

@@ -364,3 +364,65 @@ test('un schéma venu des réglages est ramené dans des bornes tenables', funct
   assert.equal(s.debut, 0);
   assert.ok(s.fin >= s.debut);
 });
+
+/* ── l'attribution automatique ── */
+
+test('l’attribution automatique reprend une porte libre avant d’en ouvrir une neuve', function () {
+  /* Un local où B-012 s'est libérée le mois dernier doit la réattribuer avant
+     d'ouvrir B-061 : les portes existent physiquement, et laisser un trou au
+     milieu du couloir pour aller poser une étiquette au bout est absurde. */
+  const local = [
+    B.creer({ numero: 'B-011', statut: 'occupee' }),
+    B.creer({ numero: 'B-012', statut: 'libre' }),
+    B.creer({ numero: 'B-013', statut: 'occupee' })
+  ];
+  assert.equal(B.numeroAAttribuer(local), 'B-012');
+});
+
+test('la plus petite des libres, pas la première rencontrée', function () {
+  const local = [
+    B.creer({ numero: 'B-030', statut: 'libre' }),
+    B.creer({ numero: 'B-007', statut: 'libre' })
+  ];
+  assert.equal(B.numeroAAttribuer(local), 'B-007');
+});
+
+test('sans porte libre, on en ouvre une neuve à la suite', function () {
+  const local = [
+    B.creer({ numero: 'B-001', statut: 'occupee' }),
+    B.creer({ numero: 'B-002', statut: 'occupee' })
+  ];
+  assert.equal(B.numeroAAttribuer(local), 'B-003');
+});
+
+test('un local vide commence au début du schéma', function () {
+  assert.equal(B.numeroAAttribuer([]), 'B-001');
+  assert.equal(B.numeroAAttribuer(null), 'B-001');
+});
+
+test('une boîte hors service ou suspendue n’est pas libre', function () {
+  /* Une serrure cassée ne s'attribue pas : la personne ne pourrait pas ouvrir
+     sa porte, et le courrier serait inaccessible sans que rien ne le dise. */
+  const local = [
+    B.creer({ numero: 'B-001', statut: 'horsservice' }),
+    B.creer({ numero: 'B-002', statut: 'suspendue' }),
+    B.creer({ numero: 'B-003', statut: 'reservee' })
+  ];
+  assert.equal(B.numeroAAttribuer(local), 'B-004', 'on passe à la suivante');
+});
+
+test('un local plein le dit, il n’invente pas un numéro hors plan', function () {
+  /* Un local plein est un fait, pas une erreur. L'appelant doit pouvoir le
+     dire à l'agent — qui libérera une boîte, ou étendra le schéma. */
+  const schema = { prefixe: 'B-', chiffres: 3, debut: 1, fin: 2, reutiliser: true };
+  const local = [
+    B.creer({ numero: 'B-001', statut: 'occupee' }, schema),
+    B.creer({ numero: 'B-002', statut: 'occupee' }, schema)
+  ];
+  assert.equal(B.numeroAAttribuer(local, schema), null);
+});
+
+test('le schéma du bureau est respecté', function () {
+  const schema = { prefixe: 'A', chiffres: 2, debut: 1, fin: 99, reutiliser: true };
+  assert.equal(B.numeroAAttribuer([], schema), 'A01');
+});

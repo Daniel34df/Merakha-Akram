@@ -443,6 +443,30 @@ Sur la fiche de remise, l'emplacement passe avant le transporteur : quelqu'un
 attend au comptoir, et ce qu'il faut d'abord, c'est savoir où aller le
 chercher.
 
+## La boîte à l'ouverture d'un dossier
+
+À l'ouverture d'une domiciliation, la personne n'a encore aucun casier. Le
+formulaire propose donc deux façons de lui en donner un :
+
+- **Attribuer automatiquement** (par défaut) — le serveur prend la première
+  boîte libre. Il reprend une porte libérée avant d'en ouvrir une neuve : les
+  casiers existent physiquement, et laisser un trou au milieu du couloir pour
+  aller poser une étiquette au bout n'a pas de sens. L'aide annonce ce qui sera
+  pris, sans le réserver.
+- **Choisir moi-même** — l'agent tape le numéro. Il a le local sous les yeux et
+  sait des choses que le plan ignore : une porte qui ferme mal, un casier trop
+  haut pour quelqu'un. Un numéro inconnu du plan y entre de lui-même.
+
+C'est **le serveur qui attribue**, jamais le poste, et le choix se fait à
+l'intérieur de l'écriture. Deux postes qui ouvrent un dossier au même instant
+liraient sinon la même « première libre », et deux personnes se partageraient
+une porte — celui qui ouvre trouverait le courrier d'un autre.
+
+Un local plein n'empêche pas d'inscrire quelqu'un : la fiche se crée sans
+boîte et l'écran le dit. Refuser l'inscription faute de casier reviendrait à
+refuser la domiciliation, c'est-à-dire à refuser une adresse à quelqu'un qui
+n'en a pas.
+
 ## Le relevé de la journée
 
 Un bureau de courrier n'est pas tenu par une seule personne : quelqu'un ouvre,
@@ -1329,7 +1353,7 @@ tools/verifier/       vérifications de navigateur, une par défaut corrigé
 ```
 
 ```bash
-npm test     # 712 tests : utilitaires, API, comptes, domiciliation, appels, socle,
+npm test     # 724 tests : utilitaires, API, comptes, domiciliation, appels, socle,
              #             couleurs, rejeu, casiers, signature, scanner, référence,
              #             doublons, colis, relevé du jour, journée, diagnostic,
              #             calendrier, PDF, étiquettes, délégation

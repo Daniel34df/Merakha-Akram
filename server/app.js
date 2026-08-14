@@ -1925,7 +1925,8 @@ async function handleApi(req, res, ctx, pathname) {
     // n'empêche d'appeler l'autre directement.
     if (method === 'GET') return sendJson(res, 200, pourSonAntenne(db.data.contacts));
     if (method === 'POST') {
-      const input = cleanContact(await readBody(req));
+      const brut = await readBody(req);
+      const input = cleanContact(brut);
       /* Ouvrir une domiciliation, c'est inscrire quelqu'un : l'agent d'accueil
          le fait tous les jours. On ne lui demande donc pas le droit de
          modifier le registre — seulement celui de domicilier, et uniquement
@@ -1941,9 +1942,34 @@ async function handleApi(req, res, ctx, pathname) {
          connu, il change de titulaire ; sinon il est créé à la volée. Un
          bureau qui n'ouvre jamais l'écran des casiers travaille donc comme
          avant, et son plan se remplit tout seul au fil des inscriptions. */
+      /* L'attribution automatique : le bureau demande une boîte, le serveur en
+         choisit une. C'est le geste ordinaire à l'ouverture d'un premier
+         dossier de domiciliation — la personne n'a encore aucun casier, et
+         l'agent n'a pas à connaître le local par cœur.
+
+         Le choix se fait **dans le mutateur**, pour la même raison que la
+         référence de courrier : `db.write` sérialise les écritures, et deux
+         postes qui ouvrent un dossier au même instant liraient sinon le même
+         « premier libre ». Deux personnes, une seule porte, et celui qui ouvre
+         trouve le courrier d'un autre.
+
+         Un local plein n'est pas une erreur : la fiche se crée sans boîte, et
+         la réponse le dit pour que l'agent en libère une ou étende le plan.
+         Refuser l'inscription pour un casier manquant serait refuser la
+         domiciliation elle-même. */
+      const auto = !!(brut && brut.boiteAuto) && !String(contact.box || '').trim();
+      let localPlein = false;
       await db.write(function (data) {
         if (!Array.isArray(data.boites)) data.boites = [];
-        const r = boites.reconcilier(data.boites, contact, contact.box, data.settings.numerotation);
+        let demande = contact.box;
+        if (auto) {
+          demande = boites.numeroAAttribuer(data.boites, data.settings.numerotation);
+          if (!demande) {
+            localPlein = true;
+            demande = '';
+          }
+        }
+        const r = boites.reconcilier(data.boites, contact, demande, data.settings.numerotation);
         data.boites = r.boites;
         contact = Object.assign({}, contact, { box: r.numero });
         data.contacts.push(contact);
@@ -1954,7 +1980,9 @@ async function handleApi(req, res, ctx, pathname) {
         cible: contact.name,
         details: contact.box ? 'boîte ' + contact.box : ''
       });
-      return sendJson(res, 201, contact);
+      /* `localPlein` voyage à côté de la fiche plutôt que dedans : ce n'est pas
+         une propriété de la personne, c'est un état du local à cet instant. */
+      return sendJson(res, 201, localPlein ? Object.assign({}, contact, { localPlein: true }) : contact);
     }
   }
 

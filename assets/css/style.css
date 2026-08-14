@@ -2545,3 +2545,8 @@ body.impression-casier .feuille-casier{display:block;}
 /* Sur la fiche de remise, ces deux lignes ne s'alignent pas à droite comme les
    couples « nom : valeur » : ce sont des phrases, elles se lisent. */
 .notes-cell{text-align:left !important;font-weight:500 !important;}
+
+/* Le choix « automatique / manuel » de la boîte, à l'ouverture d'un dossier.
+   La barre segmentée est celle du guichet, réemployée : c'est le même geste,
+   il doit avoir la même forme. */
+#domBoiteMode{margin-bottom:6px;}

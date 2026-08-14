@@ -20,6 +20,7 @@
   const util = root.BC.util;
   const store = root.BC.store;
   const domi = root.BC.domiciliation;
+  const boites = root.BC.boites;
   const ui = root.BC.ui;
   const impression = root.BC.impression;
   const tableau = root.BC.tableau.tableau;
@@ -109,13 +110,18 @@
       }
 
       return {
+        /* L'attribution automatique se demande au serveur ; le numéro n'est pas
+           décidé ici. Deux postes qui ouvrent un dossier au même instant
+           liraient sinon le même « premier libre », et deux personnes se
+           partageraient une porte. */
+        boiteAuto: modeBoite() === 'auto',
         contact: {
           // « Prénom NOM » : l'ordre sous lequel on cherche quelqu'un au guichet.
           name: prenom + ' ' + nom,
           email: courriel,
           telephone: $('domTelephone').value.trim(),
           naissance: $('domNaissance').value,
-          box: $('domBoite').value.trim(),
+          box: modeBoite() === 'auto' ? '' : $('domBoite').value.trim(),
           langue: $('domLangue').value,
           antenneId: antennes().length ? $('domAntenne').value : '',
           notes: $('domNotes').value.trim(),
@@ -141,7 +147,7 @@
       const btn = $('enregistrerDomiBtn');
       btn.disabled = true;
       try {
-        const c = await store.addContact(lu.contact);
+        const c = await store.addContact(Object.assign({ boiteAuto: lu.boiteAuto }, lu.contact));
         const e2 = domi.etat(c, S.history);
         $('formDomiciliation').hidden = true;
         stamp('Domicilié', c.name);
@@ -150,7 +156,12 @@
           'ok',
           '<strong>' + esc(c.name) + '</strong> est domicilié·e ici et inscrit·e au registre.<br>' +
             'Attestation valable jusqu’au <strong>' + esc(util.formatJour(e2.echeance)) + '</strong>.' +
-            (c.box ? ' Boîte ' + esc(c.box) + '.' : '') +
+            (c.box
+              ? ' Boîte <strong>' + esc(c.box) + '</strong>.'
+              : c.localPlein
+                ? ' <em>Aucune boîte libre : le plan du local est complet. ' +
+                  'Libérez-en une ou étendez la numérotation, puis attribuez-la depuis le Registre.</em>'
+                : '') +
             (c.email
               ? ' Les avis de courrier partiront à ' + esc(c.email) + '.'
               : ' <em>Sans adresse électronique : à prévenir par téléphone.</em>') +
@@ -599,12 +610,54 @@
      donc pas se faire au chargement, l'ordre des balises <script> ne le
      garantissant pas. `init()` est appelé par app.js une fois tout le monde
      inscrit. */
+  /* ═════════════ la boîte, à l'ouverture d'un dossier ═════════════ */
+
+  /* Le mode se lit sur le bouton actif plutôt que dans une variable : l'état
+     visible et l'état réel ne peuvent alors pas diverger. Une variable oubliée
+     lors d'une remise à zéro du formulaire enverrait « manuel » avec un champ
+     vide, et la personne repartirait sans boîte sans que rien ne le dise. */
+  function modeBoite() {
+    const actif = document.querySelector('#domBoiteMode button.active');
+    return actif && actif.dataset.boiteMode === 'manuel' ? 'manuel' : 'auto';
+  }
+
+  function majModeBoite() {
+    const manuel = modeBoite() === 'manuel';
+    $('domBoite').hidden = !manuel;
+    if (!manuel) $('domBoite').value = '';
+    /* Ce que l'aide dit dépend de ce que le bureau a déjà : proposer « B-001 »
+       à un local qui commence à B-100 serait une promesse fausse, et le numéro
+       réel n'est de toute façon attribué qu'à l'enregistrement. On annonce donc
+       ce qui **sera** pris, sans le réserver. */
+    const prochaine = boites.numeroAAttribuer(S.boites, S.settings.numerotation);
+    $('domBoiteAide').textContent = manuel
+      ? 'Un numéro inconnu du plan y entrera de lui-même.'
+      : prochaine
+        ? 'La première boîte libre sera attribuée — actuellement ' + prochaine + '.'
+        : 'Aucune boîte libre : le dossier s’ouvrira sans casier, et vous pourrez en attribuer un plus tard.';
+  }
+
   function init() {
     ecrans.registre.remplirLangues($('domLangue'), 'fr');
+
+    ui.deleguer('domBoiteMode', 'button[data-boite-mode]', function (btn) {
+      $('domBoiteMode').querySelectorAll('button').forEach(function (b) {
+        const actif = b === btn;
+        b.classList.toggle('active', actif);
+        b.setAttribute('aria-checked', actif ? 'true' : 'false');
+      });
+      majModeBoite();
+    });
+    majModeBoite();
   }
 
   ui.inscrire('domiciliation', {
     init: init,
-    render: renderDomiciliation
+    render: function () {
+      renderDomiciliation();
+      /* L'aide annonce la prochaine boîte libre : elle vieillit dès qu'un
+         collègue en attribue une. */
+      if ($('domBoiteAide')) majModeBoite();
+    }
   });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

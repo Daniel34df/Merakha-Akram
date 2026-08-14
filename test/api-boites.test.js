@@ -366,3 +366,104 @@ test('un registre d’avant les casiers retrouve son plan au chargement', functi
       'et le miroir est cohérent dès la migration');
   });
 });
+
+/* ── l'attribution automatique à l'ouverture d'un dossier ── */
+
+test('le serveur attribue une boîte quand on la lui demande', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const r = await t.call('POST', '/api/contacts', {
+      name: 'Amina Diallo', telephone: '06 12 34 56 78',
+      domicilie: true, domicilieDepuis: '2026-08-01',
+      boiteAuto: true
+    });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.box, 'B-001', 'la première du plan');
+
+    const etat = await t.call('GET', '/api/state');
+    const b = etat.body.boites.find(function (x) { return x.numero === 'B-001'; });
+    assert.ok(b, 'la boîte est créée au plan du local');
+    assert.equal(B.titulaireCourant(b).contactId, r.body.id,
+      'et la personne en est titulaire — le miroir tient dès l’ouverture');
+  });
+});
+
+test('l’attribution automatique reprend une boîte libérée avant d’en ouvrir une neuve', function () {
+  /* Les portes existent physiquement : laisser un trou au milieu du couloir
+     pour aller poser une étiquette au bout est absurde. */
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    await t.call('POST', '/api/boites/serie', { debut: 1, fin: 5 });
+    const un = await t.call('POST', '/api/contacts', {
+      name: 'Premier', telephone: '0600000001', boiteAuto: true
+    });
+    assert.equal(un.body.box, 'B-001');
+    const deux = await t.call('POST', '/api/contacts', {
+      name: 'Deuxième', telephone: '0600000002', boiteAuto: true
+    });
+    assert.equal(deux.body.box, 'B-002');
+
+    /* On libère la première, puis on inscrit quelqu'un : il doit la reprendre. */
+    const etat = await t.call('GET', '/api/state');
+    const b1 = etat.body.boites.find(function (x) { return x.numero === 'B-001'; });
+    await t.call('POST', '/api/boites/' + b1.id + '/liberer', { motif: 'relogée' });
+
+    const trois = await t.call('POST', '/api/contacts', {
+      name: 'Troisième', telephone: '0600000003', boiteAuto: true
+    });
+    assert.equal(trois.body.box, 'B-001', 'la porte libérée reprend du service');
+  });
+});
+
+test('un numéro choisi à la main l’emporte sur l’attribution automatique', function () {
+  /* L'agent qui a le local sous les yeux sait des choses que le plan ignore —
+     une porte qui ferme mal, un casier trop haut pour quelqu'un. */
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const r = await t.call('POST', '/api/contacts', {
+      name: 'Amina Diallo', telephone: '06 12 34 56 78',
+      box: 'B-042', boiteAuto: true
+    });
+    assert.equal(r.body.box, 'B-042');
+  });
+});
+
+test('deux dossiers ouverts au même instant n’obtiennent pas la même porte', function () {
+  /* C'est **la** raison pour laquelle le choix se fait dans le mutateur de
+     `db.write`. Deux personnes, une seule porte, et celui qui ouvre trouve le
+     courrier d'un autre. */
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const envois = [];
+    for (let i = 0; i < 6; i++) {
+      envois.push(t.call('POST', '/api/contacts', {
+        name: 'Personne ' + i, telephone: '06000000' + i, boiteAuto: true
+      }));
+    }
+    const boitesRendues = (await Promise.all(envois)).map(function (r) { return r.body.box; });
+    assert.equal(new Set(boitesRendues).size, 6,
+      'six dossiers, six portes : ' + boitesRendues.join(' '));
+  });
+});
+
+test('un local plein n’empêche pas d’inscrire quelqu’un', function () {
+  /* Refuser l'inscription pour un casier manquant serait refuser la
+     domiciliation elle-même — c'est-à-dire refuser une adresse à quelqu'un qui
+     n'en a pas. La fiche se crée sans boîte, et la réponse le dit. */
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    await t.call('PUT', '/api/settings', {
+      subject: 'Un courrier vous attend', body: 'Bonjour,',
+      numerotation: { prefixe: 'B-', chiffres: 3, debut: 1, fin: 2, reutiliser: true }
+    });
+    await t.call('POST', '/api/contacts', { name: 'Un', telephone: '0600000001', boiteAuto: true });
+    await t.call('POST', '/api/contacts', { name: 'Deux', telephone: '0600000002', boiteAuto: true });
+
+    const trop = await t.call('POST', '/api/contacts', {
+      name: 'Trois', telephone: '0600000003', boiteAuto: true
+    });
+    assert.equal(trop.status, 201, 'la fiche est créée quand même');
+    assert.equal(trop.body.box, '');
+    assert.equal(trop.body.localPlein, true, 'et l’agent est prévenu');
+  });
+});

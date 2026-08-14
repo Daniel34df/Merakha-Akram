@@ -732,8 +732,24 @@
             <p class="hint" id="domEcheance"></p>
           </div>
           <div>
-            <label for="domBoite">Numéro de boîte ou de casier</label>
-            <input type="text" id="domBoite" autocomplete="off" placeholder="B-12">
+            <label id="domBoiteLabel">Boîte aux lettres</label>
+            <!-- À l'ouverture d'un dossier, la personne n'a encore aucun
+                 casier. L'automatique est proposé par défaut : c'est le geste
+                 ordinaire, et l'agent n'a pas à connaître le local par cœur.
+                 Le manuel reste à un clic — il a le local sous les yeux et
+                 sait des choses que le plan ignore : une porte qui ferme mal,
+                 un casier trop haut pour quelqu'un.
+                 Le numéro n'est **pas** décidé ici : c'est le serveur qui
+                 attribue, sans quoi deux postes donneraient la même porte à
+                 deux personnes. Voir assets/js/boites.js. -->
+            <div class="search-modes" id="domBoiteMode" role="radiogroup" aria-labelledby="domBoiteLabel">
+              <button type="button" class="active" data-boite-mode="auto"
+                      role="radio" aria-checked="true">Attribuer automatiquement</button>
+              <button type="button" data-boite-mode="manuel"
+                      role="radio" aria-checked="false">Choisir moi-même</button>
+            </div>
+            <input type="text" id="domBoite" autocomplete="off" placeholder="B-12" hidden>
+            <p class="hint" id="domBoiteAide"></p>
           </div>
         </div>
         <div id="domAntenneBloc" hidden>

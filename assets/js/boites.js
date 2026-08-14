@@ -249,6 +249,34 @@
     return trier(boites).find(estLibre) || null;
   }
 
+  /* Le numéro à attribuer d'office, quand le bureau demande l'attribution
+     automatique — typiquement à l'ouverture d'un premier dossier de
+     domiciliation, où la personne n'a encore aucun casier.
+
+     L'ordre compte, et il n'est pas évident :
+
+       1. **une boîte qui existe et qui est libre**, la plus petite. Un local
+          où B-012 s'est libérée le mois dernier doit la réattribuer avant
+          d'ouvrir B-061 : les portes existent physiquement, et laisser un trou
+          au milieu du couloir pour aller poser une étiquette au bout est
+          absurde ;
+       2. **à défaut, le prochain numéro du schéma**, qui créera un casier.
+
+     Rend `null` quand le schéma est épuisé — un local plein est un fait, pas
+     une erreur, et l'appelant doit pouvoir le dire à l'agent plutôt que
+     d'inventer un numéro hors plan.
+
+     **À n'appeler que depuis l'intérieur d'un `db.write`.** Deux postes qui
+     ouvrent un dossier au même instant liraient sinon le même « premier libre »
+     et attribueraient la même porte à deux personnes — exactement ce que
+     l'attribution par le serveur existe pour empêcher. */
+  function numeroAAttribuer(boites, schema) {
+    const libre = premiereLibre(boites);
+    if (libre && libre.numero) return libre.numero;
+    const n = prochainNumero(boites, schema);
+    return n === null ? null : formaterNumero(n, schema);
+  }
+
   /* ---------- la capacité ---------- */
 
   /* Deux seuils, parce qu'un seul arrive trop tard : à 80 % on prévient, à
@@ -539,6 +567,7 @@
     liberer: liberer,
     prochainNumero: prochainNumero,
     premiereLibre: premiereLibre,
+    numeroAAttribuer: numeroAAttribuer,
     etat: etat,
     comptesEnAttente: comptesEnAttente,
     plan: plan,
