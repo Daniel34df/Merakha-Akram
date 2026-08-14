@@ -67,6 +67,12 @@
       history.replaceState(null, '', '#' + name);
     }
 
+    /* Le panneau qu'on ouvre a peut-être vieilli pendant qu'il était masqué :
+       on le repeint avant qu'il paraisse. Sans cette ligne, le rendu paresseux
+       montrerait l'état d'il y a dix minutes — ce serait échanger une lenteur
+       contre un mensonge. */
+    if (aRepeindre[name]) peindrePanneau(name);
+
     /* La carte « Postes du bureau » interroge le serveur, donc elle ne se
        charge que lorsqu'elle est à l'écran — sans quoi chaque écriture d'un
        autre poste déclencherait un appel pour une carte que personne ne
@@ -1861,8 +1867,6 @@
     const attente = S.history.filter(function (h) {
       return enAttente(h) && deLAntenne(h);
     });
-    $('countAttente').textContent = attente.length;
-    ui.majCompteur($('tabCountAttente'), attente.length);
 
     if (attente.length === 0) {
       box.innerHTML = '<div class="empty">Aucun courrier en attente. Tout est retiré.</div>';
@@ -2199,8 +2203,6 @@
     const classes = S.history.filter(function (h) {
       return etatCourrier(h) === 'clos';
     });
-    $('countDossier').textContent = signales.length;
-    ui.majCompteur($('tabCountDossier'), signales.length);
 
     /* Bilan des relances : c'est le chiffre qui dit si relancer sert à quelque
        chose, et qui répond à « qui a récupéré, qui n'a pas ». */
@@ -2847,8 +2849,6 @@
 
   function renderContacts() {
     const duBureau = S.contacts.filter(deLAntenne);
-    $('countContacts').textContent = duBureau.length;
-    ui.majCompteur($('tabCountContacts'), duBureau.length);
     const box = $('contactsTable');
     const list = visibleContacts();
 
@@ -5253,44 +5253,131 @@
     renderAll: function () {
       return renderAll();
     },
+    renderTout: function () {
+      return renderTout();
+    },
     showPanel: function (nom) {
       return showPanel(nom);
     }
   });
 
+  /* ═════════════ compter, puis peindre ═════════════
+
+     Ces trois chiffres vivent sur les onglets, donc **toujours à l'écran**,
+     quel que soit l'onglet ouvert. Ils étaient calculés en tête des fonctions
+     qui peignent les écrans correspondants — ce qui les liait au dessin de
+     tableaux que personne ne regarde.
+
+     Les séparer est ce qui rend le rendu paresseux possible : on peut cesser
+     de peindre le Registre quand il est masqué, à condition que son compteur,
+     lui, continue de dire la vérité. Un compteur figé sur l'onglet est pire
+     qu'un tableau non peint : le tableau, on le voit en l'ouvrant ; le
+     compteur, on le croit.
+
+     Trois filtres sur des tableaux en mémoire : quelques millisecondes, contre
+     les centaines que coûte le dessin. */
+  function renderCompteurs() {
+    const attente = S.history.filter(function (h) {
+      return enAttente(h) && deLAntenne(h);
+    });
+    $('countAttente').textContent = attente.length;
+    ui.majCompteur($('tabCountAttente'), attente.length);
+
+    const signales = S.history.filter(function (h) {
+      return etatCourrier(h) === 'signale';
+    });
+    $('countDossier').textContent = signales.length;
+    ui.majCompteur($('tabCountDossier'), signales.length);
+
+    const duBureau = S.contacts.filter(deLAntenne);
+    $('countContacts').textContent = duBureau.length;
+    ui.majCompteur($('tabCountContacts'), duBureau.length);
+  }
+
+  /* ═════════════ le rendu paresseux ═════════════
+
+     Ce que ça règle, mesuré. Sur un registre de deux ans — 300 fiches, 6 000
+     courriers — un `renderAll()` complet coûtait 356 ms. Et il ne se déclenche
+     pas seulement quand on clique : **chaque écriture faite sur le poste d'à
+     côté** en provoque un, par la synchronisation en direct. Le guichet se
+     figeait un tiers de seconde sous les doigts de quelqu'un en train de
+     taper, sans raison visible pour lui.
+
+     L'essentiel de ce temps servait à peindre des écrans masqués : sept
+     panneaux sur huit ne sont pas à l'écran. On peint donc celui qui l'est, et
+     on note les autres comme à refaire. `showPanel` les rattrape en les
+     ouvrant.
+
+     Ce qui reste peint dans tous les cas, et pourquoi :
+
+       · les compteurs d'onglets — ils sont visibles en permanence, et un
+         compteur figé est pire qu'un tableau non peint : le tableau, on le
+         voit en l'ouvrant ; le compteur, on le croit ;
+       · l'écran de connexion et le mode de registre — ils décident de ce qui
+         s'affiche du tout ;
+       · les droits et les barres de sections — ils masquent des cartes, donc
+         ils changent la structure de tous les panneaux à la fois.
+
+     Le reste est paresseux. */
+  const PEINTRES = {
+    guichet: [function () { ecrans.bord.render(); }],
+    remise: [renderPending, renderAppels, renderAppelEntrant],
+    registre: [renderContacts, function () { if (ecrans.casiers) ecrans.casiers.render(); }],
+    suivi: [renderHistory, renderDossier, renderStats, function () { ecrans.pilotage.render(); }],
+    domiciliation: [
+      function () { ecrans.domiciliation.render(); },
+      function () { ecrans.calendrier.render(); }
+    ],
+    reglages: [
+      renderMailbox, renderAccounts, renderJournal,
+      renderAgents, renderAntennes, renderCarteAntennes, renderPostes
+    ]
+  };
+
+  /* Les panneaux dont le contenu ne correspond plus à l'état. */
+  const aRepeindre = {};
+
+  function peindrePanneau(nom) {
+    (PEINTRES[nom] || []).forEach(function (f) {
+      f();
+    });
+    delete aRepeindre[nom];
+  }
+
+  function panneauOuvert() {
+    const actif = document.querySelector('.panel.active');
+    return actif ? String(actif.id).replace('panel-', '') : 'guichet';
+  }
+
   function renderAll() {
+    /* Toujours : ce qui se voit quel que soit l'onglet, ou ce qui décide de la
+       structure des autres. */
     renderGate();
     renderRegistryChoice();
     renderMode();
-    renderContacts();
-    renderHistory();
     renderStatus();
-    renderMailbox();
-    renderPending();
-    renderAppels();
-    renderAppelEntrant();
-    renderDossier();
-    renderAccounts();
-    renderStats();
-    renderJournal();
-    ecrans.domiciliation.render();
-    /* Le relevé du jour se refait avec le reste : il n'a de valeur que s'il
-       est à jour, et un chiffre figé sur un écran qu'on regarde le matin est
-       pire que pas de chiffre du tout. */
-    ecrans.bord.render();
-    ecrans.pilotage.render();
-    ecrans.calendrier.render();
-    renderAgents();
-    renderAntennes();
-    renderCarteAntennes();
-    renderPostes();
+    renderCompteurs();
     appliquerDroits();
     /* Après appliquerDroits : c'est lui qui masque les cartes, et les sections
        se calculent d'après ce qui reste visible. */
     renderSectionsReglages();
     renderSectionsSuivi();
     renderSectionsRegistre();
-    if (ecrans.casiers) ecrans.casiers.render();
+
+    /* Puis l'écran qu'on regarde, et lui seul. Les autres sont notés. */
+    const ouvert = panneauOuvert();
+    Object.keys(PEINTRES).forEach(function (nom) {
+      if (nom !== ouvert) aRepeindre[nom] = true;
+    });
+    peindrePanneau(ouvert);
+  }
+
+  /* Tout repeindre, sans paresse. Sert quand on ne sait pas ce qui a changé —
+     après une restauration de sauvegarde, ou un effacement complet — et aux
+     vérifications de navigateur, qui lisent des écrans sans les ouvrir. */
+  function renderTout() {
+    renderAll();
+    Object.keys(PEINTRES).forEach(peindrePanneau);
   }
 
   /* L'interface masque ce qui n'est pas ouvert. Le serveur refuse de toute

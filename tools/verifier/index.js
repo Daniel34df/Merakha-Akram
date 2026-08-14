@@ -7,7 +7,7 @@
  *
  * Ce que `node --test` ne peut pas faire : ouvrir un écran. La suite ordinaire
  * couvre tout ce qui est pur — et c'est là que va l'essentiel, parce que c'est
- * là que ça se vérifie vite et partout. Restent ces neuf parcours, qui cliquent
+ * là que ça se vérifie vite et partout. Restent ces parcours-ci, qui cliquent
  * pour de vrai.
  *
  * Chacun tourne sur **son** serveur et **sa** base : les faire partager un
@@ -42,7 +42,8 @@ const SCRIPTS = [
   ['colis', 'l’emplacement demandé quand le colis ne rentre pas, et rien qui sorte chez le transporteur'],
   ['pilotage', 'la passation du soir, et un diagnostic qui ne dit jamais « tout va bien » sans avoir regardé'],
   ['echeances', 'le calendrier qui fait voir les paquets, et un PDF qu’un lecteur accepte vraiment'],
-  ['etiquettes', 'la consigne sous les yeux au moment de la remise, et qui ne part jamais dans un message']
+  ['etiquettes', 'la consigne sous les yeux au moment de la remise, et qui ne part jamais dans un message'],
+  ['paresse', 'on ne peint que l’écran ouvert — sans qu’un compteur mente ni qu’un écran reste vieux']
 ];
 
 const PORT_BASE = Number(process.env.PORT_BASE || 5490);
