@@ -27,6 +27,7 @@
   const doublons = root.BC.doublons;
   const reference = root.BC.reference;
   const colis = root.BC.colis;
+  const etiq = root.BC.etiquettes;
   const ui = root.BC.ui;
   const impression = root.BC.impression;
   const S = store.state;
@@ -810,6 +811,19 @@
        s'efface plutôt que d'afficher un tiret sans objet. */
     if (record.reference) {
       lignes.push(ligneFiche('Référence', record.reference, 'reference-cell'));
+    }
+    /* Ce que l'équipe s'est noté sur cette personne, **au moment de la
+       remise**. C'est le seul instant où ça sert : quelqu'un est devant le
+       comptoir, et la consigne — « ne pas remettre à un tiers », « passe
+       toujours accompagnée » — est dans une fiche que l'agent n'ouvrira pas
+       s'il n'a pas de raison de l'ouvrir. C'est exactement pour ne pas avoir à
+       l'ouvrir qu'on l'affiche ici. */
+    if (contact && contact.notes) {
+      lignes.push(ligneFiche('Observations', contact.notes, 'notes-cell'));
+    }
+    const marques = etiq.de(contact);
+    if (marques.length) {
+      lignes.push(ligneFiche('Étiquettes', marques.join(' · '), 'notes-cell'));
     }
     /* Le colis, et d'abord où il est. L'agent a quelqu'un devant lui : il doit
        savoir où aller le chercher avant de savoir qui l'a livré. Un colis
@@ -2052,6 +2066,37 @@
     $('ficheAttestationBtn').hidden = actif || $('ficheAttestationBtn').dataset.possible !== 'oui';
   }
 
+  /* Un clic sur une suggestion l'ajoute au champ ; la liste se refait aussitôt,
+     pour que ce qui vient d'être posé cesse d'être proposé. Écouteur unique :
+     la liste se réécrit à chaque frappe. */
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest && e.target.closest('[data-etiq]');
+    if (!btn) return;
+    const champ = $('fedEtiquettes');
+    if (!champ) return;
+    const liste = etiq.lire(champ.value);
+    if (liste.indexOf(btn.dataset.etiq) === -1) liste.push(btn.dataset.etiq);
+    champ.value = etiq.ecrire(liste);
+    peindreSuggestionsEtiquettes();
+  });
+
+  /* Les étiquettes déjà employées par le bureau, proposées d'un clic.
+
+     C'est ce qui empêche « tutelle », « Tutelle » et « mise sous tutelle » de
+     cohabiter : on propose ce qui existe avant que quelqu'un réinvente le mot.
+     La normalisation rattrape les deux premières, pas la troisième. */
+  function peindreSuggestionsEtiquettes() {
+    const boite = $('fedEtiquettesSuggestions');
+    if (!boite) return;
+    const proposees = etiq.proposer(S.contacts, $('fedEtiquettes').value);
+    boite.innerHTML = proposees.length
+      ? proposees.map(function (e) {
+          return '<button type="button" class="etiq-suggestion" data-etiq="' + esc(e) + '">' +
+            esc(e) + '</button>';
+        }).join('')
+      : '';
+  }
+
   function remplirEditionFiche(c) {
     $('fedNom').value = c.name || '';
     $('fedBoite').value = c.box || '';
@@ -2060,6 +2105,8 @@
     $('fedNaissance').value = c.naissance || '';
     $('fedLangue').value = util.langue(c.langue).id;
     $('fedNotes').value = c.notes || '';
+    $('fedEtiquettes').value = etiq.ecrire(etiq.de(c));
+    peindreSuggestionsEtiquettes();
 
     const liste = antennes();
     $('fedAntenneBloc').hidden = liste.length === 0;
@@ -2125,6 +2172,7 @@
         langue: $('fedLangue').value,
         antenneId: antennes().length ? $('fedAntenne').value : '',
         notes: $('fedNotes').value.trim(),
+        etiquettes: etiq.lire($('fedEtiquettes').value),
         domicilie: !!c.domicilie,
         domicilieDepuis: c.domicilie ? $('fedDepuis').value : '',
         /* L'échéance courante voyage avec la modification : sans elle, le
@@ -2777,6 +2825,14 @@
     const q = view.contactFilter.trim();
     // L'antenne affichée filtre avant tout le reste.
     const duBureau = S.contacts.filter(deLAntenne);
+    /* Une saisie préfixée de « # » filtre sur les étiquettes plutôt que sur le
+       texte : « #tutelle » répond à « montre-moi les dossiers sous tutelle »,
+       ce qu'aucune recherche par nom ne sait faire. Le préfixe évite un second
+       champ, et il se tape — un champ de plus sur cet écran aurait coûté plus
+       qu'il ne rapporte. */
+    if (q.indexOf('#') === 0) {
+      return util.sortByName(etiq.filtrer(duBureau, q.replace(/#/g, ' ')));
+    }
     const list = q
       ? duBureau.filter(function (c) {
           return util.matchesQuery(c, q, 'tout');

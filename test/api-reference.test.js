@@ -223,3 +223,35 @@ test('un courrier ordinaire n’est pas urgent par accident', function () {
     assert.equal(r.body.urgent, false);
   });
 });
+
+/* ── les étiquettes ── */
+
+test('les étiquettes sont normalisées par le serveur, pas seulement à l’écran', function () {
+  /* Deux postes qui écrivent « Tutelle » et « tutelle » doivent aboutir à la
+     même étiquette. Sinon le filtre en trouve deux et l'agent croit à deux
+     situations différentes — ce qui est pire que pas d'étiquettes du tout,
+     parce qu'il croira avoir cherché. Un import de fichier passe aussi par là,
+     et lui ne passe par aucun écran. */
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const r = await t.call('POST', '/api/contacts', {
+      name: 'Amina Diallo', telephone: '06 12 34 56 78',
+      etiquettes: 'Tutelle, Suivi Social, tutelle'
+    });
+    assert.equal(r.status, 201);
+    assert.deepEqual(r.body.etiquettes, ['tutelle', 'suivi-social'],
+      'normalisées et dédoublonnées');
+
+    const relu = new Db(t.fichier);
+    await relu.load();
+    assert.deepEqual(relu.data.contacts[0].etiquettes, ['tutelle', 'suivi-social']);
+  });
+});
+
+test('une fiche sans étiquette en porte une liste vide, pas un champ absent', function () {
+  return withServer(async function (t) {
+    await t.call('POST', '/api/auth/signup', RESP);
+    const r = await t.call('POST', '/api/contacts', { name: 'Marc Petit', telephone: '0700000000' });
+    assert.deepEqual(r.body.etiquettes, []);
+  });
+});

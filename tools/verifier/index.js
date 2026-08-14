@@ -41,7 +41,8 @@ const SCRIPTS = [
   ['bord', 'le relevé du jour : calme quand c’est calme, et chaque chiffre mène à son dossier'],
   ['colis', 'l’emplacement demandé quand le colis ne rentre pas, et rien qui sorte chez le transporteur'],
   ['pilotage', 'la passation du soir, et un diagnostic qui ne dit jamais « tout va bien » sans avoir regardé'],
-  ['echeances', 'le calendrier qui fait voir les paquets, et un PDF qu’un lecteur accepte vraiment']
+  ['echeances', 'le calendrier qui fait voir les paquets, et un PDF qu’un lecteur accepte vraiment'],
+  ['etiquettes', 'la consigne sous les yeux au moment de la remise, et qui ne part jamais dans un message']
 ];
 
 const PORT_BASE = Number(process.env.PORT_BASE || 5490);

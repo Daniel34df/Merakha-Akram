@@ -1057,6 +1057,11 @@
       telephone: (input.telephone || '').trim(),
       naissance: input.naissance || '',
       notes: (input.notes || '').trim(),
+      /* Le même piège que les réglages : cette fonction reconstruit la fiche
+         champ par champ, et tout champ oublié ici disparaît en silence — la
+         saisie paraît réussir, et l'information n'est nulle part. Le serveur
+         normalise ; ici on se contente de transmettre. */
+      etiquettes: Array.isArray(input.etiquettes) ? input.etiquettes : (input.etiquettes || ''),
       absentUntil: input.absentUntil || '',
       departed: !!input.departed,
       substituteId: input.substituteId || null,

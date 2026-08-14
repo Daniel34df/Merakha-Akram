@@ -2515,3 +2515,33 @@ body.impression-casier .feuille-casier{display:block;}
   background:#000;
   object-fit:cover;
 }
+
+/* ---------- étiquettes ---------- */
+/* Elles disent de quel genre est la situation ; les observations disent
+   laquelle. Ni les unes ni les autres ne sortent dans un message : ce sont des
+   mots que l'équipe se dit entre elle, et « tutelle » ou « expulsion » lus par
+   un tiers blessent sans rien apprendre d'utile. */
+.etiq-suggestions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:6px;
+}
+.etiq-suggestion{
+  padding:3px 10px;
+  border:1px dashed var(--line);
+  border-radius:999px;
+  background:transparent;
+  color:var(--ink-2);
+  font:inherit;
+  font-size:var(--tx-1);
+  cursor:pointer;
+}
+.etiq-suggestion:hover{
+  border-style:solid;
+  border-color:var(--accent);
+  color:var(--accent-texte);
+}
+/* Sur la fiche de remise, ces deux lignes ne s'alignent pas à droite comme les
+   couples « nom : valeur » : ce sont des phrases, elles se lisent. */
+.notes-cell{text-align:left !important;font-weight:500 !important;}

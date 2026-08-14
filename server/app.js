@@ -22,6 +22,7 @@ const boites = require('../assets/js/boites.js');
 const reference = require('../assets/js/reference.js');
 const colisMod = require('../assets/js/colis.js');
 const diagnostic = require('../assets/js/diagnostic.js');
+const etiquettes = require('../assets/js/etiquettes.js');
 const journee = require('../assets/js/journee.js');
 
 const VERSION = '1.3.0';
@@ -246,6 +247,11 @@ function cleanContact(input) {
     telephone: telephone,
     naissance: jourValide(input && input.naissance, 'Date de naissance'),
     notes: String((input && input.notes) || '').trim().slice(0, 300),
+    /* Les étiquettes sont normalisées **ici**, côté serveur, et pas seulement
+       à l'écran : deux postes qui écrivent « Tutelle » et « tutelle » doivent
+       aboutir à la même, sinon le filtre en trouve deux et l'agent croit à
+       deux situations. Un import de fichier passe aussi par là. */
+    etiquettes: etiquettes.lire(input && input.etiquettes),
     domicilie: domicilie,
     domicilieDepuis: domicilie ? domicilieDepuis : '',
     domicilieJusqua: domicilie ? domicilieJusqua : '',

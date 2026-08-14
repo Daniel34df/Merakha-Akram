@@ -525,7 +525,7 @@
       <div class="card-head">
         <h2>Destinataires enregistrés (<span id="countContacts">0</span>)</h2>
         <div class="toolbar">
-          <input type="text" id="contactFilter" class="filter-input" placeholder="Filtrer…" autocomplete="off">
+          <input type="text" id="contactFilter" class="filter-input" placeholder="Filtrer… (#étiquette)" autocomplete="off">
           <button class="btn ghost small" id="importBtn">Importer</button>
           <button class="btn ghost small" id="exportContactsXlsxBtn">Exporter Excel</button>
           <button class="btn ghost small" id="exportContactsBtn">CSV</button>
@@ -1323,7 +1323,17 @@
         </div>
       </div>
       <label for="fedNotes">Observations</label>
-      <input type="text" id="fedNotes" autocomplete="off">
+      <input type="text" id="fedNotes" autocomplete="off"
+             placeholder="ce que l'équipe doit savoir — ne part jamais dans un courriel">
+      <!-- Les étiquettes disent **de quel genre** est la situation, les
+           observations disent laquelle. « tutelle » et « le tuteur est M. Roy,
+           joignable au 06… » ne vont pas au même endroit : l'une se compte et
+           se filtre, l'autre se lit. Ni l'une ni l'autre ne sort dans un
+           message. Voir assets/js/etiquettes.js. -->
+      <label for="fedEtiquettes">Étiquettes</label>
+      <input type="text" id="fedEtiquettes" autocomplete="off"
+             placeholder="tutelle, suivi social — séparées par des virgules">
+      <div class="etiq-suggestions" id="fedEtiquettesSuggestions"></div>
       <div id="fedMsg"></div>
     </form>
 
@@ -1393,6 +1403,7 @@
 <script src="assets/js/diagnostic.js"></script>
 <script src="assets/js/calendrier.js"></script>
 <script src="assets/js/pdf.js"></script>
+<script src="assets/js/etiquettes.js"></script>
 <script src="assets/js/doublons.js"></script>
 <script src="assets/js/scanner.js"></script>
 <script src="assets/js/store.js"></script>
