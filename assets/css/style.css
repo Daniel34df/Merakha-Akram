@@ -1088,6 +1088,59 @@ td.box-cell{font-family:var(--mono);font-size:var(--tx-2);color:var(--ink-2);whi
 .msg ul{margin:8px 0 0;padding-left:20px;}
 .msg a{color:var(--accent-texte);font-weight:600;}
 
+/* ---------- calendrier des échéances ---------- */
+/* Une grille de sept colonnes, du lundi au dimanche. Les jours vides gardent
+   leur place : ce sont les creux qui servent, quand il faut déplacer un
+   rendez-vous. */
+.cal{margin-top:12px;overflow-x:auto;}
+.cal-entete, .cal-semaine{
+  display:grid;
+  grid-template-columns:repeat(7, minmax(0, 1fr));
+  gap:4px;
+  min-width:560px;
+}
+.cal-entete{margin-bottom:4px;}
+.cal-jour-nom{
+  font-size:var(--tx-1);
+  text-transform:uppercase;
+  letter-spacing:var(--suivi-large);
+  color:var(--ink-2);
+  padding:2px 6px;
+}
+.cal-jour-nom abbr{text-decoration:none;border:0;}
+.cal-semaine{margin-bottom:4px;}
+.cal-case{
+  min-height:74px;
+  padding:6px 8px;
+  border:1px solid var(--line);
+  border-radius:var(--r1);
+  background:var(--surface);
+  font-size:var(--tx-1);
+}
+/* Les jours des mois voisins restent lisibles mais s'effacent : ils sont là
+   pour ne pas trouer la grille, pas pour être consultés. */
+.cal-hors{background:var(--surface-2);opacity:.5;}
+.cal-numero{font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums;}
+.cal-aujourdhui{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
+.cal-aujourdhui .cal-numero{color:var(--accent-texte);}
+/* Le nombre est écrit dans la case, à côté de sa couleur : une journée chargée
+   et une journée dépassée ne se distinguent pas par la teinte pour tout le
+   monde, et la différence est celle entre « à étaler » et « en retard ». */
+.cal-compte{
+  font-size:var(--tx-1);
+  font-weight:600;
+  color:var(--ink-2);
+  margin:2px 0 3px;
+}
+.cal-remplie{background:var(--info-wash);border-color:color-mix(in srgb, var(--info) 30%, transparent);}
+.cal-charge{background:var(--warn-wash);border-color:color-mix(in srgb, var(--warn) 40%, transparent);}
+.cal-charge .cal-compte{color:var(--warn);}
+.cal-expiree{background:var(--danger-wash);border-color:color-mix(in srgb, var(--danger) 40%, transparent);}
+.cal-expiree .cal-compte{color:var(--danger);}
+.cal-noms{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;}
+.cal-noms .link-btn{padding:0;font-size:var(--tx-1);text-align:left;}
+.cal-reste{color:var(--ink-2);font-style:italic;}
+
 /* ---------- le relevé de journée ---------- */
 /* Les chiffres de la journée, en cases. Ils répondent à « est-ce qu'on a bien
    tout saisi ? », qui est la question qu'on se pose en fermant — d'où des

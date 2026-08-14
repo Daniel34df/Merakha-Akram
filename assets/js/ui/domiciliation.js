@@ -357,6 +357,10 @@
             deuxTiers[1],
             '<button class="link-btn" data-domifiche="' + esc(l.id) + '">Fiche</button>' +
               '<button class="link-btn" data-attestation="' + esc(l.id) + '">Attestation</button>' +
+              /* Le PDF à côté de l'impression, pas à sa place : l'attestation
+                 se remet en main propre le plus souvent, et se transmet
+                 parfois. Les deux gestes coexistent. */
+              '<button class="link-btn" data-attestation-pdf="' + esc(l.id) + '">PDF</button>' +
               '<button class="link-btn" data-renouveler="' + esc(l.id) + '">Renouveler</button>' +
               /* Prévenir la personne, pas seulement le signaler à l'équipe. Le
                  sujet suit la liste : échéance d'attestation ou absence. */
@@ -412,6 +416,8 @@
     $('panel-domiciliation').addEventListener('click', function (e) {
       const fiche = e.target.closest('button[data-domifiche]');
       if (fiche) return ecrans.registre.ouvrirFiche(fiche.dataset.domifiche);
+      const pdfAttest = e.target.closest('button[data-attestation-pdf]');
+      if (pdfAttest) return impression.attestationPdf(pdfAttest.dataset.attestationPdf);
       const attestation = e.target.closest('button[data-attestation]');
       if (attestation) return impression.imprimerAttestation(attestation.dataset.attestation);
       const passage = e.target.closest('button[data-passage]');
@@ -574,6 +580,12 @@
         rows: lignes
       });
       downloadBytes('domiciliation-' + r.annee + '.xlsx', bytes, MIME_XLSX);
+    });
+
+    $('rapportPdfBtn').addEventListener('click', function () {
+      const d = view.domiciliation;
+      if (!d) return;
+      impression.rapportPdf(d.rapport);
     });
 
     $('rapportImprimerBtn').addEventListener('click', function () {

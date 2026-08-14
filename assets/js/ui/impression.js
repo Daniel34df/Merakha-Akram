@@ -20,6 +20,7 @@
     enNode ? require('../domiciliation.js') : root.BC.domiciliation,
     enNode ? require('./noyau.js') : root.BC.ui,
     enNode ? require('../codebarres.js') : root.BC.codebarres,
+    enNode ? require('../pdf.js') : root.BC.pdf,
     root
   );
   if (enNode) {
@@ -28,7 +29,7 @@
     root.BC = root.BC || {};
     root.BC.impression = api;
   }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, store, domi, ui, codebarres, root) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, store, domi, ui, codebarres, pdf, root) {
   'use strict';
 
   const S = store.state;
@@ -343,7 +344,124 @@
     );
   }
 
+  /* ─────────── la version PDF ───────────
+
+     L'attestation s'imprime, et c'est le cas courant. Mais elle se **transmet**
+     aussi : la personne la dépose à la CAF, l'envoie à l'assurance maladie, la
+     garde sur un téléphone. « Imprimer vers un PDF » existe sur la plupart des
+     postes, pas sur tous, et le résultat porte alors les en-têtes du navigateur
+     — date, URL, numéro de page — sur un document qui doit avoir l'air d'un
+     document officiel, parce qu'il en est un.
+
+     Le PDF reprend le **même texte** que la version imprimée, pas une variante :
+     deux formulations d'une même attestation, c'est une administration qui
+     refuse celle qu'elle ne connaît pas. Ce qui change, c'est ce qui ne se
+     transpose pas — les traits à remplir à la main deviennent des blancs, et le
+     code à barres disparaît, faute d'images. */
+  function attestationBlocs(contact) {
+    const e = domi.etat(contact, S.history);
+    const bureau = leBureau();
+    const adresse = adresseDomiciliation(contact);
+    const ville = S.settings.officeVille || '';
+    const pointille = '……………………………';
+    const ou = function (v, formate) {
+      return v ? (formate ? util.formatJour(v) : v) : pointille;
+    };
+
+    return [
+      { type: 'texte', texte: bureau, gras: true },
+      adresse ? { type: 'texte', texte: adresse, taille: 9.5 } : null,
+      S.settings.officeAgrement ? { type: 'texte', texte: S.settings.officeAgrement, taille: 9.5 } : null,
+      { type: 'trait' },
+      { type: 'titre', texte: 'Attestation d’élection de domicile' },
+      { type: 'texte', texte: 'Je soussigné·e, représentant l’organisme désigné ci-dessus, atteste que :' },
+      { type: 'espace', hauteur: 6 },
+      {
+        type: 'texte', gras: true,
+        texte: (contact.name || pointille) + ', né·e le ' + ou(contact.naissance, true)
+      },
+      { type: 'espace', hauteur: 6 },
+      {
+        type: 'texte',
+        texte: 'a élu domicile auprès de notre organisme depuis le ' +
+          ou(contact.domicilieDepuis, true) + '.'
+      },
+      { type: 'texte', texte: 'L’adresse à laquelle son courrier peut lui être adressé est :' },
+      {
+        type: 'texte', gras: true,
+        texte: bureau + (adresse ? '\n' + adresse : '') + (contact.box ? '\nBoîte ' + contact.box : '')
+      },
+      { type: 'espace', hauteur: 6 },
+      {
+        type: 'texte',
+        texte: 'La présente attestation est valable jusqu’au ' + ou(e.echeance, true) + '.'
+      },
+      { type: 'espace' },
+      { type: 'texte', texte: 'Fait à ' + (ville || pointille) + ', le ' + leJour() + '.' },
+      { type: 'signature', texte: 'Signature et cachet de l’organisme' }
+    ].filter(Boolean);
+  }
+
+  /* Le nom du fichier compte : il atterrit dans un dossier de téléchargements
+     au milieu de dizaines d'autres, et c'est souvent la seule chose que la
+     personne verra avant de le joindre à un dossier. */
+  function nomFichier(prefixe, contact) {
+    const nom = util
+      .normalize(contact && contact.name)
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    return prefixe + (nom ? '-' + nom : '') + '-' + new Date().toISOString().slice(0, 10) + '.pdf';
+  }
+
+  function attestationPdf(contactId) {
+    const c = S.contacts.find(function (x) { return x.id === contactId; });
+    if (!c) return;
+    /* Le même refus que pour l'impression : une attestation échue ne doit pas
+       plus partir en PDF qu'elle ne sortirait de l'imprimante. Un fichier
+       circule plus loin qu'une feuille, et plus longtemps. */
+    const refus = refusAttestation(c);
+    if (refus) {
+      ui.toast(refus, 'error');
+      return;
+    }
+    ui.downloadBytes(nomFichier('attestation', c), pdf.document(attestationBlocs(c)), 'application/pdf');
+  }
+
+  function rapportPdf(r) {
+    if (!r) return;
+    const blocs = [
+      { type: 'titre', texte: 'Rapport annuel de domiciliation' },
+      { type: 'texte', texte: leBureau() + ' — ' + leJour() },
+      { type: 'trait' },
+      {
+        type: 'tableau',
+        entetes: ['Indicateur', 'Nombre'],
+        lignes: [
+          ['Domiciliations actives', r.actives],
+          ['Ouvertes dans l’année', r.ouvertes],
+          ['Closes dans l’année', r.closes],
+          ['Courriers reçus pour des personnes domiciliées', r.courriers],
+          ['Dont retirés', r.retires]
+        ]
+      }
+    ];
+    if (r.motifs && Object.keys(r.motifs).length) {
+      blocs.push({ type: 'espace' });
+      blocs.push({ type: 'texte', texte: 'Motifs de clôture', gras: true });
+      blocs.push({
+        type: 'tableau',
+        entetes: ['Motif', 'Nombre'],
+        lignes: Object.keys(r.motifs).map(function (m) { return [m, r.motifs[m]]; })
+      });
+    }
+    ui.downloadBytes('rapport-domiciliation-' + new Date().toISOString().slice(0, 10) + '.pdf',
+      pdf.document(blocs), 'application/pdf');
+  }
+
   return {
+    attestationBlocs: attestationBlocs,
+    attestationPdf: attestationPdf,
+    rapportPdf: rapportPdf,
     imprimerFeuille: imprimerFeuille,
     ETIQUETTE: ETIQUETTE,
     etiquettesHtml: etiquettesHtml,

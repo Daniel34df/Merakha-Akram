@@ -657,6 +657,24 @@
 
   <!-- ═══════════════ DOMICILIATION ═══════════════ -->
   <section class="panel" id="panel-domiciliation" aria-label="Domiciliation">
+    <!-- Les échéances par mois. La liste triée par urgence répond à « qu'est-ce
+         qui presse » ; celle-ci répond à « est-ce que la semaine prochaine va
+         être tenable », et c'est elle qui décide si l'on convoque quatre
+         personnes lundi ou si l'on étale sur quinze jours. Voir
+         assets/js/calendrier.js. -->
+    <div class="card" id="calendrierCard">
+      <div class="card-head">
+        <h2>Échéances — <span id="calMois"></span></h2>
+        <div class="toolbar">
+          <button class="btn ghost small" id="calPrecedent" aria-label="Mois précédent">◂</button>
+          <button class="btn ghost small" id="calAujourdhui">Ce mois-ci</button>
+          <button class="btn ghost small" id="calSuivant" aria-label="Mois suivant">▸</button>
+        </div>
+      </div>
+      <p class="bord-phrase" id="calPhrase"></p>
+      <div class="cal" id="calGrille"></div>
+    </div>
+
     <div class="card" id="formDomiciliationCard">
       <div class="card-head">
         <h2>Nouvelle domiciliation</h2>
@@ -778,6 +796,7 @@
           <select id="rapportAnnee" class="filter-input"></select>
           <button class="btn ghost small" id="rapportXlsxBtn">Exporter Excel</button>
           <button class="btn ghost small" id="rapportImprimerBtn">Imprimer</button>
+          <button class="btn ghost small" id="rapportPdfBtn">PDF</button>
         </div>
       </div>
       <div id="rapportCorps"></div>
@@ -1372,6 +1391,8 @@
 <script src="assets/js/colis.js"></script>
 <script src="assets/js/journee.js"></script>
 <script src="assets/js/diagnostic.js"></script>
+<script src="assets/js/calendrier.js"></script>
+<script src="assets/js/pdf.js"></script>
 <script src="assets/js/doublons.js"></script>
 <script src="assets/js/scanner.js"></script>
 <script src="assets/js/store.js"></script>
@@ -1386,6 +1407,7 @@
 <script src="assets/js/ui/casiers.js"></script>
 <script src="assets/js/ui/bord.js"></script>
 <script src="assets/js/ui/pilotage.js"></script>
+<script src="assets/js/ui/calendrier.js"></script>
 <script src="assets/js/ui/scanner.js"></script>
 <script src="assets/js/app.js"></script>
 </body>

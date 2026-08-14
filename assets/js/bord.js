@@ -129,8 +129,11 @@
     /* La domiciliation. `aRenouveler` rend « bientôt » et « expirée »
        ensemble ; on les sépare, parce qu'elles n'appellent pas le même geste
        ni la même urgence. */
+    /* `now`, un horodatage — c'est le nom que `domiciliation.js` lit. Avec
+       `maintenant`, il retombait sur `Date.now()` et la date injectée ne
+       servait à rien : les tests se jouaient au jour où on les lançait. */
     const domiOpts = {
-      maintenant: at,
+      now: at.getTime(),
       validiteMois: settings.domiciliationMois,
       absenceMois: settings.domiciliationAbsenceMois
     };

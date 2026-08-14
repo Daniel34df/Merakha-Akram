@@ -5244,6 +5244,7 @@
        pire que pas de chiffre du tout. */
     ecrans.bord.render();
     ecrans.pilotage.render();
+    ecrans.calendrier.render();
     renderAgents();
     renderAntennes();
     renderCarteAntennes();

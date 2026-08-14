@@ -189,8 +189,9 @@
     /* Ce qui arrive demain, pour que celui qui ouvre sache avant d'ouvrir. Les
        domiciliations d'abord : c'est le seul poste où l'échéance fait perdre un
        droit, pas seulement du temps. */
+    /* `now` : voir la même remarque dans `bord.js`. */
     const domiOpts = {
-      maintenant: at,
+      now: at.getTime(),
       validiteMois: settings.domiciliationMois,
       absenceMois: settings.domiciliationAbsenceMois
     };

@@ -40,7 +40,8 @@ const SCRIPTS = [
   ['doublons', 'l’avertissement paraît pendant la saisie, prévient sans bloquer, et la référence suit'],
   ['bord', 'le relevé du jour : calme quand c’est calme, et chaque chiffre mène à son dossier'],
   ['colis', 'l’emplacement demandé quand le colis ne rentre pas, et rien qui sorte chez le transporteur'],
-  ['pilotage', 'la passation du soir, et un diagnostic qui ne dit jamais « tout va bien » sans avoir regardé']
+  ['pilotage', 'la passation du soir, et un diagnostic qui ne dit jamais « tout va bien » sans avoir regardé'],
+  ['echeances', 'le calendrier qui fait voir les paquets, et un PDF qu’un lecteur accepte vraiment']
 ];
 
 const PORT_BASE = Number(process.env.PORT_BASE || 5490);
