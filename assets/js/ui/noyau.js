@@ -245,6 +245,50 @@
      entre écrans visibles : un `ui.ecrans.registre.ouvrirFiche(...)` se
      retrouve d'un coup de grep, un appel direct ne se voyait pas. */
 
+  /* ─────────── la délégation ───────────
+
+     Le problème qu'elle règle. Une liste qui se redessine — les courriers en
+     attente, les appels du jour, les suggestions — repose ses écouteurs après
+     chaque rendu :
+
+         box.querySelectorAll('button[data-send]').forEach(function (btn) {
+           btn.addEventListener('click', …);
+         });
+
+     Ça marche, et ça a trois défauts. Le travail est refait à chaque rendu, y
+     compris quand rien n'a changé. Un rendu qui oublie de rappeler cette
+     boucle produit des boutons **muets** : ils s'affichent, ils se cliquent, et
+     il ne se passe rien — le pire mode de panne d'une interface, parce qu'il
+     ressemble à une lenteur. Et un écouteur posé sur un élément qu'un autre
+     rendu vient de remplacer ne sert plus à personne.
+
+     `deleguer` pose **un** écouteur sur le conteneur, une fois pour toutes, et
+     retrouve la cible au moment du clic. Le contenu peut être réécrit cent
+     fois : l'écouteur, lui, ne bouge pas. Un bouton dessiné plus tard marche
+     sans qu'on ait à y penser, ce qui est exactement la garantie qui manquait.
+
+     Le double appel est neutralisé : `init()` peut être rappelé, et deux
+     écouteurs identiques enverraient deux fois la même notification. */
+  function deleguer(racine, selecteur, gestionnaire, evenement) {
+    const el = typeof racine === 'string' ? $(racine) : racine;
+    if (!el) return;
+    const type = evenement || 'click';
+    /* Une marque par couple événement + sélecteur : un même conteneur délègue
+       souvent plusieurs gestes, et un drapeau unique n'en laisserait passer
+       qu'un. */
+    const cle = '__deleg_' + type + '_' + selecteur;
+    if (el[cle]) return;
+    el[cle] = true;
+    el.addEventListener(type, function (e) {
+      const cible = e.target && e.target.closest ? e.target.closest(selecteur) : null;
+      /* `closest` peut remonter au-delà du conteneur quand celui-ci est
+         imbriqué dans un autre qui délègue le même sélecteur. On s'assure que
+         la cible est bien à nous. */
+      if (!cible || !el.contains(cible)) return;
+      gestionnaire(cible, e);
+    });
+  }
+
   const ecrans = {};
 
   function inscrire(nom, api) {
@@ -511,6 +555,7 @@
     deLAntenne: deLAntenne,
     ecrans: ecrans,
     inscrire: inscrire,
+    deleguer: deleguer,
     sessionManquante: sessionManquante,
     mouvementReduit: mouvementReduit,
     squelette: squelette,

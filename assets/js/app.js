@@ -40,6 +40,7 @@
   const stamp = ui.stamp;
   const confirmDialog = ui.confirmDialog;
   const setMsg = ui.setMsg;
+  const deleguer = ui.deleguer;
   const download = ui.download;
   const downloadBytes = ui.downloadBytes;
   const MIME_XLSX = ui.MIME_XLSX;
@@ -1075,13 +1076,11 @@
         .join('') +
       '</div>';
 
-    box.querySelectorAll('button[data-send]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        const c = S.contacts.find(function (x) {
-          return x.id === btn.dataset.send;
-        });
-        if (c) notifierEnTenantCompteDesAbsences(c, btn);
+    deleguer(box, 'button[data-send]', function (btn) {
+      const c = S.contacts.find(function (x) {
+        return x.id === btn.dataset.send;
       });
+      if (c) notifierEnTenantCompteDesAbsences(c, btn);
     });
   }
 
@@ -1168,16 +1167,12 @@
         esc(raw) +
         ' » au registre</button></div></div>';
 
-      $('searchResults')
-        .querySelectorAll('button[data-send]')
-        .forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            const c = S.contacts.find(function (x) {
-              return x.id === btn.dataset.send;
-            });
-            if (c) sendNotification(c, btn);
-          });
+      deleguer('searchResults', 'button[data-send]', function (btn) {
+        const c = S.contacts.find(function (x) {
+          return x.id === btn.dataset.send;
         });
+        if (c) sendNotification(c, btn);
+      });
       $('quandMemeBtn').addEventListener('click', function () {
         renderInconnuFranc(raw);
       });
@@ -1643,10 +1638,8 @@
         );
       })
       .join('');
-    boite.querySelectorAll('button[data-i]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        lancerPalette(Number(b.dataset.i));
-      });
+    deleguer(boite, 'button[data-i]', function (b) {
+      lancerPalette(Number(b.dataset.i));
     });
   }
 
@@ -2292,30 +2285,30 @@
     brancherCloture(closBox);
   }
 
+  /* Un écouteur par conteneur, posé une fois : la liste se redessine à chaque
+     écriture d'un autre poste, et reposer les écouteurs à chaque rendu finit
+     tôt ou tard par en oublier un — le bouton s'affiche alors, se clique, et
+     ne fait rien. */
   function brancherCloture(racine) {
-    racine.querySelectorAll('[data-close]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        const raison = root.prompt(
-          'Qu’est-il advenu de ce courrier ?\n(retourné à l’expéditeur, remis en main propre, détruit…)'
-        );
-        if (!raison || !raison.trim()) return;
-        try {
-          await store.closeMail(btn.dataset.close, raison.trim());
-          toast('Courrier classé.');
-        } catch (err) {
-          toast('Impossible : ' + err.message, 'error');
-        }
-      });
+    deleguer(racine, '[data-close]', async function (btn) {
+      const raison = root.prompt(
+        'Qu’est-il advenu de ce courrier ?\n(retourné à l’expéditeur, remis en main propre, détruit…)'
+      );
+      if (!raison || !raison.trim()) return;
+      try {
+        await store.closeMail(btn.dataset.close, raison.trim());
+        toast('Courrier classé.');
+      } catch (err) {
+        toast('Impossible : ' + err.message, 'error');
+      }
     });
-    racine.querySelectorAll('[data-unclose]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        try {
-          await store.closeMail(btn.dataset.unclose, null);
-          toast('Courrier rouvert.');
-        } catch (err) {
-          toast('Impossible : ' + err.message, 'error');
-        }
-      });
+    deleguer(racine, '[data-unclose]', async function (btn) {
+      try {
+        await store.closeMail(btn.dataset.unclose, null);
+        toast('Courrier rouvert.');
+      } catch (err) {
+        toast('Impossible : ' + err.message, 'error');
+      }
     });
   }
 
@@ -2939,142 +2932,128 @@
       }
     });
 
-    box.querySelectorAll('button[data-edit]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        view.editingId = btn.dataset.edit;
-        renderContacts();
-        const input = box.querySelector('.edit-name');
-        if (input) input.focus();
-      });
+    deleguer(box, 'button[data-edit]', function (btn) {
+      view.editingId = btn.dataset.edit;
+      renderContacts();
+      const input = box.querySelector('.edit-name');
+      if (input) input.focus();
     });
-    box.querySelectorAll('button[data-cancel]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+    deleguer(box, 'button[data-cancel]', function (btn) {
+      view.editingId = null;
+      renderContacts();
+    });
+    deleguer(box, 'button[data-save]', async function (btn) {
+      const row = box.querySelector('tr[data-row="' + CSS.escape(btn.dataset.save) + '"]');
+      const name = row.querySelector('.edit-name').value.trim();
+      const email = row.querySelector('.edit-email').value.trim();
+      // Surtout pas « box » ici : le conteneur du tableau porte déjà ce nom,
+      // et la redéclaration le rendait inaccessible dès la première ligne.
+      const boite = row.querySelector('.edit-box').value.trim();
+      const telephone = row.querySelector('.edit-telephone').value.trim();
+      const absence = lireAbsence(btn.dataset.save);
+
+      /* La même règle qu'à l'inscription : un courriel OU un téléphone.
+         Exiger le courriel ici rendait toute personne sans adresse
+         définitivement incorrigible — et c'est justement le public que ce
+         bureau reçoit. */
+      if (!name) {
+        toast('Le nom ne peut pas être vide.', 'error');
+        return;
+      }
+      if (email && !util.isValidEmail(email)) {
+        toast('Cette adresse électronique n’est pas valide.', 'error');
+        return;
+      }
+      if (!email && !telephone) {
+        toast('Gardez au moins un courriel ou un téléphone pour la joindre.', 'error');
+        return;
+      }
+      const clash = store.findByEmail(email);
+      if (clash && clash.id !== btn.dataset.save) {
+        toast('Ce courriel est déjà utilisé par « ' + clash.name + ' ».', 'error');
+        return;
+      }
+      try {
+        await store.updateContact(
+          btn.dataset.save,
+          Object.assign({ name: name, email: email, box: boite, telephone: telephone }, absence)
+        );
         view.editingId = null;
         renderContacts();
-      });
+        toast('Destinataire mis à jour.', 'ok');
+      } catch (err) {
+        toast('Modification impossible : ' + err.message, 'error');
+      }
     });
-    box.querySelectorAll('button[data-save]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        const row = box.querySelector('tr[data-row="' + CSS.escape(btn.dataset.save) + '"]');
-        const name = row.querySelector('.edit-name').value.trim();
-        const email = row.querySelector('.edit-email').value.trim();
-        // Surtout pas « box » ici : le conteneur du tableau porte déjà ce nom,
-        // et la redéclaration le rendait inaccessible dès la première ligne.
-        const boite = row.querySelector('.edit-box').value.trim();
-        const telephone = row.querySelector('.edit-telephone').value.trim();
-        const absence = lireAbsence(btn.dataset.save);
-
-        /* La même règle qu'à l'inscription : un courriel OU un téléphone.
-           Exiger le courriel ici rendait toute personne sans adresse
-           définitivement incorrigible — et c'est justement le public que ce
-           bureau reçoit. */
-        if (!name) {
-          toast('Le nom ne peut pas être vide.', 'error');
-          return;
-        }
-        if (email && !util.isValidEmail(email)) {
-          toast('Cette adresse électronique n’est pas valide.', 'error');
-          return;
-        }
-        if (!email && !telephone) {
-          toast('Gardez au moins un courriel ou un téléphone pour la joindre.', 'error');
-          return;
-        }
-        const clash = store.findByEmail(email);
-        if (clash && clash.id !== btn.dataset.save) {
-          toast('Ce courriel est déjà utilisé par « ' + clash.name + ' ».', 'error');
-          return;
-        }
-        try {
-          await store.updateContact(
-            btn.dataset.save,
-            Object.assign({ name: name, email: email, box: boite, telephone: telephone }, absence)
-          );
-          view.editingId = null;
-          renderContacts();
-          toast('Destinataire mis à jour.', 'ok');
-        } catch (err) {
-          toast('Modification impossible : ' + err.message, 'error');
-        }
+    deleguer(box, 'button[data-del]', async function (btn) {
+      const c = S.contacts.find(function (x) {
+        return x.id === btn.dataset.del;
       });
-    });
-    box.querySelectorAll('button[data-del]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        const c = S.contacts.find(function (x) {
-          return x.id === btn.dataset.del;
-        });
-        if (!c) return;
-        /* Le courriel entre parenthèses affichait « ( ) » pour une personne
-           sans adresse : on annonce ce par quoi on peut la joindre. */
-        const repere = c.email || c.telephone || 'sans courriel ni téléphone';
-        const ok = await confirmDialog(
-          'Sortir du registre',
-          'Retirer « ' + c.name + ' » (' + repere + ') du registre ? ' +
-            'Son courrier passé reste à l’historique — ce n’est pas un effacement.',
-          'Sortir du registre'
-        );
-        if (!ok) return;
-        try {
-          await store.removeContact(c.id);
-          toast('« ' + c.name + ' » retiré du registre.');
-        } catch (err) {
-          toast('Suppression impossible : ' + err.message, 'error');
-        }
-      });
+      if (!c) return;
+      /* Le courriel entre parenthèses affichait « ( ) » pour une personne
+         sans adresse : on annonce ce par quoi on peut la joindre. */
+      const repere = c.email || c.telephone || 'sans courriel ni téléphone';
+      const ok = await confirmDialog(
+        'Sortir du registre',
+        'Retirer « ' + c.name + ' » (' + repere + ') du registre ? ' +
+          'Son courrier passé reste à l’historique — ce n’est pas un effacement.',
+        'Sortir du registre'
+      );
+      if (!ok) return;
+      try {
+        await store.removeContact(c.id);
+        toast('« ' + c.name + ' » retiré du registre.');
+      } catch (err) {
+        toast('Suppression impossible : ' + err.message, 'error');
+      }
     });
 
     /* Effacer, pour de bon. Ce registre porte les noms et les dates de
        naissance de personnes sans domicile stable ; quand l'une d'elles
        demande à disparaître des fichiers, il faut pouvoir le faire vraiment.
        Deux confirmations, et la seconde dit ce qui part. */
-    box.querySelectorAll('button[data-effacer]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        const c = S.contacts.find(function (x) {
-          return x.id === btn.dataset.effacer;
-        });
-        if (!c) return;
-        const courriers = S.history.filter(function (h) {
-          return h.contactId === c.id || (c.email && util.normalize(h.email) === util.normalize(c.email));
-        }).length;
+    deleguer(box, 'button[data-effacer]', async function (btn) {
+      const c = S.contacts.find(function (x) {
+        return x.id === btn.dataset.effacer;
+      });
+      if (!c) return;
+      const courriers = S.history.filter(function (h) {
+        return h.contactId === c.id || (c.email && util.normalize(h.email) === util.normalize(c.email));
+      }).length;
 
-        const ok = await confirmDialog(
-          'Effacer définitivement',
-          'Effacer « ' + c.name + ' » : la fiche, ' + courriers + ' courrier(s) de son historique, ' +
-            'et son nom dans le journal d’activité. Seule reste la trace de l’effacement — ' +
-            'qui l’a fait et quand. C’est irréversible.',
-          'Effacer définitivement'
+      const ok = await confirmDialog(
+        'Effacer définitivement',
+        'Effacer « ' + c.name + ' » : la fiche, ' + courriers + ' courrier(s) de son historique, ' +
+          'et son nom dans le journal d’activité. Seule reste la trace de l’effacement — ' +
+          'qui l’a fait et quand. C’est irréversible.',
+        'Effacer définitivement'
+      );
+      if (!ok) return;
+      try {
+        const bilan = await store.removeContact(c.id, { complet: true });
+        toast(
+          'Effacé. ' +
+            (bilan
+              ? bilan.courriersEfface + ' courrier(s), ' + bilan.lignesAnonymisees + ' ligne(s) du journal.'
+              : ''),
+          'ok'
         );
-        if (!ok) return;
-        try {
-          const bilan = await store.removeContact(c.id, { complet: true });
-          toast(
-            'Effacé. ' +
-              (bilan
-                ? bilan.courriersEfface + ' courrier(s), ' + bilan.lignesAnonymisees + ' ligne(s) du journal.'
-                : ''),
-            'ok'
-          );
-          renderAll();
-        } catch (err) {
-          toast('Effacement impossible : ' + err.message, 'error');
-        }
-      });
+        renderAll();
+      } catch (err) {
+        toast('Effacement impossible : ' + err.message, 'error');
+      }
     });
-    box.querySelectorAll('button[data-fiche]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        ouvrirFiche(btn.dataset.fiche);
-      });
+    deleguer(box, 'button[data-fiche]', function (btn) {
+      ouvrirFiche(btn.dataset.fiche);
     });
-    box.querySelectorAll('button[data-notify]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        const c = S.contacts.find(function (x) {
-          return x.id === btn.dataset.notify;
-        });
-        if (!c) return;
-        showPanel('guichet');
-        nameInput.value = c.name;
-        notifierEnTenantCompteDesAbsences(c);
+    deleguer(box, 'button[data-notify]', function (btn) {
+      const c = S.contacts.find(function (x) {
+        return x.id === btn.dataset.notify;
       });
+      if (!c) return;
+      showPanel('guichet');
+      nameInput.value = c.name;
+      notifierEnTenantCompteDesAbsences(c);
     });
   }
 
